@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# shellcheck disable=SC2034
+VERSION="0.0.1"
+FAVORITE_FILE="favorite"
+SCRIPT_NAME=$(basename "$0")
+
+myrealpath() {
+    local LINK REALPATH
+    local OURPWD=$PWD
+    cd "$(dirname "$1")" || exit
+    LINK=$(readlink "$(basename "$1")")
+    while [ "$LINK" ]; do
+        cd "$(dirname "$LINK")" || exit
+        LINK=$(readlink "$(basename "$1")")
+    done
+    REALPATH="$PWD/$(basename "$1")"
+    cd "$OURPWD" || exit
+    echo "$REALPATH"
+}
+
+# $0 may have ./ in ./script_name
+# then use pwd
+
+if [[ -z $(which "${SCRIPT_NAME}") || $0 = "./${SCRIPT_NAME}" ]]; then
+    # echo "in 1"
+    script_path=$(myrealpath "$0")
+    # script_path=${script_path%/*}
+else
+    # echo "in 2"
+    script_path=$(myrealpath "$(which "${SCRIPT_NAME}")")
+fi
+
+script_dir="${script_path%/*}"
+# shellcheck disable=SC1091
+source "${script_dir}/getoptions"
+
+check_cmd() {
+    if [[ ! $(command -v "$1") ]]; then
+        app=$1
+        echo "It seems like you don't have ${app}."
+        echo "Please install ${app}."
+        exit 1
+    fi
+}
+
+check_cmd mpv
+
+# # opens a favorite list and select number to play a station
+# tera play
+fn_play() {
+    echo playing
+}
+
+# # uses radio-browser.info bytag and grep
+# # use country codes
+# # after search result ask a number to play/save
+# tera search jazz US
+fn_search() {
+    echo searching
+}
+
+# # list a favorite and ask a number to play
+# tera ls
+fn_ls() {
+    echo listing
+}
+
+# # open a favorite to edit with EDITOR
+# tera edit
+fn_edit() {
+    echo editting
+}
+
+# # stop playing
+# tera stop
+fn_stop() {
+    echo stopping
+}
+
+# # pause playing
+# tera pause (or space)
+fn_pause() {
+    echo pausing
+}
+
+# shellcheck disable=SC1083
+parser_definition() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} [command] [options...] [arguments...]"
+    msg -- '' 'Options:'
+    disp :usage -h --help
+    disp VERSION --version
+
+    msg -- '' 'Commands: '
+    msg -- 'Use command -h for a command help.'
+    cmd play -- "Play."
+    cmd search -- "search."
+    cmd ls -- "ls."
+    cmd edit -- "edit."
+    cmd stop -- "stop."
+    cmd pause -- "pause."
+}
+
+# shellcheck disable=SC1083
+parser_definition_play() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} play [options] [arguments]"
+    msg -- 'Options:'
+    param FONT -f --font init:="standard" -- "accepts --font fontname / --font=fontname"
+    disp :usage -h --help
+}
+
+# shellcheck disable=SC1083
+parser_definition_search() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} search "
+    msg -- 'Create a public Gist with the Typelet file.'
+    disp :usage -h --help
+}
+
+# shellcheck disable=SC1083
+parser_definition_ls() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} ls"
+    msg -- 'Create a public Gist with the Typelet file.'
+    disp :usage -h --help
+}
+
+# shellcheck disable=SC1083
+parser_definition_edit() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} edit"
+    msg -- 'Create a public Gist with the Typelet file.'
+    disp :usage -h --help
+}
+
+# shellcheck disable=SC1083
+parser_definition_stop() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} stop"
+    msg -- 'Create a public Gist with the Typelet file.'
+    disp :usage -h --help
+}
+
+# shellcheck disable=SC1083
+parser_definition_pause() {
+    setup REST help:usage abbr:true -- \
+        "Usage: ${2##*/} pause"
+    msg -- 'Create a public Gist with the Typelet file.'
+    disp :usage -h --help
+}
+
+eval "$(getoptions parser_definition parse "$0") exit 1"
+parse "$@"
+eval "set -- $REST"
+
+if [ $# -gt 0 ]; then
+    cmd=$1
+    shift
+    case $cmd in
+    play)
+        eval "$(getoptions parser_definition_play parse "$0")"
+        parse "$@"
+        eval "set -- $REST"
+        fn_play "$@"
+        ;;
+    search)
+        eval "$(getoptions parser_definition_search parse "$0")"
+        parse "$@"
+        eval "set -- $REST"
+        fn_search "$@"
+        ;;
+    ls)
+        eval "$(getoptions parser_definition_ls parse "$0")"
+        parse "$@"
+        eval "set -- $REST"
+        fn_ls "$@"
+        ;;
+    edit)
+        eval "$(getoptions parser_definition_edit parse "$0")"
+        parse "$@"
+        eval "set -- $REST"
+        fn_edit
+        ;;
+    stop)
+        eval "$(getoptions parser_definition_stop parse "$0")"
+        parse "$@"
+        eval "set -- $REST"
+        fn_stop
+        ;;
+    pause)
+        eval "$(getoptions parser_definition_pause parse "$0")"
+        parse "$@"
+        eval "set -- $REST"
+        fn_pause
+        ;;
+    --) ;; # no subcommand, arguments only
+    esac
+fi
