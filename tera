@@ -11,6 +11,8 @@ SCRIPT_NAME=$(basename "$0")
 RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
 SEARCH_URL="http://91.132.145.114/json/stations/search"
 
+# rm /tmp/*.json
+
 myrealpath() {
     local LINK REALPATH
     local OURPWD=$PWD
@@ -42,30 +44,11 @@ script_dir="${script_path%/*}"
 source "${script_dir}/getoptions"
 # shellcheck disable=SC1091
 source "${script_dir}/lib"
-
-check_cmd() {
-    if [[ ! $(command -v "$1") ]]; then
-        app=$1
-        echo "It seems like you don't have ${app}."
-        echo "Please install ${app}."
-        exit 1
-    fi
-}
+# shellcheck disable=SC1091
+source "${script_dir}/search"
 
 check_cmd mpv
 check_cmd jq
-
-cleanup() {
-    # TEMP_FILES=(/tmp/*.json)
-    # echo "${TEMP_FILES[@]}"
-    rm -f "/tmp/*.json"
-    #     if [[ ${#TEMP_FILES[@]} -gt 0 ]]; then
-    #         rm -f "/tmp/*.json"
-    #     fi
-}
-
-trap cleanup EXIT
-# trap cleanup ERR
 
 # check ~/.tera/favorite
 if [ ! -d "$FAVORITE_PATH" ]; then
@@ -255,6 +238,57 @@ fn_delete() {
     rm "$TEMP_FILE"
 }
 
+search_menu() {
+    # cleanup /tmp/cora_searches.json
+    _clean_tmp
+    echo -ne "
+$SCRIPT_NAME Search by:
+$(ColorGreen '1)') Tags
+$(ColorGreen '2)') Name
+$(ColorGreen '3)') Language 
+$(ColorGreen '4)') Country code
+$(ColorGreen '5)') State
+$(ColorGreen '6)') Advanced search
+$(ColorGreen '0)') Exit
+$(ColorBlue 'Choose an option:') "
+    read -r a
+    case $a in
+    1)
+        echo "Search by tag"
+        search_by tag
+        menu
+        ;;
+    2)
+        echo "Search by name"
+        search_by name
+        menu
+        ;;
+    3)
+        echo "Search by language"
+        search_by language
+        menu
+        ;;
+    4)
+        search_by countrycode
+        menu
+        ;;
+    5)
+        search_by state
+        menu
+        ;;
+    6)
+        advanced_search
+        menu
+        ;;
+    0) exit 0 ;;
+    *)
+        echo -e $red"Wrong option."$clear
+        # WrongCommand
+        exit 1
+        ;;
+    esac
+}
+
 menu() {
     echo -ne "
 $SCRIPT_NAME Menu
@@ -272,7 +306,7 @@ $(ColorBlue 'Choose an option:') "
         menu
         ;;
     2)
-        fn_search
+        search_menu
         menu
         ;;
     3)
@@ -290,81 +324,82 @@ $(ColorBlue 'Choose an option:') "
     0) exit 0 ;;
     *)
         echo -e $red"Wrong option."$clear
-        WrongCommand
+        # WrongCommand
+        exit 1
         ;;
     esac
 }
 
 menu
 # shellcheck disable=SC1083
-parser_definition() {
-    setup REST help:usage abbr:true -- \
-        "Usage: ${2##*/} [command] [options...] [arguments...]"
-    msg -- '' 'Options:'
-    disp :usage -h --help
-    disp VERSION --version
+# parser_definition() {
+#     setup REST help:usage abbr:true -- \
+#         "Usage: ${2##*/} [command] [options...] [arguments...]"
+#     msg -- '' 'Options:'
+#     disp :usage -h --help
+#     disp VERSION --version
 
-    msg -- '' 'Commands: '
-    msg -- 'Use command -h for a command help.'
-    cmd play -- "Play a radio station."
-    cmd search -- "Search radio stations."
-    cmd delete -- "Delete a station from the favorite file."
-}
+#     msg -- '' 'Commands: '
+#     msg -- 'Use command -h for a command help.'
+#     cmd play -- "Play a radio station."
+#     cmd search -- "Search radio stations."
+#     cmd delete -- "Delete a station from the favorite file."
+# }
 
-# shellcheck disable=SC1083
-parser_definition_play() {
-    setup REST help:usage abbr:true -- \
-        "Usage: ${2##*/} play [options] [arguments]"
-    msg -- 'Play a station.'
-    disp :usage -h --help
-}
+# # shellcheck disable=SC1083
+# parser_definition_play() {
+#     setup REST help:usage abbr:true -- \
+#         "Usage: ${2##*/} play [options] [arguments]"
+#     msg -- 'Play a station.'
+#     disp :usage -h --help
+# }
 
-# shellcheck disable=SC1083
-parser_definition_search() {
-    setup REST help:usage abbr:true -- \
-        "Usage: ${2##*/} search "
-    msg -- 'Search a station.'
-    param COUNTRYCODE -c --countrycode -- "accepts --countrycode value / --countrycode=value"
-    param NAME -n --name -- "accepts --name value / --name=value"
-    param LANGUAGE -l --lang -- "accepts --lang value / --lang=value"
-    param STATE -s --state -- "accepts --state value / --state=value"
-    disp :usage -h --help
-}
+# # shellcheck disable=SC1083
+# parser_definition_search() {
+#     setup REST help:usage abbr:true -- \
+#         "Usage: ${2##*/} search "
+#     msg -- 'Search a station.'
+#     param COUNTRYCODE -c --countrycode -- "accepts --countrycode value / --countrycode=value"
+#     param NAME -n --name -- "accepts --name value / --name=value"
+#     param LANGUAGE -l --lang -- "accepts --lang value / --lang=value"
+#     param STATE -s --state -- "accepts --state value / --state=value"
+#     disp :usage -h --help
+# }
 
-# shellcheck disable=SC1083
-parser_definition_delete() {
-    setup REST help:usage abbr:true -- \
-        "Usage: ${2##*/} delete"
-    msg -- 'Delete a station.'
-    disp :usage -h --help
-}
+# # shellcheck disable=SC1083
+# parser_definition_delete() {
+#     setup REST help:usage abbr:true -- \
+#         "Usage: ${2##*/} delete"
+#     msg -- 'Delete a station.'
+#     disp :usage -h --help
+# }
 
-eval "$(getoptions parser_definition parse "$0") exit 1"
-parse "$@"
-eval "set -- $REST"
+# eval "$(getoptions parser_definition parse "$0") exit 1"
+# parse "$@"
+# eval "set -- $REST"
 
-if [ $# -gt 0 ]; then
-    cmd=$1
-    shift
-    case $cmd in
-    play)
-        eval "$(getoptions parser_definition_play parse "$0")"
-        parse "$@"
-        eval "set -- $REST"
-        fn_play "$@"
-        ;;
-    search)
-        eval "$(getoptions parser_definition_search parse "$0")"
-        parse "$@"
-        eval "set -- $REST"
-        fn_search "$@"
-        ;;
-    delete)
-        eval "$(getoptions parser_definition_delete parse "$0")"
-        parse "$@"
-        eval "set -- $REST"
-        fn_delete
-        ;;
-    --) ;; # no subcommand, arguments only
-    esac
-fi
+# if [ $# -gt 0 ]; then
+#     cmd=$1
+#     shift
+#     case $cmd in
+#     play)
+#         eval "$(getoptions parser_definition_play parse "$0")"
+#         parse "$@"
+#         eval "set -- $REST"
+#         fn_play "$@"
+#         ;;
+#     search)
+#         eval "$(getoptions parser_definition_search parse "$0")"
+#         parse "$@"
+#         eval "set -- $REST"
+#         fn_search "$@"
+#         ;;
+#     delete)
+#         eval "$(getoptions parser_definition_delete parse "$0")"
+#         parse "$@"
+#         eval "set -- $REST"
+#         fn_delete
+#         ;;
+#     --) ;; # no subcommand, arguments only
+#     esac
+# fi

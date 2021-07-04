@@ -5,6 +5,7 @@
 ##
 green='\e[32m'
 blue='\e[34m'
+red='\e[31m'
 clear='\e[0m'
 
 ##
@@ -12,8 +13,31 @@ clear='\e[0m'
 ##
 
 ColorGreen() {
-    echo -ne $green$1$clear
+    echo -ne "$green$1$clear"
 }
 ColorBlue() {
-    echo -ne $blue$1$clear
+    echo -ne "$blue$1$clear"
+}
+
+check_cmd() {
+    if [[ ! $(command -v "$1") ]]; then
+        app=$1
+        echo "It seems like you don't have ${app}."
+        echo "Please install ${app}."
+        exit 1
+    fi
+}
+
+# cleanup() {
+#     rm -f "/tmp/*.json"
+# }
+
+# trap cleanup EXIT
+# trap cleanup ERR
+
+# cleanup
+_clean_tmp() {
+    if [[ -f "/tmp/cora_searches.json" ]]; then
+        rm /tmp/cora_searches.json
+    fi
 }

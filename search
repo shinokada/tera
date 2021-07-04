@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+# RADIO_BROWSER="http://91.132.145.114/json/stations/search"
+
+_search_play() {
+    URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
+    mpv "$URL_RESOLVED"
+}
+
+search_submenu() {
+    echo -ne "
+$SCRIPT_NAME Search by:
+$(ColorGreen '1)') Play
+$(ColorGreen '2)') Save
+$(ColorGreen '3)') Go back to search menu
+$(ColorGreen '0)') Exit
+$(ColorBlue 'Choose an option:') "
+    read -r a
+    case $a in
+    1)
+        echo "Playing"
+        _search_play "$1"
+        menu
+        ;;
+    2)
+        echo "Save the station."
+        _save station
+        menu
+        ;;
+    3)
+        echo "Go back to search menu"
+        search_menu
+        ;;
+    0) exit 0 ;;
+    *)
+        echo -e $red"Wrong option."$clear
+        # WrongCommand
+        exit 1
+        ;;
+    esac
+}
+
+search_by() {
+    KEY=$1
+    SEARCH_RESULTS=$(mktemp /tmp/cora_searches.json)
+    read -rp "Type a $KEY to search.   " RES
+    OPTS=()
+    for TAG in "${RES[@]}"; do
+        OPTS+=(-d "$KEY=$TAG")
+    done
+
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+
+    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    read -rp "Select a number.   " ANS
+    echo "$ANS"
+
+    # URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
+    search_submenu "$ANS"
+    # rm "$SEARCH_RESULTS"
+}

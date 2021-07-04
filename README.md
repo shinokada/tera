@@ -48,6 +48,7 @@ tera pause (or space)
 
 ## Reference
 
+- [Bash menu](https://devdojo.com/bobbyiliev/how-to-create-an-interactive-menu-in-bash)
 
 ## Author
 
