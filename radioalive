@@ -4,8 +4,9 @@ set -eu
 
 # shellcheck disable=SC2034
 VERSION="0.0.2"
-FAVORITE_PATH="$HOME/.cora"
-FAVORITE_FILE="favorite.json"
+SCRIPT_DOT_DIR="$HOME/.radioalive"
+FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
+FAVORITE_FILE="default.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
 RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
@@ -52,34 +53,11 @@ check_cmd jq
 
 # check ~/.tera/favorite
 if [ ! -d "$FAVORITE_PATH" ]; then
-    mkdir "$FAVORITE_PATH"
+    mkdir -p "$FAVORITE_PATH"
 fi
 if [ ! -f "$FAVORITE_FULL" ]; then
     touch "$FAVORITE_FULL"
 fi
-
-_fav_list() {
-    arr=("$FAVORITE_PATH"/*.json)
-    list=()
-    for f in "${arr[@]}"; do
-        if [ -s "$f" ]; then
-            name=$(basename "$f")
-            list+=("${name%.*}")
-        fi
-    done
-    echo "${list[@]}"
-}
-
-_station_list() {
-    jq -r '.[] | .name' <"$1"
-}
-
-_play() {
-    echo
-    echo "Press q to quit."
-    echo
-    mpv "$1"
-}
 
 # # opens a favorite list and select number to play a station
 # tera play
@@ -101,13 +79,8 @@ fn_play() {
 
     # read -rp "Type a list number.   " LIST
     if [ -n "$LIST" ]; then
-        echo "Select a number to play."
+        echo "Select a number to play from $LIST."
         STATIONS=$(_station_list "$LIST")
-        # select ST in $STATIONS; do
-        #     break
-        # done
-        # echo "$ST"
-        # exit
         echo "$STATIONS" | nl
         echo
         read -rp "Type number to play.   " ANS
@@ -149,10 +122,10 @@ fn_search() {
     fi
     # echo "OPTS are : "
     # echo "${OPTS[@]}"
-    SEARCH_RESULTS=$(mktemp /tmp/cora_searches.json)
-    SEARCH_RESULT=$(mktemp /tmp/cora_search.json)
-    TEMP_FILE=$(mktemp /tmp/cora_favorite.json)
-    TEMP_FILE2=$(mktemp /tmp/cora_favorite2.json)
+    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
+    SEARCH_RESULT=$(mktemp /tmp/radio_search.json)
+    TEMP_FILE=$(mktemp /tmp/radio_favorite.json)
+    TEMP_FILE2=$(mktemp /tmp/radio_favorite2.json)
     echo
     curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
@@ -231,15 +204,39 @@ fn_delete() {
     STATIONS=$(_station_list)
     echo "$STATIONS" | nl
     echo
-    read -rp "Type number to delete.   " ANS
+    read -rp "Type number to delete. " ANS
     jq "del(.[$ANS-1])" <"${FAVORITE_FULL}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
     # echo "$FAVORITE_FULL"
     echo "Deleted."
     rm "$TEMP_FILE"
 }
 
+fn_lucky() {
+    _clean_tmp
+    echo "I feel lucky."
+    # ask a tag word
+    read -rp "Type a key word. " RES
+    # find all stations with a key word
+    # select one station using
+
+    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
+    OPTS=()
+    for TAG in "${RES[@]}"; do
+        OPTS+=(-d "tag=$TAG")
+    done
+
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+
+    # find the list length
+    LENGTH=$(jq length "$SEARCH_RESULTS")
+    # random number
+    RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
+    echo "$RAN_NUM"
+    _search_play "$RAN_NUM"
+}
+
 search_menu() {
-    # cleanup /tmp/cora_searches.json
+    # cleanup /tmp/radio_searches.json
     _clean_tmp
     echo -ne "
 $SCRIPT_NAME Search by:
@@ -297,6 +294,7 @@ $(ColorGreen '2)') Search radio stations
 $(ColorGreen '3)') Delete a radio station 
 $(ColorGreen '4)') Gist up/down
 $(ColorGreen '5)') My Lists
+$(ColorGreen '6)') I feel lucky
 $(ColorGreen '0)') Exit
 $(ColorBlue 'Choose an option:') "
     read -r a
@@ -321,6 +319,10 @@ $(ColorBlue 'Choose an option:') "
         fn_list
         menu
         ;;
+    6)
+        fn_lucky
+        menu
+        ;;
     0) exit 0 ;;
     *)
         echo -e $red"Wrong option."$clear
@@ -331,75 +333,3 @@ $(ColorBlue 'Choose an option:') "
 }
 
 menu
-# shellcheck disable=SC1083
-# parser_definition() {
-#     setup REST help:usage abbr:true -- \
-#         "Usage: ${2##*/} [command] [options...] [arguments...]"
-#     msg -- '' 'Options:'
-#     disp :usage -h --help
-#     disp VERSION --version
-
-#     msg -- '' 'Commands: '
-#     msg -- 'Use command -h for a command help.'
-#     cmd play -- "Play a radio station."
-#     cmd search -- "Search radio stations."
-#     cmd delete -- "Delete a station from the favorite file."
-# }
-
-# # shellcheck disable=SC1083
-# parser_definition_play() {
-#     setup REST help:usage abbr:true -- \
-#         "Usage: ${2##*/} play [options] [arguments]"
-#     msg -- 'Play a station.'
-#     disp :usage -h --help
-# }
-
-# # shellcheck disable=SC1083
-# parser_definition_search() {
-#     setup REST help:usage abbr:true -- \
-#         "Usage: ${2##*/} search "
-#     msg -- 'Search a station.'
-#     param COUNTRYCODE -c --countrycode -- "accepts --countrycode value / --countrycode=value"
-#     param NAME -n --name -- "accepts --name value / --name=value"
-#     param LANGUAGE -l --lang -- "accepts --lang value / --lang=value"
-#     param STATE -s --state -- "accepts --state value / --state=value"
-#     disp :usage -h --help
-# }
-
-# # shellcheck disable=SC1083
-# parser_definition_delete() {
-#     setup REST help:usage abbr:true -- \
-#         "Usage: ${2##*/} delete"
-#     msg -- 'Delete a station.'
-#     disp :usage -h --help
-# }
-
-# eval "$(getoptions parser_definition parse "$0") exit 1"
-# parse "$@"
-# eval "set -- $REST"
-
-# if [ $# -gt 0 ]; then
-#     cmd=$1
-#     shift
-#     case $cmd in
-#     play)
-#         eval "$(getoptions parser_definition_play parse "$0")"
-#         parse "$@"
-#         eval "set -- $REST"
-#         fn_play "$@"
-#         ;;
-#     search)
-#         eval "$(getoptions parser_definition_search parse "$0")"
-#         parse "$@"
-#         eval "set -- $REST"
-#         fn_search "$@"
-#         ;;
-#     delete)
-#         eval "$(getoptions parser_definition_delete parse "$0")"
-#         parse "$@"
-#         eval "set -- $REST"
-#         fn_delete
-#         ;;
-#     --) ;; # no subcommand, arguments only
-#     esac
-# fi

@@ -3,8 +3,22 @@
 # RADIO_BROWSER="http://91.132.145.114/json/stations/search"
 
 _search_play() {
+    ANS=$1
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     mpv "$URL_RESOLVED"
+}
+
+_save_station() {
+    # echo saving
+    ANS=$(_show_favlist)
+    echo "$ANS"
+    FAVORITE_FULL="${FAVORITE_PATH}/${ANS}.json"
+
+    jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE2" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
+    # which list?
+    # STATIONS=$(_station_list "$LIST")
+    # echo "$STATIONS" | nl
+    # save it to the list
 }
 
 search_submenu() {
@@ -24,7 +38,7 @@ $(ColorBlue 'Choose an option:') "
         ;;
     2)
         echo "Save the station."
-        _save station
+        _save_station station
         menu
         ;;
     3)
@@ -42,7 +56,7 @@ $(ColorBlue 'Choose an option:') "
 
 search_by() {
     KEY=$1
-    SEARCH_RESULTS=$(mktemp /tmp/cora_searches.json)
+    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
     read -rp "Type a $KEY to search.   " RES
     OPTS=()
     for TAG in "${RES[@]}"; do
@@ -59,3 +73,16 @@ search_by() {
     search_submenu "$ANS"
     # rm "$SEARCH_RESULTS"
 }
+
+# luck_search() {
+#     KEY=$1
+#     SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
+#     read -rp "Type a $KEY to search.   " RES
+#     OPTS=()
+#     for TAG in "${RES[@]}"; do
+#         OPTS+=(-d "$KEY=$TAG")
+#     done
+
+#     curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+
+# }

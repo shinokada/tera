@@ -37,7 +37,47 @@ check_cmd() {
 
 # cleanup
 _clean_tmp() {
-    if [[ -f "/tmp/cora_searches.json" ]]; then
-        rm /tmp/cora_searches.json
+    if [[ -f "/tmp/radio_searches.json" ]]; then
+        rm /tmp/radio_searches.json
     fi
+}
+
+_fav_list() {
+    arr=("$FAVORITE_PATH"/*.json)
+    list=()
+    for f in "${arr[@]}"; do
+        if [ -s "$f" ]; then
+            name=$(basename "$f")
+            list+=("${name%.*}")
+        fi
+    done
+    echo "${list[@]}"
+}
+
+_station_list() {
+    jq -r '.[] | .name' <"$FAVORITE_PATH/$1.json"
+}
+
+_play() {
+    echo
+    echo "Press q to quit."
+    echo
+    mpv "$1"
+}
+
+_show_favlist() {
+    lists=$(_fav_list)
+    # lists=""
+    # echo "$lists"
+    if [ -z "$lists" ]; then
+        echo "lists is empty"
+        echo "try $SCRIPT_NAME search"
+    fi
+
+    PS3="Enter a number: "
+    select LIST in $(_fav_list); do
+        # echo "Selected list: $LIST"
+        break
+    done
+    echo "$LIST"
 }
