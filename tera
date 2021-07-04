@@ -131,52 +131,30 @@ fn_play() {
 fn_search() {
     # curl -X POST -d 'tag=jazz&countrycode=au&state=queensland' http://91.132.145.114/json/stations/search
     # curl -X POST -d 'tag=$1' -d 'countrycode=AU' $SEARCH_URL
-    # check $1
-    # if [ -z $1 ];
-
-    # fi
-    # echo "1: $1"
-    # if [ $# -ge 1 ] && [ -n "$1" ]; then
-    #     TA="-d 'tag=$1'"
-    # else
-    #     TA=""
-    # fi
+    OPTS=()
+    if [ $# -ge 1 ] && [ -n "$1" ]; then
+        OPTS+=(-d "tag=$1")
+    fi
     # echo "countrycode: $COUNTRYCODE"
-    # if [ -n "$COUNTRYCODE" ]; then
-    #     CC="-d 'countrycode=$COUNTRYCODE'"
-    # else
-    #     CC=""
-    # fi
+    if [ -n "$COUNTRYCODE" ]; then
+        OPTS+=(-d "countrycode=$COUNTRYCODE")
+    fi
     # echo "name: $NAME"
-    # if [ -n "$NAME" ]; then
-    #     NA="-d 'name=$NAME'"
-    # else
-    #     NA=""
-    # fi
+    if [ -n "$NAME" ]; then
+        OPTS+=(-d "name=$NAME")
+    fi
     # echo "language: $LANGUAGE"
-    # if [ -n "$LANGUAGE" ]; then
-    #     LA="-d 'language=$LANGUAGE'"
-    # else
-    #     LA=""
-    # fi
+    if [ -n "$LANGUAGE" ]; then
+        OPTS+=(-d "language=$LANGUAGE")
+    fi
     # echo "state: $STATE"
-    # if [ -n "$STATE" ]; then
-    #     ST="-d 'state=$STATE'"
-    # else
-    #     ST=""
-    # fi
-
-    # curl_opts=$(echo "$TA $CC $NA $LA $ST" | tr -s ' ')
-    # curl_opts=("$TA $CC $NA $LA $ST")
-    # OPTS=$(echo "${curl_opts[@]}" | tr -s ' ')
-    # curl_opts=(-d'tag=jazz' -d'state=queensland')
-    # echo "$curl_opts"
-    # OPTS=$(echo "$TA $CC $NA $LA $ST" | tr -s ' ')
-    # echo "$OPTS"
-    OPTS="-d 'tag=jazz' -d 'language=english' -d 'state=queensland'"
-    # curl -X POST -d 'tag=jazz' -d 'language=english' -d 'state=queensland' "$SEARCH_URL"
-    # curl -X POST "$OPTS" "$SEARCH_URL"
-    # exit
+    if [ -n "$STATE" ]; then
+        OPTS+=(-d "state=$STATE")
+    fi
+    echo "OPTS are : "
+    echo "${OPTS[@]}"
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL"
+    exit
     TEMP_FILE=$(mktemp /tmp/cora_favorite.json)
     TEMP_FILE2=$(mktemp /tmp/cora_favorite2.json)
     echo "Searching ..."
