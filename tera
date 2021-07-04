@@ -41,7 +41,7 @@ script_dir="${script_path%/*}"
 # shellcheck disable=SC1091
 source "${script_dir}/getoptions"
 # shellcheck disable=SC1091
-# source "${script_dir}/lib"
+source "${script_dir}/lib"
 
 check_cmd() {
     if [[ ! $(command -v "$1") ]]; then
@@ -55,16 +55,16 @@ check_cmd() {
 check_cmd mpv
 check_cmd jq
 
-# cleanup() {
-#     if [ -f "$TEMP_FILE" ] && [[ "$TEMP_FILE" =~ ".json"$ ]]; then
-#         rm -f "$TEMP_FILE"
-#     fi
-#     if [ -f "$TEMP_FILE2" ] && [[ "$TEMP_FILE2" =~ ".json"$ ]]; then
-#         rm -f "$TEMP_FILE2"
-#     fi
-# }
+cleanup() {
+    # TEMP_FILES=(/tmp/*.json)
+    # echo "${TEMP_FILES[@]}"
+    rm -f "/tmp/*.json"
+    #     if [[ ${#TEMP_FILES[@]} -gt 0 ]]; then
+    #         rm -f "/tmp/*.json"
+    #     fi
+}
 
-# trap cleanup EXIT
+trap cleanup EXIT
 # trap cleanup ERR
 
 # check ~/.tera/favorite
@@ -77,14 +77,12 @@ fi
 
 _fav_list() {
     arr=("$FAVORITE_PATH"/*.json)
-    # for ((i = 0; i < ${#arr[@]}; i++)); do
-    #     #do something to each element of array
-    #     echo "${arr[$i]}"
-    # done
     list=()
     for f in "${arr[@]}"; do
-        name=$(basename "$f")
-        list+=("${name%.*}")
+        if [ -s "$f" ]; then
+            name=$(basename "$f")
+            list+=("${name%.*}")
+        fi
     done
     echo "${list[@]}"
 }
@@ -92,13 +90,21 @@ _fav_list() {
 _station_list() {
     jq -r '.[] | .name' <"$1"
 }
+
+_play() {
+    echo
+    echo "Press q to quit."
+    echo
+    mpv "$1"
+}
+
 # # opens a favorite list and select number to play a station
 # tera play
 fn_play() {
     # check if a list is empty
     lists=$(_fav_list)
-    lists=""
-    echo "$lists"
+    # lists=""
+    # echo "$lists"
     if [ -z "$lists" ]; then
         echo "lists is empty"
         echo "try $SCRIPT_NAME search"
@@ -111,17 +117,24 @@ fn_play() {
     done
 
     # read -rp "Type a list number.   " LIST
-
-    echo "Select a number to play."
-    STATIONS=$(_station_list "$LIST")
-    echo "$STATIONS" | nl
-    echo
-    read -rp "Type number to play.   " ANS
-    # find the $ANS line e.g. line 2
-    URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
-    echo "$URL_RESOLVED"
-    mpv "$URL_RESOLVED"
-    echo "wow"
+    if [ -n "$LIST" ]; then
+        echo "Select a number to play."
+        STATIONS=$(_station_list "$LIST")
+        # select ST in $STATIONS; do
+        #     break
+        # done
+        # echo "$ST"
+        # exit
+        echo "$STATIONS" | nl
+        echo
+        read -rp "Type number to play.   " ANS
+        # find the $ANS line e.g. line 2
+        URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
+        _play "$URL_RESOLVED"
+    else
+        echo "No such a list."
+        exit
+    fi
 }
 
 # uses radio-browser.info bytag and grep
@@ -151,15 +164,61 @@ fn_search() {
     if [ -n "$STATE" ]; then
         OPTS+=(-d "state=$STATE")
     fi
-    echo "OPTS are : "
-    echo "${OPTS[@]}"
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL"
-    exit
+    # echo "OPTS are : "
+    # echo "${OPTS[@]}"
+    SEARCH_RESULTS=$(mktemp /tmp/cora_searches.json)
+    SEARCH_RESULT=$(mktemp /tmp/cora_search.json)
     TEMP_FILE=$(mktemp /tmp/cora_favorite.json)
     TEMP_FILE2=$(mktemp /tmp/cora_favorite2.json)
+    echo
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    echo
+    # cat "$SEARCH_RESULTS"
+    read -rp "Select a number.   " NUM
+    # STATION_NUM=$NUM
+    jq ".[$NUM]" <"$SEARCH_RESULTS" >"$SEARCH_RESULT"
+    # echo "Station no.: $STATION_NUM"
+    echo
+    echo "Do you want to: "
+    echo
+    PS3="Enter a number: "
+    select LIST in "Play" "Save" "Save & play" "Create"; do
+        # echo "Selected list: $LIST"
+        break
+    done
+    echo "you selected $LIST"
+    echo "reply $REPLY"
+    # rm "$SEARCH_RESULTS"
+    # rm "/tmp/*.json"
+    # exit
+
+    case $REPLY in
+    1)
+        url=$(jq -r '.url_resolved' <"$1")
+        _play "$url"
+        # url=$(jq -r '.url_resolved' <"$SEARCH_RESULT")
+        # mpv "$url"
+        # # echo "$url_resolved"
+        # echo "Wow !!"
+        # exit
+        ;;
+    2)
+        fn_save "$@"
+        ;;
+    3)
+        fn_save_play
+        ;;
+    4)
+        fn_create
+        echo "hi"
+        ;;
+    --) ;; # no subcommand, arguments only
+    esac
+
     echo "Searching ..."
     # works
-    COUNTRYCODE=$2
+
     curl $RADIO_BROWSER/"$1" | jq --arg COUNTRYCODE "$COUNTRYCODE" '[.[] | select(.countrycode==$COUNTRYCODE)]' >"$TEMP_FILE"
     # shows station names
     jq -r '.[].name' <"$TEMP_FILE" | nl
@@ -196,6 +255,47 @@ fn_delete() {
     rm "$TEMP_FILE"
 }
 
+menu() {
+    echo -ne "
+$SCRIPT_NAME Menu
+$(ColorGreen '1)') Play from my list
+$(ColorGreen '2)') Search radio stations
+$(ColorGreen '3)') Delete a radio station 
+$(ColorGreen '4)') Gist up/down
+$(ColorGreen '5)') My Lists
+$(ColorGreen '0)') Exit
+$(ColorBlue 'Choose an option:') "
+    read -r a
+    case $a in
+    1)
+        fn_play
+        menu
+        ;;
+    2)
+        fn_search
+        menu
+        ;;
+    3)
+        fn_delete
+        menu
+        ;;
+    4)
+        fn_gist
+        menu
+        ;;
+    5)
+        fn_list
+        menu
+        ;;
+    0) exit 0 ;;
+    *)
+        echo -e $red"Wrong option."$clear
+        WrongCommand
+        ;;
+    esac
+}
+
+menu
 # shellcheck disable=SC1083
 parser_definition() {
     setup REST help:usage abbr:true -- \
