@@ -4,12 +4,12 @@ set -eu
 
 # shellcheck disable=SC2034
 VERSION="0.1.0"
-SCRIPT_DOT_DIR="$HOME/.radioalive"
+SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 FAVORITE_FILE="default.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
-APP_NAME="RADIO ON BASH"
+APP_NAME="TERMINAL RADIO"
 RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
 SEARCH_URL="http://91.132.145.114/json/stations/search"
 

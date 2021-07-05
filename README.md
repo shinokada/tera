@@ -1,4 +1,4 @@
-# Radio on Bash (Rob)
+# Terminal Radio (TERA)
 
 ## Overview
 
