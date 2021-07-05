@@ -6,17 +6,22 @@ Play radio, save/edit favorite, search radio stations.
 
 ## Requirement
 
-[mpv](https://mpv.io/) is a free, open source, and cross-platform media player.
-[jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
-[gh](https://cli.github.com/) is the GitHub CLI
+- [mpv](https://mpv.io/) is a free, open source, and cross-platform media player.
+- [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
+- [gh](https://cli.github.com/) is the GitHub CLI
 
 ## Usage
 
 ### Commands
 
 ```sh
-# opens a favorite list and select number to play a station
-rob play
+rob
+```
+
+![start](https://raw.githubusercontent.com/shinokada/rob/main/images/radio1.png)
+
+
+```sh
 
 # uses radio-browser.info bytag and grep
 # use country codes
