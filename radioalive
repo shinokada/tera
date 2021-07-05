@@ -83,7 +83,7 @@ fn_play() {
         STATIONS=$(_station_list "$LIST")
         echo "$STATIONS" | nl
         echo
-        read -rp "Type number to play.   " ANS
+        read -rp "Type number to play. " ANS
         # find the $ANS line e.g. line 2
         URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
         _play "$URL_RESOLVED"
@@ -131,7 +131,7 @@ fn_search() {
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
     echo
     # cat "$SEARCH_RESULTS"
-    read -rp "Select a number.   " NUM
+    read -rp "Select a number. " NUM
     # STATION_NUM=$NUM
     jq ".[$NUM]" <"$SEARCH_RESULTS" >"$SEARCH_RESULT"
     # echo "Station no.: $STATION_NUM"
@@ -182,7 +182,7 @@ fn_search() {
     # ls "$TEMP_FILE"
     # cat "$TEMP_FILE"
     # after search result ask a number to play/save
-    read -rp "Select a number to add to your favirite list.   " ANS
+    read -rp "Select a number to add to your favirite list. " ANS
     # get the content
     jq ".[$ANS-1]" <"$TEMP_FILE" >"$TEMP_FILE2"
 
@@ -200,10 +200,13 @@ fn_search() {
 
 fn_delete() {
     TEMP_FILE=$(mktemp)
-    echo "Select a number to delete."
-    STATIONS=$(_station_list)
-    echo "$STATIONS" | nl
+    echo "Select a list number to delete from."
+    STATIONS=$(_show_favlist)
+    echo "$STATIONS"
     echo
+    read -rp "Type your station number to delete. " ANS
+    LIST=$(_station_list "$LIST_NAME")
+    exit
     read -rp "Type number to delete. " ANS
     jq "del(.[$ANS-1])" <"${FAVORITE_FULL}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
     # echo "$FAVORITE_FULL"
@@ -213,9 +216,9 @@ fn_delete() {
 
 fn_lucky() {
     _clean_tmp
-    echo "I feel lucky."
+    echo "Type a genre of music or a key word. rock, classical, jazz, pop, country, hip, heavy, blues, soul, meditation, relax, etc."
     # ask a tag word
-    read -rp "Type a key word. " RES
+    read -rp "Genre: " RES
     # find all stations with a key word
     # select one station using
 
@@ -231,7 +234,7 @@ fn_lucky() {
     LENGTH=$(jq length "$SEARCH_RESULTS")
     # random number
     RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
-    echo "$RAN_NUM"
+    # echo "$RAN_NUM"
     _search_play "$RAN_NUM"
 }
 
@@ -240,7 +243,7 @@ search_menu() {
     _clean_tmp
     echo -ne "
 $SCRIPT_NAME Search by:
-$(ColorGreen '1)') Tags
+$(ColorGreen '1)') Tag
 $(ColorGreen '2)') Name
 $(ColorGreen '3)') Language 
 $(ColorGreen '4)') Country code
