@@ -1,4 +1,4 @@
-# Terminal Radio Tera
+# Radio on Bash (Rob)
 
 ## Overview
 
@@ -16,24 +16,24 @@ Play radio, save/edit favorite, search radio stations.
 
 ```sh
 # opens a favorite list and select number to play a station
-tera play
+rob play
 
 # uses radio-browser.info bytag and grep
 # use country codes
 # after search result ask a number to play/save
-tera search jazz US
+rob search jazz 
 
 # list a favorite and ask a number to play
-tera ls
+rob ls
 
 # open a favorite to edit with EDITOR
-tera edit
+rob edit
 
 # stop playing
-tera stop
+rob stop
 
 # pause playing
-tera pause (or space)
+rob pause (or space)
 ```
 
 ### Options

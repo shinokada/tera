@@ -3,12 +3,13 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.0.2"
+VERSION="0.1.0"
 SCRIPT_DOT_DIR="$HOME/.radioalive"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 FAVORITE_FILE="default.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
+APP_NAME="RADIO ON BASH"
 RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
 SEARCH_URL="http://91.132.145.114/json/stations/search"
 
@@ -254,7 +255,7 @@ search_menu() {
     # cleanup /tmp/radio_searches.json
     _clean_tmp
     echo -ne "
-$SCRIPT_NAME Search by:
+$APP_NAME Search by:
 $(ColorGreen '1)') Tag
 $(ColorGreen '2)') Name
 $(ColorGreen '3)') Language 
@@ -306,7 +307,7 @@ $(ColorBlue 'Choose an option:') "
 
 menu() {
     echo -ne "
-$SCRIPT_NAME Menu
+$APP_NAME Menu
 $(ColorGreen '1)') Play from my list
 $(ColorGreen '2)') Search radio stations
 $(ColorGreen '3)') Delete a radio station 
@@ -352,5 +353,28 @@ $(ColorBlue 'Choose an option:') "
         ;;
     esac
 }
+
+usage() {
+    cat <<EOF
+    Name: $APP_NAME
+
+    Usage:
+    $SCRIPT_NAME
+
+EOF
+}
+
+while (($# > 0)); do
+    case $1 in
+    --version)
+        echo $VERSION
+        exit
+        ;;
+    -h | --help | *)
+        usage
+        exit
+        ;;
+    esac
+done
 
 menu
