@@ -214,6 +214,18 @@ fn_delete() {
     rm "$TEMP_FILE"
 }
 
+fn_list() {
+    echo "Showing lists."
+    echo "Work in progress."
+    exit
+}
+
+fn_gist() {
+    echo "Gist part."
+    echo "Work in progress."
+    exit
+}
+
 fn_lucky() {
     _clean_tmp
     echo "Type a genre of music or a key word. rock, classical, jazz, pop, country, hip, heavy, blues, soul, meditation, relax, etc."
@@ -280,7 +292,10 @@ $(ColorBlue 'Choose an option:') "
         advanced_search
         menu
         ;;
-    0) exit 0 ;;
+    0)
+        echo "Bye bye."
+        exit 0
+        ;;
     *)
         echo -e $red"Wrong option."$clear
         # WrongCommand
@@ -326,7 +341,10 @@ $(ColorBlue 'Choose an option:') "
         fn_lucky
         menu
         ;;
-    0) exit 0 ;;
+    0)
+        echo "Bye bye."
+        exit 0
+        ;;
     *)
         echo -e $red"Wrong option."$clear
         # WrongCommand
