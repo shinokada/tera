@@ -49,14 +49,23 @@ _cleanup_tmp() {
     fi
 }
 
+# shellcheck disable=SC2120
 _fav_list() {
     arr=("$FAVORITE_PATH"/*.json)
     list=()
     for f in "${arr[@]}"; do
-        if [ -s "$f" ]; then
+        if [ $# -ge 1 ] && [ -n "$1" ]; then
+            # if any argument is given then show all
             name=$(basename "$f")
             list+=("${name%.*}")
+        else
+            if [ -s "$f" ]; then
+                # otherwise show files with content
+                name=$(basename "$f")
+                list+=("${name%.*}")
+            fi
         fi
+
     done
     echo "${list[@]}"
 }
@@ -73,16 +82,16 @@ _play() {
 }
 
 _show_favlist() {
-    lists=$(_fav_list)
+    LISTS=$(_fav_list)
     # lists=""
     # echo "$lists"
-    if [ -z "$lists" ]; then
+    if [ -z "$LISTS" ]; then
         echo "lists is empty"
         echo "try $SCRIPT_NAME search"
     fi
 
     PS3="Enter a number: "
-    select LIST in $(_fav_list); do
+    select LIST in $LISTS; do
         # echo "Selected list: $LIST"
         break
     done

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+fn_delete() {
+    echo
+    TEMP_FILE=$(mktemp)
+    echo "Select a list number to delete from."
+    echo
+    LIST=$(_show_favlist)
+    echo
+    _station_list "$LIST" | nl
+    read -rp "Type your station number to delete. " ANS
+    # echo $ANS
+    jq "del(.[$ANS-1])" <"${FAVORITE_FULL}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
+    # echo "$FAVORITE_FULL"
+    _station_list "$LIST" | nl
+    # rm "$TEMP_FILE"
+    menu
+}

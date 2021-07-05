@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+fn_lucky() {
+    _clean_tmp
+    echo
+    echo "Type a genre of music, rock, classical, jazz, pop, country, hip, heavy, blues, soul."
+    echo "Or type a keyword, like meditation, relax, mozart, Beatles etc."
+    echo "Use only one word."
+    echo
+    # ask a tag word
+    read -rp "Genre/keyword: " RES
+    # find all stations with a key word
+    # select one station using
+
+    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
+    OPTS=()
+    for TAG in "${RES[@]}"; do
+        OPTS+=(-d "tag=$TAG")
+    done
+
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+
+    # find the list length
+    LENGTH=$(jq length "$SEARCH_RESULTS")
+    # random number
+    RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
+    # echo "$RAN_NUM"
+    _search_play "$RAN_NUM"
+}

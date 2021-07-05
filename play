@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+# # opens a favorite list and select number to play a station
+# tera play
+fn_play() {
+    # check if a list is empty
+    lists=$(_fav_list)
+    # lists=""
+    # echo "$lists"
+    if [ -z "$lists" ]; then
+        echo "lists is empty"
+        echo "try $SCRIPT_NAME search"
+    fi
+    echo
+    echo "Playing from my list."
+    echo
+    PS3="Enter a number: "
+    select LIST in $(_fav_list); do
+        # echo "Selected list: $LIST"
+        break
+    done
+
+    # read -rp "Type a list number.   " LIST
+    if [ -n "$LIST" ]; then
+        echo
+        echo "Select a number to play from $LIST list."
+        echo "Which station do you want to play?"
+        echo
+        STATIONS=$(_station_list "$LIST")
+        echo "$STATIONS" | nl
+        echo
+        read -rp "Type a number to play. " ANS
+        # find the $ANS line e.g. line 2
+        URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
+        _play "$URL_RESOLVED"
+    else
+        echo "No such a list."
+        exit
+    fi
+}

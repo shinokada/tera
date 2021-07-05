@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+_list_intro() {
+    lists=$(_fav_list)
+    # lists=""
+    # echo "$lists"
+    if [ -z "$lists" ]; then
+        echo "lists is empty"
+        echo "try $SCRIPT_NAME search"
+    fi
+    echo
+    echo "My lists: "
+    for list in $(_fav_list all); do
+        echo "$list"
+    done
+    echo
+}
+
+create_list() {
+    _list_intro
+    read -rp "Type a new list name: " NEW_LIST
+    echo
+    # replace spaces with - in $NEW_LIST
+    NEW=$NEW_LIST
+    NAME="${NEW// /-}"
+    touch "$FAVORITE_PATH/$NAME.json"
+    echo "$NAME is created."
+    list_menu
+}
+
+delete_list() {
+    _list_intro
+    read -rp "Type a new list name to delete: " LIST
+    echo
+    rm "$FAVORITE_PATH/$LIST.json" 2>/dev/null || {
+        echo "$LIST doesn't exist."
+        list_menu
+    }
+    echo "$LIST is deleted"
+    _list_intro
+    list_menu
+}
+
+show_lists() {
+    echo "All my lists:"
+    _list_intro
+}
+
+list_menu() {
+    echo -ne "
+$APP_NAME LIST MENU:
+$(ColorGreen '1)') Create a list
+$(ColorGreen '2)') Delete a list
+$(ColorGreen '3)') Show all lists
+$(ColorGreen '4)') Go back to the main menu
+$(ColorGreen '0)') Exit
+$(ColorBlue 'Choose an option:') "
+    read -r a
+    case $a in
+    1)
+        create_list
+        list_menu
+        ;;
+    2)
+        delete_list
+        list_menu
+        ;;
+    3)
+        show_lists
+        list_menu
+        ;;
+    4)
+        echo "Go back to the main menu"
+        menu
+        ;;
+    0)
+        echo "Bye bye."
+        exit 0
+        ;;
+    *)
+        echo -e $red"Wrong option."$clear
+        # WrongCommand
+        exit 1
+        ;;
+    esac
+}

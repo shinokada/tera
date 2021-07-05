@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.1.0"
+VERSION="0.1.1"
 SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 FAVORITE_FILE="default.json"
@@ -43,11 +43,14 @@ fi
 
 script_dir="${script_path%/*}"
 # shellcheck disable=SC1091
-source "${script_dir}/getoptions"
-# shellcheck disable=SC1091
-source "${script_dir}/lib"
-# shellcheck disable=SC1091
-source "${script_dir}/search"
+{
+    source "${script_dir}/lib"
+    source "${script_dir}/search"
+    source "${script_dir}/list"
+    source "${script_dir}/lucky"
+    source "${script_dir}/play"
+    source "${script_dir}/delete_station"
+}
 
 check_cmd mpv
 check_cmd jq
@@ -60,254 +63,15 @@ if [ ! -f "$FAVORITE_FULL" ]; then
     touch "$FAVORITE_FULL"
 fi
 
-# # opens a favorite list and select number to play a station
-# tera play
-fn_play() {
-    # check if a list is empty
-    lists=$(_fav_list)
-    # lists=""
-    # echo "$lists"
-    if [ -z "$lists" ]; then
-        echo "lists is empty"
-        echo "try $SCRIPT_NAME search"
-    fi
-
-    PS3="Enter a number: "
-    select LIST in $(_fav_list); do
-        # echo "Selected list: $LIST"
-        break
-    done
-
-    # read -rp "Type a list number.   " LIST
-    if [ -n "$LIST" ]; then
-        echo "Select a number to play from $LIST."
-        STATIONS=$(_station_list "$LIST")
-        echo "$STATIONS" | nl
-        echo
-        read -rp "Type number to play. " ANS
-        # find the $ANS line e.g. line 2
-        URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
-        _play "$URL_RESOLVED"
-    else
-        echo "No such a list."
-        exit
-    fi
-}
-
-# uses radio-browser.info bytag and grep
-# use country codes
-# after search result ask a number to play/save
-# tera search jazz US
-fn_search() {
-    # curl -X POST -d 'tag=jazz&countrycode=au&state=queensland' http://91.132.145.114/json/stations/search
-    # curl -X POST -d 'tag=$1' -d 'countrycode=AU' $SEARCH_URL
-    OPTS=()
-    if [ $# -ge 1 ] && [ -n "$1" ]; then
-        OPTS+=(-d "tag=$1")
-    fi
-    # echo "countrycode: $COUNTRYCODE"
-    if [ -n "$COUNTRYCODE" ]; then
-        OPTS+=(-d "countrycode=$COUNTRYCODE")
-    fi
-    # echo "name: $NAME"
-    if [ -n "$NAME" ]; then
-        OPTS+=(-d "name=$NAME")
-    fi
-    # echo "language: $LANGUAGE"
-    if [ -n "$LANGUAGE" ]; then
-        OPTS+=(-d "language=$LANGUAGE")
-    fi
-    # echo "state: $STATE"
-    if [ -n "$STATE" ]; then
-        OPTS+=(-d "state=$STATE")
-    fi
-    # echo "OPTS are : "
-    # echo "${OPTS[@]}"
-    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
-    SEARCH_RESULT=$(mktemp /tmp/radio_search.json)
-    TEMP_FILE=$(mktemp /tmp/radio_favorite.json)
-    TEMP_FILE2=$(mktemp /tmp/radio_favorite2.json)
-    echo
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
-    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
-    echo
-    # cat "$SEARCH_RESULTS"
-    read -rp "Select a number. " NUM
-    # STATION_NUM=$NUM
-    jq ".[$NUM]" <"$SEARCH_RESULTS" >"$SEARCH_RESULT"
-    # echo "Station no.: $STATION_NUM"
-    echo
-    echo "Do you want to: "
-    echo
-    PS3="Enter a number: "
-    select LIST in "Play" "Save" "Save & play" "Create"; do
-        # echo "Selected list: $LIST"
-        break
-    done
-    echo "you selected $LIST"
-    echo "reply $REPLY"
-    # rm "$SEARCH_RESULTS"
-    # rm "/tmp/*.json"
-    # exit
-
-    case $REPLY in
-    1)
-        url=$(jq -r '.url_resolved' <"$1")
-        _play "$url"
-        # url=$(jq -r '.url_resolved' <"$SEARCH_RESULT")
-        # mpv "$url"
-        # # echo "$url_resolved"
-        # echo "Wow !!"
-        # exit
-        ;;
-    2)
-        fn_save "$@"
-        ;;
-    3)
-        fn_save_play
-        ;;
-    4)
-        fn_create
-        echo "hi"
-        ;;
-    --) ;; # no subcommand, arguments only
-    esac
-
-    echo "Searching ..."
-    # works
-
-    curl $RADIO_BROWSER/"$1" | jq --arg COUNTRYCODE "$COUNTRYCODE" '[.[] | select(.countrycode==$COUNTRYCODE)]' >"$TEMP_FILE"
-    # shows station names
-    jq -r '.[].name' <"$TEMP_FILE" | nl
-
-    # ls "$TEMP_FILE"
-    # cat "$TEMP_FILE"
-    # after search result ask a number to play/save
-    read -rp "Select a number to add to your favirite list. " ANS
-    # get the content
-    jq ".[$ANS-1]" <"$TEMP_FILE" >"$TEMP_FILE2"
-
-    # 1
-    # jq '. += ["$TEMP_FILE2"]' "$FAVORITE_FULL" "$TEMP_FILE2"
-    # 2
-    # jq --argjson TEMP "$(cat "$TEMP_FILE2")" '. += [$TEMP]' "$FAVORITE_FULL" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-    jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE2" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-
-    # cleanup
-    rm -f "$TEMP_FILE"
-    rm -f "$TEMP_FILE2"
-    echo "Added a new station."
-}
-
-fn_delete() {
-    TEMP_FILE=$(mktemp)
-    echo "Select a list number to delete from."
-    STATIONS=$(_show_favlist)
-    echo "$STATIONS"
-    echo
-    read -rp "Type your station number to delete. " ANS
-    LIST=$(_station_list "$LIST_NAME")
-    exit
-    read -rp "Type number to delete. " ANS
-    jq "del(.[$ANS-1])" <"${FAVORITE_FULL}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-    # echo "$FAVORITE_FULL"
-    echo "Deleted."
-    rm "$TEMP_FILE"
-}
-
-fn_list() {
-    echo "Showing lists."
-    echo "Work in progress."
-    exit
-}
-
 fn_gist() {
     echo "Gist part."
     echo "Work in progress."
     exit
 }
 
-fn_lucky() {
-    _clean_tmp
-    echo "Type a genre of music or a key word. rock, classical, jazz, pop, country, hip, heavy, blues, soul, meditation, relax, etc."
-    # ask a tag word
-    read -rp "Genre: " RES
-    # find all stations with a key word
-    # select one station using
-
-    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
-    OPTS=()
-    for TAG in "${RES[@]}"; do
-        OPTS+=(-d "tag=$TAG")
-    done
-
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
-
-    # find the list length
-    LENGTH=$(jq length "$SEARCH_RESULTS")
-    # random number
-    RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
-    # echo "$RAN_NUM"
-    _search_play "$RAN_NUM"
-}
-
-search_menu() {
-    # cleanup /tmp/radio_searches.json
-    _clean_tmp
-    echo -ne "
-$APP_NAME Search by:
-$(ColorGreen '1)') Tag
-$(ColorGreen '2)') Name
-$(ColorGreen '3)') Language 
-$(ColorGreen '4)') Country code
-$(ColorGreen '5)') State
-$(ColorGreen '6)') Advanced search
-$(ColorGreen '0)') Exit
-$(ColorBlue 'Choose an option:') "
-    read -r a
-    case $a in
-    1)
-        echo "Search by tag"
-        search_by tag
-        menu
-        ;;
-    2)
-        echo "Search by name"
-        search_by name
-        menu
-        ;;
-    3)
-        echo "Search by language"
-        search_by language
-        menu
-        ;;
-    4)
-        search_by countrycode
-        menu
-        ;;
-    5)
-        search_by state
-        menu
-        ;;
-    6)
-        advanced_search
-        menu
-        ;;
-    0)
-        echo "Bye bye."
-        exit 0
-        ;;
-    *)
-        echo -e $red"Wrong option."$clear
-        # WrongCommand
-        exit 1
-        ;;
-    esac
-}
-
 menu() {
     echo -ne "
-$APP_NAME Menu
+$APP_NAME MAIN MENU
 $(ColorGreen '1)') Play from my list
 $(ColorGreen '2)') Search radio stations
 $(ColorGreen '3)') Delete a radio station 
@@ -335,7 +99,7 @@ $(ColorBlue 'Choose an option:') "
         menu
         ;;
     5)
-        fn_list
+        list_menu
         menu
         ;;
     6)
