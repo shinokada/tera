@@ -10,6 +10,16 @@ Play radio, save/edit favorite, search radio stations.
 - [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
 - [gh](https://cli.github.com/) is the GitHub CLI
 
+
+## Features
+
+- Play from a list
+- Search radio station by tag, name, language, country code, state.
+- Create/edit/show lists.
+- Delete a radio station from a list
+- I feel lucky.
+- Gist upload.
+
 ## Installation
 
 Using [Awesome package manager](https://github.com/shinokada/awesome):
@@ -42,9 +52,6 @@ You can search by tag, name, language, country code, state, and advanced(todo).
 -h | --help
 --version
 ```
-
-## Features
-
 
 ## Reference
 
