@@ -2,34 +2,36 @@
 
 _list_intro() {
     lists=$(_fav_list)
-    # lists=""
-    # echo "$lists"
     if [ -z "$lists" ]; then
         echo "lists is empty"
         echo "try $SCRIPT_NAME search"
     fi
-    echo
-    echo "My lists: "
     for list in $(_fav_list all); do
         echo "$list"
     done
-    echo
 }
 
 create_list() {
+    echo
+    echo "My lists: "
     _list_intro
+    echo
     read -rp "Type a new list name: " NEW_LIST
     echo
     # replace spaces with - in $NEW_LIST
     NEW=$NEW_LIST
     NAME="${NEW// /-}"
     touch "$FAVORITE_PATH/$NAME.json"
+    echo "[]" >"$FAVORITE_PATH/$NAME.json"
     echo "$NAME is created."
     list_menu
 }
 
 delete_list() {
+    echo
+    echo "My lists: "
     _list_intro
+    echo
     read -rp "Type a new list name to delete: " LIST
     echo
     rm "$FAVORITE_PATH/$LIST.json" 2>/dev/null || {
@@ -37,13 +39,18 @@ delete_list() {
         list_menu
     }
     echo "$LIST is deleted"
+    echo
+    echo "My lists: "
     _list_intro
+    echo
     list_menu
 }
 
 show_lists() {
-    echo "All my lists:"
+    echo
+    echo "My lists: "
     _list_intro
+    echo
 }
 
 list_menu() {

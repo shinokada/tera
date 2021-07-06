@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+GIST_URL_FILE="$HOME/.terminalradio/gisturl"
+
+create_gist() {
+    #
+    FAV=$(_list_intro)
+    echo "${FAV_ARR[@]}"
+    ARR=()
+    # add fav list to ARR array
+    for file in $FAV; do
+        ARR+=("${FAVORITE_PATH}/${file}.json")
+    done
+    # echo "${ARR[@]}"
+    # check GIST_URL exists and has a length greater than zero., if so ask to update else create a Gist
+    if [[ ! -s $GIST_URL_FILE ]]; then
+        #     # without mapfile
+        #     arr=()
+        #     IFS=$'\n' read -ra arr -d '' <"$dotties_file"
+        gh gist create -d "Terminal radio favorite lists." "${ARR[@]}" >"$GIST_URL_FILE"
+        echo "Created a secret Gist"
+        read -r gist_url <"$GIST_URL_FILE"
+        python -m webbrowser "$gist_url"
+    else
+        :
+        # read -r gist_url <"$GIST_URL_FILE"
+        # read -rp "You have your Gist at ${gist_url}. Do you want to update? (yes/no)(y/n)" ANS
+        # GIST_ANS=$(echo "$ANS" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
+        # if [[ $GIST_ANS = "Y" ]]; then
+        #     gh gist edit "$gist_url"
+        # fi
+    fi
+    gist_menu
+}
+
+download_gist() {
+    echo download a gist
+}
+
+gist_menu() {
+    echo -ne "
+$APP_NAME LIST MENU:
+$(ColorGreen '1)') Create a gist
+$(ColorGreen '2)') Download my gist
+$(ColorGreen '3)') Go back to the main menu
+$(ColorGreen '0)') Exit
+$(ColorBlue 'Choose an option:') "
+    read -r a
+    case $a in
+    1)
+        create_gist
+        gist_menu
+        ;;
+    2)
+        download_gist
+        gist_menu
+        ;;
+    3)
+        echo "Go back to the main menu"
+        menu
+        ;;
+    0)
+        echo "Bye bye."
+        exit 0
+        ;;
+    *)
+        echo -e "Wrong option."
+        exit 1
+        ;;
+    esac
+}

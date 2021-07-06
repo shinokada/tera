@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.1.1"
+VERSION="0.2.0"
 SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 FAVORITE_FILE="default.json"
@@ -50,6 +50,7 @@ script_dir="${script_path%/*}"
     source "${script_dir}/lucky"
     source "${script_dir}/play"
     source "${script_dir}/delete_station"
+    source "${script_dir}/gist"
 }
 
 check_cmd mpv
@@ -63,20 +64,14 @@ if [ ! -f "$FAVORITE_FULL" ]; then
     touch "$FAVORITE_FULL"
 fi
 
-fn_gist() {
-    echo "Gist part."
-    echo "Work in progress."
-    exit
-}
-
 menu() {
     echo -ne "
 $APP_NAME MAIN MENU
 $(ColorGreen '1)') Play from my list
 $(ColorGreen '2)') Search radio stations
 $(ColorGreen '3)') Delete a radio station 
-$(ColorGreen '4)') Gist up/down
-$(ColorGreen '5)') My Lists
+$(ColorGreen '4)') Gist up/download
+$(ColorGreen '5)') Lists Create/Edit/Show 
 $(ColorGreen '6)') I feel lucky
 $(ColorGreen '0)') Exit
 $(ColorBlue 'Choose an option:') "
@@ -95,7 +90,7 @@ $(ColorBlue 'Choose an option:') "
         menu
         ;;
     4)
-        fn_gist
+        gist_menu
         menu
         ;;
     5)
