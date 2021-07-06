@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 fn_lucky() {
-    _clean_tmp
+    _cleanup_tmp "/tmp/radio_searches.json"
     echo
     echo "Type a genre of music, rock, classical, jazz, pop, country, hip, heavy, blues, soul."
     echo "Or type a keyword, like meditation, relax, mozart, Beatles etc."

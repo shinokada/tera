@@ -56,12 +56,12 @@ show_lists() {
 list_menu() {
     echo -ne "
 $APP_NAME LIST MENU:
-$(ColorGreen '1)') Create a list
-$(ColorGreen '2)') Delete a list
-$(ColorGreen '3)') Show all lists
-$(ColorGreen '4)') Go back to the main menu
-$(ColorGreen '0)') Exit
-$(ColorBlue 'Choose an option:') "
+$(greenprint '1)') Create a list
+$(greenprint '2)') Delete a list
+$(greenprint '3)') Show all lists
+$(greenprint '4)') Go back to the main menu
+$(greenprint '0)') Exit
+$(blueprint 'Choose an option:') "
     read -r a
     case $a in
     1)
@@ -85,8 +85,7 @@ $(ColorBlue 'Choose an option:') "
         exit 0
         ;;
     *)
-        echo -e $red"Wrong option."$clear
-        # WrongCommand
+        redprint "Wrong option."
         exit 1
         ;;
     esac

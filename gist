@@ -40,11 +40,11 @@ download_gist() {
 gist_menu() {
     echo -ne "
 $APP_NAME LIST MENU:
-$(ColorGreen '1)') Create a gist
-$(ColorGreen '2)') Download my gist
-$(ColorGreen '3)') Go back to the main menu
-$(ColorGreen '0)') Exit
-$(ColorBlue 'Choose an option:') "
+$(greenprint '1)') Create a gist
+$(greenprint '2)') Download my gist
+$(greenprint '3)') Go back to the main menu
+$(greenprint '0)') Exit
+$(blueprint 'Choose an option:') "
     read -r a
     case $a in
     1)
@@ -64,7 +64,7 @@ $(ColorBlue 'Choose an option:') "
         exit 0
         ;;
     *)
-        echo -e "Wrong option."
+        redprint "Wrong option."
         exit 1
         ;;
     esac

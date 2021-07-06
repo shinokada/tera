@@ -1,22 +1,42 @@
 #!/usr/bin/env bash
 
-##
-# Color  Variables
-##
-green='\e[32m'
-blue='\e[34m'
-red='\e[31m'
-clear='\e[0m'
+### Colors ##
+ESC=$(printf '\033')
+RESET="${ESC}[0m"
+BLACK="${ESC}[30m"
+RED="${ESC}[31m"
+GREEN="${ESC}[32m"
+YELLOW="${ESC}[33m"
+BLUE="${ESC}[34m"
+MAGENTA="${ESC}[35m"
+CYAN="${ESC}[36m"
+WHITE="${ESC}[37m"
+DEFAULT="${ESC}[39m"
 
-##
-# Color Functions
-##
+### Color Functions ##
 
-ColorGreen() {
-    echo -ne "$green$1$clear"
+greenprint() {
+    printf "${GREEN}%s${RESET}\n" "$1"
 }
-ColorBlue() {
-    echo -ne "$blue$1$clear"
+
+blueprint() {
+    printf "${BLUE}%s${RESET}\n" "$1"
+}
+
+redprint() {
+    printf "${RED}%s${RESET}\n" "$1"
+}
+
+yellowprint() {
+    printf "${YELLOW}%s${RESET}\n" "$1"
+}
+
+magentaprint() {
+    printf "${MAGENTA}%s${RESET}\n" "$1"
+}
+
+cyanprint() {
+    printf "${CYAN}%s${RESET}\n" "$1"
 }
 
 check_cmd() {
@@ -25,20 +45,6 @@ check_cmd() {
         echo "It seems like you don't have ${app}."
         echo "Please install ${app}."
         exit 1
-    fi
-}
-
-# cleanup() {
-#     rm -f "/tmp/*.json"
-# }
-
-# trap cleanup EXIT
-# trap cleanup ERR
-
-# cleanup
-_clean_tmp() {
-    if [[ -f "/tmp/radio_searches.json" ]]; then
-        rm /tmp/radio_searches.json
     fi
 }
 

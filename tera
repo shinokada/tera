@@ -67,14 +67,14 @@ fi
 menu() {
     echo -ne "
 $APP_NAME MAIN MENU
-$(ColorGreen '1)') Play from my list
-$(ColorGreen '2)') Search radio stations
-$(ColorGreen '3)') Delete a radio station 
-$(ColorGreen '4)') Gist up/download
-$(ColorGreen '5)') Lists Create/Edit/Show 
-$(ColorGreen '6)') I feel lucky
-$(ColorGreen '0)') Exit
-$(ColorBlue 'Choose an option:') "
+$(greenprint '1)') Play from my list
+$(greenprint '2)') Search radio stations
+$(greenprint '3)') Delete a radio station 
+$(greenprint '4)') Gist up/download
+$(greenprint '5)') Lists Create/Edit/Show 
+$(greenprint '6)') I feel lucky
+$(greenprint '0)') Exit
+$(blueprint 'Choose an option:') "
     read -r a
     case $a in
     1)
@@ -106,8 +106,7 @@ $(ColorBlue 'Choose an option:') "
         exit 0
         ;;
     *)
-        echo -e $red"Wrong option."$clear
-        # WrongCommand
+        redprint 'Wrong option.'
         exit 1
         ;;
     esac
