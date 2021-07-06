@@ -59,9 +59,9 @@ edit_list() {
     _list_intro
     echo
     read -rp "Type a list name to edit: " LIST
-    echo $LIST
+    echo "Old name: $LIST"
     read -rp "Type a new name: " NEW
-    echo $NEW
+    echo "New name: $NEW"
     mv "$FAVORITE_PATH/$LIST.json" "$FAVORITE_PATH/$NEW.json" &>/dev/null || {
         echo "$LIST doesn't exist. Try again."
         list_menu

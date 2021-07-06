@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 
 fn_delete() {
+    _cleanup_tmp "/tmp/radio_delete.json"
     echo
-    TEMP_FILE=$(mktemp)
+    TEMP_FILE=$(mktemp /tmp/radio_delete.json)
     echo "Select a list number to delete from."
     echo
+    echo "0) CANCEL"
     LIST=$(_show_favlist)
     echo
+    echo "LIST: $LIST"
+    if [[ -z $LIST ]]; then
+        menu
+    fi
     _station_list "$LIST" | nl
     read -rp "Type your station number to delete. " ANS
-    # echo $ANS
-    jq "del(.[$ANS-1])" <"${FAVORITE_FULL}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-    # echo "$FAVORITE_FULL"
+    echo "$ANS"
+    FAVLIST_PATH="${FAVORITE_PATH}/${LIST}.json"
+    jq "del(.[$ANS-1])" <"${FAVLIST_PATH}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVLIST_PATH"
     _station_list "$LIST" | nl
-    # rm "$TEMP_FILE"
     menu
 }

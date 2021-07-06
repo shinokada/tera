@@ -14,11 +14,19 @@ Play radio, save/edit favorite, search radio stations.
 
 ### Commands
 
+#### Main Menu
+
 ```sh
 tera
 ```
 
 ![start](https://raw.githubusercontent.com/shinokada/tera/main/images/radio1.png)
+
+#### Search Menu
+
+You can search by tag, name, language, country code, state, and advanced(todo).
+
+![start](https://raw.githubusercontent.com/shinokada/tera/main/images/searchmenu.png)
 
 ### Options
 
