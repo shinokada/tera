@@ -20,7 +20,6 @@ tera
 
 ![start](https://raw.githubusercontent.com/shinokada/tera/main/images/radio1.png)
 
-
 ### Options
 
 ```sh

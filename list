@@ -53,13 +53,30 @@ show_lists() {
     echo
 }
 
+edit_list() {
+    echo
+    echo "My lists: "
+    _list_intro
+    echo
+    read -rp "Type a list name to edit: " LIST
+    echo $LIST
+    read -rp "Type a new name: " NEW
+    echo $NEW
+    mv "$FAVORITE_PATH/$LIST.json" "$FAVORITE_PATH/$NEW.json" &>/dev/null || {
+        echo "$LIST doesn't exist. Try again."
+        list_menu
+    }
+    show_lists
+}
+
 list_menu() {
     echo -ne "
 $APP_NAME LIST MENU:
 $(greenprint '1)') Create a list
 $(greenprint '2)') Delete a list
-$(greenprint '3)') Show all lists
-$(greenprint '4)') Go back to the main menu
+$(greenprint '3)') Edit a list
+$(greenprint '4)') Show all lists
+$(greenprint '5)') Go back to the main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
     read -r a
@@ -73,10 +90,14 @@ $(blueprint 'Choose an option:') "
         list_menu
         ;;
     3)
-        show_lists
+        edit_list
         list_menu
         ;;
     4)
+        show_lists
+        list_menu
+        ;;
+    5)
         echo "Go back to the main menu"
         menu
         ;;

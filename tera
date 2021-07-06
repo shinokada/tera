@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.2.2"
+VERSION="0.2.3"
 SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 FAVORITE_FILE="default.json"
@@ -70,8 +70,8 @@ $APP_NAME MAIN MENU
 $(greenprint '1)') Play from my list
 $(greenprint '2)') Search radio stations
 $(greenprint '3)') Delete a radio station 
-$(greenprint '4)') Gist up/download
-$(greenprint '5)') Lists Create/Edit/Show 
+$(greenprint '4)') Gist (Upload)
+$(greenprint '5)') List (Create/Edit/Show)
 $(greenprint '6)') I feel lucky
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
