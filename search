@@ -48,37 +48,37 @@ _search_play() {
     fi
 }
 
-_save_station() {
-    # FILE1="/tmp/radio_favorite.json"
-    # FILE2="/tmp/radio_favorite2.json"
-    # _cleanup_tmp $FILE1
-    # _cleanup_tmp $FILE2
-    # TEMP_FILE=$(mktemp "$FILE1")
-    # TEMP_FILE2=$(mktemp "$FILE2")
-    # echo "$1" # list number
-    # ANS=$1
-    _save_station_to_list "$1"
-    ########
-    # echo "Select the list to save to: "
-    # # echo saving
-    # LIST_NAME=$(_show_favlist)
-    # echo "$LIST_NAME"
-    # FAVORITE_FULL="${FAVORITE_PATH}/${LIST_NAME}.json"
-    # # echo "$FAVORITE_FULL"
-    # # get item from "$SEARCH_RESULTS" using $ANS
+# _save_station() {
+#     # FILE1="/tmp/radio_favorite.json"
+#     # FILE2="/tmp/radio_favorite2.json"
+#     # _cleanup_tmp $FILE1
+#     # _cleanup_tmp $FILE2
+#     # TEMP_FILE=$(mktemp "$FILE1")
+#     # TEMP_FILE2=$(mktemp "$FILE2")
+#     # echo "$1" # list number
+#     # ANS=$1
+#     _save_station_to_list "$1"
+#     ########
+#     # echo "Select the list to save to: "
+#     # # echo saving
+#     # LIST_NAME=$(_show_favlist)
+#     # echo "$LIST_NAME"
+#     # FAVORITE_FULL="${FAVORITE_PATH}/${LIST_NAME}.json"
+#     # # echo "$FAVORITE_FULL"
+#     # # get item from "$SEARCH_RESULTS" using $ANS
 
-    # jq ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
-    # # add the item to the fav list
-    # # jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE"
-    # jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE" >"$TEMP_FILE2" && mv "$TEMP_FILE2" "$FAVORITE_FULL"
-    # # which list?
-    # echo "Successfull save it to your $LIST_NAME list."
-    # # STATIONS=$(_station_list "$LIST")
-    # # echo "$STATIONS" | nl
-    # # save it to the list
-    ############
-    search_submenu
-}
+#     # jq ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
+#     # # add the item to the fav list
+#     # # jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE"
+#     # jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE" >"$TEMP_FILE2" && mv "$TEMP_FILE2" "$FAVORITE_FULL"
+#     # # which list?
+#     # echo "Successfull save it to your $LIST_NAME list."
+#     # # STATIONS=$(_station_list "$LIST")
+#     # # echo "$STATIONS" | nl
+#     # # save it to the list
+#     ############
+#     search_submenu
+# }
 
 _save_play() {
     echo "Save & Play"
@@ -95,7 +95,14 @@ search_by() {
     done
 
     curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+    # cat "$SEARCH_RESULTS"
+    LENGTH=$(jq length "$SEARCH_RESULTS")
 
+    # check $SEARCH_RESULT has length is more than 0
+    if (("$LENGTH" < 1)); then
+        echo "No result. Try again."
+        search_menu
+    fi
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
     echo
     read -rp "Select a number. " ANS
@@ -211,8 +218,8 @@ search_submenu() {
 $APP_NAME SEARCH SUB MENU:
 $(ColorGreen '1)') Play
 $(ColorGreen '2)') Save
-$(ColorGreen '3)') Go back to the Main menu
-$(ColorGreen '4)') Go back to the Search menu
+$(ColorGreen '3)') Go back to the Search menu
+$(ColorGreen '4)') Go back to the Main menu
 $(ColorGreen '0)') Exit
 $(ColorBlue 'Choose an option:') "
     read -r a
@@ -226,17 +233,16 @@ $(ColorBlue 'Choose an option:') "
         search_menu
         ;;
     3)
-        echo "Go back to the Main menu"
-        menu
-        ;;
-    4)
         echo "Go back to the Search menu"
         search_menu
+        ;;
+    4)
+        echo "Go back to the Main menu"
+        menu
         ;;
     0) exit 0 ;;
     *)
         echo -e $red"Wrong option."$clear
-        # WrongCommand
         exit 1
         ;;
     esac
