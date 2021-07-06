@@ -21,14 +21,6 @@ create_gist() {
         echo "Created a secret Gist"
         read -r gist_url <"$GIST_URL_FILE"
         python -m webbrowser "$gist_url"
-    else
-        :
-        # read -r gist_url <"$GIST_URL_FILE"
-        # read -rp "You have your Gist at ${gist_url}. Do you want to update? (yes/no)(y/n)" ANS
-        # GIST_ANS=$(echo "$ANS" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
-        # if [[ $GIST_ANS = "Y" ]]; then
-        #     gh gist edit "$gist_url"
-        # fi
     fi
     gist_menu
 }
@@ -41,8 +33,7 @@ gist_menu() {
     echo -ne "
 $APP_NAME LIST MENU:
 $(greenprint '1)') Create a gist
-$(greenprint '2)') Download my gist
-$(greenprint '3)') Go back to the main menu
+$(greenprint '2)') Go back to the main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
     read -r a
@@ -52,11 +43,6 @@ $(blueprint 'Choose an option:') "
         gist_menu
         ;;
     2)
-        download_gist
-        gist_menu
-        ;;
-    3)
-        echo "Go back to the main menu"
         menu
         ;;
     0)

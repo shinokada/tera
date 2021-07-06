@@ -15,31 +15,11 @@ Play radio, save/edit favorite, search radio stations.
 ### Commands
 
 ```sh
-rob
+tera
 ```
 
-![start](https://raw.githubusercontent.com/shinokada/rob/main/images/radio1.png)
+![start](https://raw.githubusercontent.com/shinokada/tera/main/images/radio1.png)
 
-
-```sh
-
-# uses radio-browser.info bytag and grep
-# use country codes
-# after search result ask a number to play/save
-rob search jazz 
-
-# list a favorite and ask a number to play
-rob ls
-
-# open a favorite to edit with EDITOR
-rob edit
-
-# stop playing
-rob stop
-
-# pause playing
-rob pause (or space)
-```
 
 ### Options
 
