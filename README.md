@@ -2,13 +2,13 @@
 
 ## Overview
 
-Play radio, save/edit favorite, search radio stations.
+Play radio, CRUD favorites, search radio stations.
 
 ## Requirement
 
 - [mpv](https://mpv.io/) is a free, open source, and cross-platform media player.
 - [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
-- [gh](https://cli.github.com/) is the GitHub CLI
+- [gh](https://cli.github.com/) is the GitHub CLI. Only for Gist functions.
 
 ## Features
 
@@ -16,10 +16,10 @@ Play radio, save/edit favorite, search radio stations.
 - 27780+ radio stations.
 - Play from a list
 - Search radio station by tag, name, language, country code, state.
-- After play, you can save to a list if you wish.
-- Create/edit/show lists.
+- After play, you can save to a list.
+- CRUD favorite lists.
 - Delete a radio station from a list
-- I feel lucky.
+- I feel lucky menu.
 - Gist upload.
 
 ## Installation

@@ -65,7 +65,9 @@ _fav_list() {
             name=$(basename "$f")
             list+=("${name%.*}")
         else
-            if [ -s "$f" ]; then
+            content_length=$(jq length "$f")
+            # echo "$content_length"
+            if (("$content_length" > 0)); then
                 # otherwise show files with content
                 name=$(basename "$f")
                 list+=("${name%.*}")

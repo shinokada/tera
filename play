@@ -12,7 +12,7 @@ fn_play() {
         echo "try $SCRIPT_NAME search"
     fi
     echo
-    echo "Playing from my list."
+    echo "Select a list."
     echo
     PS3="Enter a number: "
     select LIST in $(_fav_list); do

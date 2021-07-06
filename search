@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 
 _save_station_to_list() {
-    FILE1="/tmp/radio_favorite.json"
-    FILE2="/tmp/radio_favorite2.json"
-    _cleanup_tmp $FILE1
-    _cleanup_tmp $FILE2
-    TEMP_FILE=$(mktemp "$FILE1")
-    TEMP_FILE2=$(mktemp "$FILE2")
+    TEMP_FILE="${TMP_PATH}/radio_favorite.json"
+    TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
+    # FILE1="${TMP_PATH}/radio_favorite.json"
+    # FILE2="${TMP_PATH}/radio_favorite2.json"
+    # FILE1="/tmp/radio_favorite.json"
+    # FILE2="/tmp/radio_favorite2.json"
+    _cleanup_tmp "$TEMP_FILE"
+    _cleanup_tmp "$TEMP_FILE2"
+    # TEMP_FILE=$(mktemp "$FILE1")
+    # TEMP_FILE2=$(mktemp "$FILE2")
     echo
     ANS=$1
     # echo $ANS
@@ -27,11 +31,13 @@ _save_station_to_list() {
 }
 
 _search_play() {
-    FILE="/tmp/radio_listening.json"
-    _cleanup_tmp $FILE
+    # FILE="/tmp/radio_listening.json"
+    TEMP_FILE="${TMP_PATH}/radio_favorite.json"
+    # TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
+    _cleanup_tmp "$TEMP_FILE"
     # echo "$1" # this is a list number in "$SEARCH_RESULTS"
     ANS=$1
-    jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >$FILE
+    jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     mpv "$URL_RESOLVED"
     echo
@@ -48,7 +54,7 @@ _save_play() {
 
 search_by() {
     KEY=$1
-    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
+    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     echo
     read -rp "Type a $KEY to search: " RES
     OPTS=()
@@ -104,10 +110,10 @@ fn_search() {
     fi
     # echo "OPTS are : "
     # echo "${OPTS[@]}"
-    SEARCH_RESULTS=$(mktemp /tmp/radio_searches.json)
-    SEARCH_RESULT=$(mktemp /tmp/radio_search.json)
-    TEMP_FILE=$(mktemp /tmp/radio_favorite.json)
-    TEMP_FILE2=$(mktemp /tmp/radio_favorite2.json)
+    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+    SEARCH_RESULT="${TMP_PATH}/radio_search.json"
+    TEMP_FILE="${TMP_PATH}/radio_favorite.json"
+    TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
     echo
     curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
