@@ -214,15 +214,15 @@ search_menu() {
     _cleanup_tmp "/tmp/radio_searches.json"
     echo -ne "
 $APP_NAME SEARCH MENU:
-$(ColorGreen '1)') Tag
-$(ColorGreen '2)') Name
-$(ColorGreen '3)') Language 
-$(ColorGreen '4)') Country code
-$(ColorGreen '5)') State
-$(ColorGreen '6)') Advanced search
-$(ColorGreen '7)') Main Menu
-$(ColorGreen '0)') Exit
-$(ColorBlue 'Choose an option:') "
+$(greenprint '1)') Tag
+$(greenprint '2)') Name
+$(greenprint '3)') Language 
+$(greenprint '4)') Country code
+$(greenprint '5)') State
+$(greenprint '6)') Advanced search
+$(greenprint '7)') Main Menu
+$(greenprint '0)') Exit
+$(blueprint 'Choose an option:') "
     read -r a
     case $a in
     1)
