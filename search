@@ -219,11 +219,11 @@ $(ColorBlue 'Choose an option:') "
     case $a in
     1)
         _search_play "$ANS"
-        search_submenu
+        search_menu
         ;;
     2)
         _save_station_to_list "$ANS"
-        search_submenu
+        search_menu
         ;;
     3)
         echo "Go back to the Main menu"
