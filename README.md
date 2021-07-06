@@ -12,10 +12,11 @@ Play radio, save/edit favorite, search radio stations.
 
 ## Features
 
-- Powered by [Radio Browser API](https://de1.api.radio-browser.info/).
+- Powered by [Radio Browser API](https://de1.api.radio-browser.info/) and [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
 - 27780+ radio stations.
 - Play from a list
 - Search radio station by tag, name, language, country code, state.
+- After play, you can save to a list if you wish.
 - Create/edit/show lists.
 - Delete a radio station from a list
 - I feel lucky.
@@ -30,6 +31,13 @@ awesome install shinokada/tera
 ```
 
 ## Usage
+
+While playing music:
+
+- Pause: `q` or `space`.
+- Forward: Right arrow.
+- Backward: Left arrow.
+- [More MPV control](https://mpv.io/manual/master/)
 
 ### Commands
 
