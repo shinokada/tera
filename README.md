@@ -10,6 +10,14 @@ Play radio, save/edit favorite, search radio stations.
 - [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
 - [gh](https://cli.github.com/) is the GitHub CLI
 
+## Installation
+
+Using [Awesome package manager](https://github.com/shinokada/awesome):
+
+```sh
+awesome install shinokada/tera
+```
+
 ## Usage
 
 ### Commands
