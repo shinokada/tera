@@ -3,8 +3,14 @@
 _save_station_to_list() {
     TEMP_FILE="${TMP_PATH}/radio_favorite.json"
     TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
+    # FILE1="${TMP_PATH}/radio_favorite.json"
+    # FILE2="${TMP_PATH}/radio_favorite2.json"
+    # FILE1="/tmp/radio_favorite.json"
+    # FILE2="/tmp/radio_favorite2.json"
     _cleanup_tmp "$TEMP_FILE"
     _cleanup_tmp "$TEMP_FILE2"
+    # TEMP_FILE=$(mktemp "$FILE1")
+    # TEMP_FILE2=$(mktemp "$FILE2")
     echo
     ANS=$1
     # echo $ANS
@@ -26,7 +32,9 @@ _save_station_to_list() {
 }
 
 _search_play() {
+    # FILE="/tmp/radio_listening.json"
     TEMP_FILE="${TMP_PATH}/radio_favorite.json"
+    # TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
     _cleanup_tmp "$TEMP_FILE"
     # echo "$1" # this is a list number in "$SEARCH_RESULTS"
     ANS=$1
@@ -78,115 +86,112 @@ search_by() {
 # use country codes
 # after search result ask a number to play/save
 # tera search jazz US
-fn_search() {
-    # curl -X POST -d 'tag=jazz&countrycode=au&state=queensland' http://91.132.145.114/json/stations/search
-    # curl -X POST -d 'tag=$1' -d 'countrycode=AU' $SEARCH_URL
-    OPTS=()
-    if [ $# -ge 1 ] && [ -n "$1" ]; then
-        OPTS+=(-d "tag=$1")
-    fi
-    # echo "countrycode: $COUNTRYCODE"
-    if [ -n "$COUNTRYCODE" ]; then
-        OPTS+=(-d "countrycode=$COUNTRYCODE")
-    fi
-    # echo "name: $NAME"
-    if [ -n "$NAME" ]; then
-        OPTS+=(-d "name=$NAME")
-    fi
-    # echo "language: $LANGUAGE"
-    if [ -n "$LANGUAGE" ]; then
-        OPTS+=(-d "language=$LANGUAGE")
-    fi
-    # echo "state: $STATE"
-    if [ -n "$STATE" ]; then
-        OPTS+=(-d "state=$STATE")
-    fi
-    # echo "OPTS are : "
-    # echo "${OPTS[@]}"
-    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
-    SEARCH_RESULT="${TMP_PATH}/radio_search.json"
-    TEMP_FILE="${TMP_PATH}/radio_favorite.json"
-    TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
-    echo
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
-    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
-    echo
-    # cat "$SEARCH_RESULTS"
-    read -rp "Select a number. " NUM
-    # STATION_NUM=$NUM
-    jq ".[$NUM]" <"$SEARCH_RESULTS" >"$SEARCH_RESULT"
-    # echo "Station no.: $STATION_NUM"
-    echo
-    echo "Do you want to: "
-    echo
-    PS3="Enter a number: "
-    select LIST in "Play" "Save" "Save & play" "Create"; do
-        # echo "Selected list: $LIST"
-        break
-    done
-    echo "you selected $LIST"
-    echo "reply $REPLY"
-    # rm "$SEARCH_RESULTS"
-    # rm "/tmp/*.json"
-    # exit
+# fn_search() {
+#     # curl -X POST -d 'tag=jazz&countrycode=au&state=queensland' http://91.132.145.114/json/stations/search
+#     # curl -X POST -d 'tag=$1' -d 'countrycode=AU' $SEARCH_URL
+#     OPTS=()
+#     if [ $# -ge 1 ] && [ -n "$1" ]; then
+#         OPTS+=(-d "tag=$1")
+#     fi
+#     # echo "countrycode: $COUNTRYCODE"
+#     if [ -n "$COUNTRYCODE" ]; then
+#         OPTS+=(-d "countrycode=$COUNTRYCODE")
+#     fi
+#     # echo "name: $NAME"
+#     if [ -n "$NAME" ]; then
+#         OPTS+=(-d "name=$NAME")
+#     fi
+#     # echo "language: $LANGUAGE"
+#     if [ -n "$LANGUAGE" ]; then
+#         OPTS+=(-d "language=$LANGUAGE")
+#     fi
+#     # echo "state: $STATE"
+#     if [ -n "$STATE" ]; then
+#         OPTS+=(-d "state=$STATE")
+#     fi
+#     # echo "OPTS are : "
+#     # echo "${OPTS[@]}"
+#     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+#     SEARCH_RESULT="${TMP_PATH}/radio_search.json"
+#     TEMP_FILE="${TMP_PATH}/radio_favorite.json"
+#     TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
+#     echo
+#     curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+#     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+#     echo
+#     # cat "$SEARCH_RESULTS"
+#     read -rp "Select a number. " NUM
+#     # STATION_NUM=$NUM
+#     jq ".[$NUM]" <"$SEARCH_RESULTS" >"$SEARCH_RESULT"
+#     # echo "Station no.: $STATION_NUM"
+#     echo
+#     echo "Do you want to: "
+#     echo
+#     PS3="Enter a number: "
+#     select LIST in "Play" "Save" "Save & play" "Create"; do
+#         # echo "Selected list: $LIST"
+#         break
+#     done
+#     echo "you selected $LIST"
+#     echo "reply $REPLY"
+#     # rm "$SEARCH_RESULTS"
+#     # rm "/tmp/*.json"
+#     # exit
 
-    case $REPLY in
-    1)
-        url=$(jq -r '.url_resolved' <"$1")
-        _play "$url"
-        ;;
-    2)
-        fn_save "$@"
-        ;;
-    3)
-        fn_save_play
-        ;;
-    4)
-        fn_create
-        echo "hi"
-        ;;
-    --) ;; # no subcommand, arguments only
-    esac
+#     case $REPLY in
+#     1)
+#         url=$(jq -r '.url_resolved' <"$1")
+#         _play "$url"
+#         ;;
+#     2)
+#         fn_save "$@"
+#         ;;
+#     3)
+#         fn_save_play
+#         ;;
+#     4)
+#         fn_create
+#         echo "hi"
+#         ;;
+#     --) ;; # no subcommand, arguments only
+#     esac
 
-    echo "Searching ..."
-    # works
+#     echo "Searching ..."
+#     # works
 
-    curl "$RADIO_BROWSER/$1" | jq --arg COUNTRYCODE "$COUNTRYCODE" '[.[] | select(.countrycode==$COUNTRYCODE)]' >"$TEMP_FILE"
-    # shows station names
-    jq -r '.[].name' <"$TEMP_FILE" | nl
+#     curl "$RADIO_BROWSER/$1" | jq --arg COUNTRYCODE "$COUNTRYCODE" '[.[] | select(.countrycode==$COUNTRYCODE)]' >"$TEMP_FILE"
+#     # shows station names
+#     jq -r '.[].name' <"$TEMP_FILE" | nl
 
-    # ls "$TEMP_FILE"
-    # cat "$TEMP_FILE"
-    # after search result ask a number to play/save
-    read -rp "Select a number to add to your favirite list. " ANS
-    # get the content
-    jq ".[$ANS-1]" <"$TEMP_FILE" >"$TEMP_FILE2"
+#     # ls "$TEMP_FILE"
+#     # cat "$TEMP_FILE"
+#     # after search result ask a number to play/save
+#     read -rp "Select a number to add to your favirite list. " ANS
+#     # get the content
+#     jq ".[$ANS-1]" <"$TEMP_FILE" >"$TEMP_FILE2"
 
-    # 1
-    # jq '. += ["$TEMP_FILE2"]' "$FAVORITE_FULL" "$TEMP_FILE2"
-    # 2
-    # jq --argjson TEMP "$(cat "$TEMP_FILE2")" '. += [$TEMP]' "$FAVORITE_FULL" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-    jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE2" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
+#     # 1
+#     # jq '. += ["$TEMP_FILE2"]' "$FAVORITE_FULL" "$TEMP_FILE2"
+#     # 2
+#     # jq --argjson TEMP "$(cat "$TEMP_FILE2")" '. += [$TEMP]' "$FAVORITE_FULL" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
+#     jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE2" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
 
-    # cleanup
-    rm -f "$TEMP_FILE"
-    rm -f "$TEMP_FILE2"
-    echo "Added a new station."
-}
+#     # cleanup
+#     rm -f "$TEMP_FILE"
+#     rm -f "$TEMP_FILE2"
+#     echo "Added a new station."
+# }
 
 advanced_search() {
+    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     # curl -X POST -d 'tag=jazz' -d 'state=queensland' http://all.api.radio-browser.info/json/stations/search
     echo "The format must be -d 'feild=word'."
     echo "For feild, use one or more of tag, name, language, country code and state."
-    echo "For example, -d 'tag=jazz' -d 'state=queensland'"
-    read -rp "Write your quiry " RES
-    echo "$RES"
-    echo "-X POST $RES http://all.api.radio-browser.info"
-
-    curl -X POST http://all.api.radio-browser.info/json/stations/search <<EOF
-    "$RES"
-EOF
-
+    echo "For example, -d tag=jazz -d state=queensland"
+    echo "Or -d tag=rock -d language=english -d countrycode=us"
+    read -rp "Write your quiry " -a RES
+    curl -X POST "${RES[@]}" http://all.api.radio-browser.info/json/stations/search -o "$SEARCH_RESULTS" >&/dev/null
+    LENGTH=$(jq length "$SEARCH_RESULTS")
 }
 
 search_submenu() {
@@ -233,7 +238,8 @@ $(greenprint '2)') Name
 $(greenprint '3)') Language 
 $(greenprint '4)') Country code
 $(greenprint '5)') State
-$(greenprint '6)') Main Menu
+$(greenprint '6)') Advanced search
+$(greenprint '7)') Main Menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
     read -r a
@@ -260,6 +266,10 @@ $(blueprint 'Choose an option:') "
         search_menu
         ;;
     6)
+        advanced_search
+        search_menu
+        ;;
+    7)
         menu
         ;;
     0)
