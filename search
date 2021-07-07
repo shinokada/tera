@@ -82,116 +82,28 @@ search_by() {
     # rm "$SEARCH_RESULTS"
 }
 
-# uses radio-browser.info bytag and grep
-# use country codes
-# after search result ask a number to play/save
-# tera search jazz US
-# fn_search() {
-#     # curl -X POST -d 'tag=jazz&countrycode=au&state=queensland' http://91.132.145.114/json/stations/search
-#     # curl -X POST -d 'tag=$1' -d 'countrycode=AU' $SEARCH_URL
-#     OPTS=()
-#     if [ $# -ge 1 ] && [ -n "$1" ]; then
-#         OPTS+=(-d "tag=$1")
-#     fi
-#     # echo "countrycode: $COUNTRYCODE"
-#     if [ -n "$COUNTRYCODE" ]; then
-#         OPTS+=(-d "countrycode=$COUNTRYCODE")
-#     fi
-#     # echo "name: $NAME"
-#     if [ -n "$NAME" ]; then
-#         OPTS+=(-d "name=$NAME")
-#     fi
-#     # echo "language: $LANGUAGE"
-#     if [ -n "$LANGUAGE" ]; then
-#         OPTS+=(-d "language=$LANGUAGE")
-#     fi
-#     # echo "state: $STATE"
-#     if [ -n "$STATE" ]; then
-#         OPTS+=(-d "state=$STATE")
-#     fi
-#     # echo "OPTS are : "
-#     # echo "${OPTS[@]}"
-#     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
-#     SEARCH_RESULT="${TMP_PATH}/radio_search.json"
-#     TEMP_FILE="${TMP_PATH}/radio_favorite.json"
-#     TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
-#     echo
-#     curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
-#     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
-#     echo
-#     # cat "$SEARCH_RESULTS"
-#     read -rp "Select a number. " NUM
-#     # STATION_NUM=$NUM
-#     jq ".[$NUM]" <"$SEARCH_RESULTS" >"$SEARCH_RESULT"
-#     # echo "Station no.: $STATION_NUM"
-#     echo
-#     echo "Do you want to: "
-#     echo
-#     PS3="Enter a number: "
-#     select LIST in "Play" "Save" "Save & play" "Create"; do
-#         # echo "Selected list: $LIST"
-#         break
-#     done
-#     echo "you selected $LIST"
-#     echo "reply $REPLY"
-#     # rm "$SEARCH_RESULTS"
-#     # rm "/tmp/*.json"
-#     # exit
-
-#     case $REPLY in
-#     1)
-#         url=$(jq -r '.url_resolved' <"$1")
-#         _play "$url"
-#         ;;
-#     2)
-#         fn_save "$@"
-#         ;;
-#     3)
-#         fn_save_play
-#         ;;
-#     4)
-#         fn_create
-#         echo "hi"
-#         ;;
-#     --) ;; # no subcommand, arguments only
-#     esac
-
-#     echo "Searching ..."
-#     # works
-
-#     curl "$RADIO_BROWSER/$1" | jq --arg COUNTRYCODE "$COUNTRYCODE" '[.[] | select(.countrycode==$COUNTRYCODE)]' >"$TEMP_FILE"
-#     # shows station names
-#     jq -r '.[].name' <"$TEMP_FILE" | nl
-
-#     # ls "$TEMP_FILE"
-#     # cat "$TEMP_FILE"
-#     # after search result ask a number to play/save
-#     read -rp "Select a number to add to your favirite list. " ANS
-#     # get the content
-#     jq ".[$ANS-1]" <"$TEMP_FILE" >"$TEMP_FILE2"
-
-#     # 1
-#     # jq '. += ["$TEMP_FILE2"]' "$FAVORITE_FULL" "$TEMP_FILE2"
-#     # 2
-#     # jq --argjson TEMP "$(cat "$TEMP_FILE2")" '. += [$TEMP]' "$FAVORITE_FULL" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-#     jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE2" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVORITE_FULL"
-
-#     # cleanup
-#     rm -f "$TEMP_FILE"
-#     rm -f "$TEMP_FILE2"
-#     echo "Added a new station."
-# }
-
 advanced_search() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     # curl -X POST -d 'tag=jazz' -d 'state=queensland' http://all.api.radio-browser.info/json/stations/search
     echo "The format must be -d 'feild=word'."
     echo "For feild, use one or more of tag, name, language, country code and state."
     echo "For example, -d tag=jazz -d state=queensland"
-    echo "Or -d tag=rock -d language=english -d countrycode=us"
+    echo "Or -d tag=rock -d language=english -d countrycode=uk"
+    echo "Or -d tag=rock -d state=IL"
     read -rp "Write your quiry " -a RES
-    curl -X POST "${RES[@]}" http://all.api.radio-browser.info/json/stations/search -o "$SEARCH_RESULTS" >&/dev/null
+    curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     LENGTH=$(jq length "$SEARCH_RESULTS")
+
+    # check $SEARCH_RESULT has length is more than 0
+    if (("$LENGTH" < 1)); then
+        echo "No result. Try again."
+        search_menu
+    fi
+    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    echo
+    read -rp "Select a number. " ANS
+
+    search_submenu "$ANS"
 }
 
 search_submenu() {
