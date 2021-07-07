@@ -1,4 +1,8 @@
-# Terminal Radio (TERA)
+<p align="center">
+<img width="400" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
+</p>
+
+<h1  align="center">Terminal Radio (TERA)</h1>
 
 ## Overview
 
