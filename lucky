@@ -23,7 +23,12 @@ fn_lucky() {
     # find the list length
     LENGTH=$(jq length "$SEARCH_RESULTS")
     # random number
-    RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
-    # echo "$RAN_NUM"
-    _search_play "$RAN_NUM"
+    if (("$LENGTH" > 0)); then
+        RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
+        # echo "$RAN_NUM"
+        _search_play "$RAN_NUM"
+    else
+        redprint "No results. Please try it again."
+        fn_lucky
+    fi
 }

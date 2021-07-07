@@ -13,15 +13,16 @@ create_gist() {
     done
     # echo "${ARR[@]}"
     # check GIST_URL exists and has a length greater than zero., if so ask to update else create a Gist
-    if [[ ! -s $GIST_URL_FILE ]]; then
-        #     # without mapfile
-        #     arr=()
-        #     IFS=$'\n' read -ra arr -d '' <"$dotties_file"
-        gh gist create -d "Terminal radio favorite lists." "${ARR[@]}" >"$GIST_URL_FILE"
-        echo "Created a secret Gist"
-        read -r gist_url <"$GIST_URL_FILE"
-        python -m webbrowser "$gist_url"
-    fi
+    # if [[ ! -s $GIST_URL_FILE ]]; then
+    #     # without mapfile
+    #     arr=()
+    #     IFS=$'\n' read -ra arr -d '' <"$dotties_file"
+    gh gist create -d "Terminal radio favorite lists." "${ARR[@]}" >"$GIST_URL_FILE"
+    echo "Created a secret Gist"
+    read -r gist_url <"$GIST_URL_FILE"
+    python -m webbrowser "$gist_url"
+
+    # fi
     gist_menu
 }
 
