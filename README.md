@@ -1,12 +1,11 @@
+<h1  align="center">Terminal Radio (TERA)</h1>
 <p align="center">
 <img width="261" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
 </p>
 
-<h1  align="center">Terminal Radio (TERA)</h1>
-
 ## Overview
 
-Tera is an interactive music radio player. You can CRUD your favorite lists, explore new radio stations from your terminal.
+Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal.
 
 ## Requirement
 
