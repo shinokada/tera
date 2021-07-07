@@ -42,8 +42,8 @@ cyanprint() {
 check_cmd() {
     if [[ ! $(command -v "$1") ]]; then
         app=$1
-        echo "It seems like you don't have ${app}."
-        echo "Please install ${app}."
+        redprint "It seems like you don't have ${app}."
+        redprint "Please install ${app}."
         exit 1
     fi
 }
@@ -84,7 +84,7 @@ _station_list() {
 
 _play() {
     echo
-    echo "Press q to quit."
+    yellowprint "Press q to quit."
     echo
     mpv "$1"
 }
@@ -98,8 +98,8 @@ _show_favlist() {
     # lists=""
     # echo "$lists"
     if [ -z "$LISTS" ]; then
-        echo "lists is empty"
-        echo "try $SCRIPT_NAME search"
+        redprint "Lists are empty."
+        cyanprint "Try $SCRIPT_NAME search"
     fi
 
     PS3="Enter a number: "

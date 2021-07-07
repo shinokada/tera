@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.2.9"
+VERSION="0.2.10"
 SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 TMP_PATH="$SCRIPT_DOT_DIR/tmp"
@@ -75,10 +75,10 @@ menu() {
 $APP_NAME MAIN MENU
 $(greenprint '1)') Play from my list
 $(greenprint '2)') Search radio stations
-$(greenprint '3)') Delete a radio station 
-$(greenprint '4)') Gist
-$(greenprint '5)') List (Create/Read/Update/Delete)
-$(greenprint '6)') I feel lucky
+$(greenprint '3)') List (Create/Read/Update/Delete)
+$(greenprint '4)') Delete a radio station 
+$(greenprint '5)') I feel lucky
+$(greenprint '6)') Gist
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
     read -r a
@@ -92,19 +92,19 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     3)
-        fn_delete
-        menu
-        ;;
-    4)
-        gist_menu
-        menu
-        ;;
-    5)
         list_menu
         menu
         ;;
-    6)
+    4)
+        fn_delete
+        menu
+        ;;
+    5)
         fn_lucky
+        menu
+        ;;
+    6)
+        gist_menu
         menu
         ;;
     0)

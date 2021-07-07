@@ -3,8 +3,8 @@
 _list_intro() {
     lists=$(_fav_list)
     if [ -z "$lists" ]; then
-        echo "lists is empty"
-        echo "try $SCRIPT_NAME search"
+        redprint "Lists are empty"
+        cyanprint "Try $SCRIPT_NAME search"
     fi
     for list in $(_fav_list all); do
         echo "$list"
@@ -13,7 +13,7 @@ _list_intro() {
 
 create_list() {
     echo
-    echo "My lists: "
+    greenprint "My lists: "
     _list_intro
     echo
     read -rp "Type a new list name: " NEW_LIST
@@ -23,24 +23,24 @@ create_list() {
     NAME="${NEW// /-}"
     touch "$FAVORITE_PATH/$NAME.json"
     echo "[]" >"$FAVORITE_PATH/$NAME.json"
-    echo "$NAME is created."
+    greenprint "$NAME is created."
     list_menu
 }
 
 delete_list() {
     echo
-    echo "My lists: "
+    greenprint "My lists: "
     _list_intro
     echo
     read -rp "Type a new list name to delete: " LIST
     echo
     rm "$FAVORITE_PATH/$LIST.json" 2>/dev/null || {
-        echo "$LIST doesn't exist."
+        redprint "$LIST doesn't exist."
         list_menu
     }
-    echo "$LIST is deleted"
+    greenprint "$LIST is deleted"
     echo
-    echo "My lists: "
+    greenprint "My lists: "
     _list_intro
     echo
     list_menu
@@ -48,20 +48,20 @@ delete_list() {
 
 show_lists() {
     echo
-    echo "My lists: "
+    greenprint "My lists: "
     _list_intro
     echo
 }
 
 edit_list() {
     echo
-    echo "My lists: "
+    greenprint "My lists: "
     _list_intro
     echo
     read -rp "Type a list name to edit: " LIST
-    echo "Old name: $LIST"
+    yellowprint "Old name: $LIST"
     read -rp "Type a new name: " NEW
-    echo "New name: $NEW"
+    cyanprint "New name: $NEW"
     mv "$FAVORITE_PATH/$LIST.json" "$FAVORITE_PATH/$NEW.json" &>/dev/null || {
         echo "$LIST doesn't exist. Try again."
         list_menu
@@ -102,7 +102,7 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        echo "Bye bye."
+        yellowprint "Bye bye."
         exit 0
         ;;
     *)

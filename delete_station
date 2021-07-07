@@ -4,7 +4,7 @@ fn_delete() {
     _cleanup_tmp "/tmp/radio_delete.json"
     echo
     TEMP_FILE=$(mktemp /tmp/radio_delete.json)
-    echo "Select a list number to delete from."
+    greenprint "Select a list number to delete from."
     echo
     echo "0) CANCEL"
     LIST=$(_show_favlist)
@@ -19,5 +19,6 @@ fn_delete() {
     FAVLIST_PATH="${FAVORITE_PATH}/${LIST}.json"
     jq "del(.[$ANS-1])" <"${FAVLIST_PATH}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVLIST_PATH"
     _station_list "$LIST" | nl
+    greenprint "Successfully deleted."
     menu
 }

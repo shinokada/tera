@@ -3,18 +3,12 @@
 _save_station_to_list() {
     TEMP_FILE="${TMP_PATH}/radio_favorite.json"
     TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
-    # FILE1="${TMP_PATH}/radio_favorite.json"
-    # FILE2="${TMP_PATH}/radio_favorite2.json"
-    # FILE1="/tmp/radio_favorite.json"
-    # FILE2="/tmp/radio_favorite2.json"
     _cleanup_tmp "$TEMP_FILE"
     _cleanup_tmp "$TEMP_FILE2"
-    # TEMP_FILE=$(mktemp "$FILE1")
-    # TEMP_FILE2=$(mktemp "$FILE2")
     echo
     ANS=$1
     # echo $ANS
-    echo "Select the list to save to: "
+    greenprint "Select the list to save to: "
     # echo saving
     LIST_NAME=$(_show_favlist all)
     echo "$LIST_NAME"
@@ -49,10 +43,6 @@ _search_play() {
     fi
 }
 
-_save_play() {
-    echo "Save & Play"
-}
-
 search_by() {
     KEY=$1
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
@@ -85,11 +75,11 @@ search_by() {
 advanced_search() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     # curl -X POST -d 'tag=jazz' -d 'state=queensland' http://all.api.radio-browser.info/json/stations/search
-    echo "The format must be -d 'feild=word'."
-    echo "For feild, use one or more of tag, name, language, country code and state."
-    echo "For example, -d tag=jazz -d state=queensland"
-    echo "Or -d tag=rock -d language=english -d countrycode=uk"
-    echo "Or -d tag=rock -d state=IL"
+    magentaprint "The format must be -d 'feild=word'."
+    magentaprint "For feild, use one or more of tag, name, language, country code and state."
+    magentaprint "For example, -d tag=jazz -d state=queensland"
+    magentaprint "Or -d tag=rock -d language=english -d countrycode=uk"
+    magentaprint "Or -d tag=rock -d state=IL"
     read -rp "Write your quiry " -a RES
     curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     LENGTH=$(jq length "$SEARCH_RESULTS")

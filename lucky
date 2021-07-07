@@ -3,9 +3,9 @@
 fn_lucky() {
     _cleanup_tmp "${TMP_PATH}/radio_searches.json"
     echo
-    echo "Type a genre of music, rock, classical, jazz, pop, country, hip, heavy, blues, soul."
-    echo "Or type a keyword, like meditation, relax, mozart, Beatles etc."
-    echo "Use only one word."
+    magentaprint "Type a genre of music, rock, classical, jazz, pop, country, hip, heavy, blues, soul."
+    magentaprint "Or type a keyword, like meditation, relax, mozart, Beatles etc."
+    cyanprint "Use only one word."
     echo
     # ask a tag word
     read -rp "Genre/keyword: " RES

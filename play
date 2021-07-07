@@ -8,11 +8,11 @@ fn_play() {
     # lists=""
     # echo "$lists"
     if [ -z "$lists" ]; then
-        echo "lists is empty"
-        echo "try $SCRIPT_NAME search"
+        redprint "Lists are empty."
+        cyanprint "Try $SCRIPT_NAME search"
     fi
     echo
-    echo "Select a list."
+    greenprint "Select a list."
     echo
     PS3="Enter a number: "
     select LIST in $(_fav_list); do
@@ -23,8 +23,8 @@ fn_play() {
     # read -rp "Type a list number.   " LIST
     if [ -n "$LIST" ]; then
         echo
-        echo "Select a number to play from $LIST list."
-        echo "Which station do you want to play?"
+        magentaprint "Which station do you want to play?"
+        greenprint "Select a number to play from $LIST list."
         echo
         STATIONS=$(_station_list "$LIST")
         echo "$STATIONS" | nl
@@ -34,7 +34,7 @@ fn_play() {
         URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
         _play "$URL_RESOLVED"
     else
-        echo "No such a list."
+        redprint "No such a list."
         exit
     fi
 }
