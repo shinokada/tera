@@ -233,8 +233,7 @@ $(greenprint '2)') Name
 $(greenprint '3)') Language 
 $(greenprint '4)') Country code
 $(greenprint '5)') State
-$(greenprint '6)') Advanced search
-$(greenprint '7)') Main Menu
+$(greenprint '6)') Main Menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
     read -r a
@@ -261,10 +260,6 @@ $(blueprint 'Choose an option:') "
         search_menu
         ;;
     6)
-        advanced_search
-        search_menu
-        ;;
-    7)
         menu
         ;;
     0)

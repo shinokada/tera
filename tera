@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.2.6"
+VERSION="0.2.7"
 SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 TMP_PATH="$SCRIPT_DOT_DIR/tmp"
