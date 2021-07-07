@@ -1,28 +1,28 @@
 <p align="center">
-<img width="400" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
+<img width="261" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
 </p>
 
 <h1  align="center">Terminal Radio (TERA)</h1>
 
 ## Overview
 
-Play radio, CRUD favorites, search radio stations.
+Tera is an interactive music radio player. You can CRUD your favorite lists, explore new radio stations from your terminal.
 
 ## Requirement
 
 - [mpv](https://mpv.io/) is a free, open source, and cross-platform media player.
 - [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
-- [gh](https://cli.github.com/) is the GitHub CLI. Only for Gist functions.
+- [gh](https://cli.github.com/) is the GitHub CLI.
 
 ## Features
 
-- Powered by [Radio Browser API](https://de1.api.radio-browser.info/) and [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
-- 27780+ radio stations.
+- 27780+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
+- [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
 - Play from a list
 - Search radio station by tag, name, language, country code, state.
-- After play, you can save to a list.
+- Save a station to a list after playing.
 - CRUD favorite lists.
-- Delete a radio station from a list
+- Delete a radio station from a list.
 - I feel lucky menu.
 - Gist upload.
 
@@ -43,13 +43,6 @@ brew install tera
 
 ## Usage
 
-While playing music:
-
-- Pause: `q` or `space`.
-- Forward: Right arrow.
-- Backward: Left arrow.
-- [More MPV control](https://mpv.io/manual/master/)
-
 ### Commands
 
 #### Main Menu
@@ -65,6 +58,13 @@ tera
 You can search by tag, name, language, country code, state, and advanced(todo).
 
 ![start](https://raw.githubusercontent.com/shinokada/tera/main/images/searchmenu.png)
+
+#### Music player
+
+- Pause: `q` or `space`.
+- Forward: Right arrow.
+- Backward: Left arrow.
+- [More MPV control](https://mpv.io/manual/master/)
 
 ### Options
 
