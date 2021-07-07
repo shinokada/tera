@@ -48,6 +48,7 @@ search_by() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     echo
     read -rp "Type a $KEY to search: " RES
+    echo
     OPTS=()
     for TAG in "${RES[@]}"; do
         OPTS+=(-d "$KEY=$TAG")
@@ -63,10 +64,13 @@ search_by() {
         search_menu
     fi
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    yellowprint "     0  Return to Search Menu"
     echo
     read -rp "Select a number. " ANS
     # echo "$ANS"
-
+    if [[ "$ANS" == 0 ]]; then
+        search_menu
+    fi
     # URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     search_submenu "$ANS"
     # rm "$SEARCH_RESULTS"
@@ -75,8 +79,8 @@ search_by() {
 advanced_search() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     # curl -X POST -d 'tag=jazz' -d 'state=queensland' http://all.api.radio-browser.info/json/stations/search
-    magentaprint "The format must be -d 'feild=word'."
-    magentaprint "For feild, use one or more of tag, name, language, country code and state."
+    magentaprint "The format must be -d field=word."
+    magentaprint "For field, use one or more of tag, name, language, country code and state."
     magentaprint "For example, -d tag=jazz -d state=queensland"
     magentaprint "Or -d tag=rock -d language=english -d countrycode=uk"
     magentaprint "Or -d tag=rock -d state=IL"
@@ -90,9 +94,12 @@ advanced_search() {
         search_menu
     fi
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    yellowprint "     0  Return to Search Menu"
     echo
     read -rp "Select a number. " ANS
-
+    if [[ "$ANS" == 0 ]]; then
+        search_menu
+    fi
     search_submenu "$ANS"
 }
 

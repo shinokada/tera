@@ -61,8 +61,9 @@ edit_list() {
     read -rp "Type a list name to edit: " LIST
     yellowprint "Old name: $LIST"
     read -rp "Type a new name: " NEW
-    cyanprint "New name: $NEW"
-    mv "$FAVORITE_PATH/$LIST.json" "$FAVORITE_PATH/$NEW.json" &>/dev/null || {
+    NAME="${NEW// /-}"
+    cyanprint "New name: $NAME"
+    mv "$FAVORITE_PATH/$LIST.json" "$FAVORITE_PATH/$NAME.json" &>/dev/null || {
         echo "$LIST doesn't exist. Try again."
         list_menu
     }
