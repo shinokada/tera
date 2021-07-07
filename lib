@@ -90,7 +90,11 @@ _play() {
 }
 
 _show_favlist() {
-    LISTS=$(_fav_list "$1")
+    if [ $# -ge 1 ]; then
+        LISTS=$(_fav_list "$1")
+    else
+        LISTS=$(_fav_list)
+    fi
     # lists=""
     # echo "$lists"
     if [ -z "$LISTS" ]; then

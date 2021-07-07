@@ -30,6 +30,13 @@ Using [Awesome package manager](https://github.com/shinokada/awesome):
 awesome install shinokada/tera
 ```
 
+HomeBrew/LinuxBrew
+
+```sh
+brew tap shinokada/tera
+brew install tera
+```
+
 ## Usage
 
 While playing music:

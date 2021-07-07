@@ -3,11 +3,11 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.2.8"
+VERSION="0.2.9"
 SCRIPT_DOT_DIR="$HOME/.terminalradio"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 TMP_PATH="$SCRIPT_DOT_DIR/tmp"
-FAVORITE_FILE="default.json"
+FAVORITE_FILE="sample.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
 APP_NAME="TERMINAL RADIO"
@@ -67,6 +67,7 @@ if [ ! -d "$TMP_PATH" ]; then
 fi
 if [ ! -f "$FAVORITE_FULL" ]; then
     touch "$FAVORITE_FULL"
+    cp "${script_dir}/sample.json" "$FAVORITE_FULL"
 fi
 
 menu() {
