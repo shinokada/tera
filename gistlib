@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-GIST_URL_FILE="$HOME/.terminalradio/gisturl"
+GIST_URL_FILE="$SCRIPT_DOT_DIR/gisturl"
 
 create_gist() {
     #
