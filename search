@@ -40,7 +40,6 @@ _search_play() {
         echo "url_resolved can't be found. Exiting ..."
         exit 1
     fi
-
     echo
     read -rp "Do you want to save this station? (yes/y/no/n) " RES
     USER_ANS=$(echo "$RES" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
