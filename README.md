@@ -42,6 +42,15 @@ brew tap shinokada/tera
 brew install tera
 ```
 
+After installation please run the following to check `mpv` is 
+installed collectly.
+
+```sh
+mpv https://live.musopen.org:8085/streamvbr0
+```
+
+If it plays music you're ready to go.
+
 ## Usage
 
 ### Commands
