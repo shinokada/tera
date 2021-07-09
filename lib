@@ -78,6 +78,12 @@ _fav_list() {
     echo "${list[@]}"
 }
 
+_graceful_exit() {
+    MESSAGE=${1:-"Sorry something went wrong."}
+    echo "$MESSAGE"
+    exit 1
+}
+
 _station_list() {
     jq -r '.[] | .name' <"$FAVORITE_PATH/$1.json"
 }
@@ -86,7 +92,7 @@ _play() {
     echo
     yellowprint "Press q to quit."
     echo
-    mpv "$1"
+    mpv "$1" || _graceful_exit "Play: Can't play mpv."
 }
 
 _show_favlist() {
