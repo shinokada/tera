@@ -32,7 +32,12 @@ fn_play() {
         read -rp "Type a number to play. " ANS
         # find the $ANS line e.g. line 2
         URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
-        _play "$URL_RESOLVED"
+        if [[ -n $URL_RESOLVED ]]; then
+            _play "$URL_RESOLVED"
+        else
+            echo "url_resolved can't be found. Exiting ..."
+            exit 1
+        fi
     else
         redprint "No such a list."
         exit
