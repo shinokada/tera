@@ -34,7 +34,13 @@ _search_play() {
     ANS=$1
     jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
-    mpv "$URL_RESOLVED"
+    if [[ -n $URL_RESOLVED ]]; then
+        mpv "$URL_RESOLVED"
+    else
+        echo "url_resolved can't be found. Exiting ..."
+        exit 1
+    fi
+
     echo
     read -rp "Do you want to save this station? (yes/y/no/n) " RES
     USER_ANS=$(echo "$RES" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
