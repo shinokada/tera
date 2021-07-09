@@ -52,7 +52,7 @@ script_dir="${script_path%/*}"
     source "${script_dir}/lucky"
     source "${script_dir}/play"
     source "${script_dir}/delete_station"
-    source "${script_dir}/gist"
+    source "${script_dir}/gistlib"
 }
 
 check_cmd mpv
