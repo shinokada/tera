@@ -57,6 +57,7 @@ script_dir="${script_path%/*}"
 
 check_cmd mpv
 check_cmd jq
+check_cmd fzf
 
 # check ~/.tera/favorite
 if [ ! -d "$FAVORITE_PATH" ]; then

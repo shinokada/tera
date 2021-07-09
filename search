@@ -63,7 +63,7 @@ search_by() {
         echo "No result. Try again."
         search_menu
     fi
-    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf
     yellowprint "     0  Return to Search Menu"
     echo
     read -rp "Select a number. " ANS
