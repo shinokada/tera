@@ -22,7 +22,7 @@ _save_station_to_list() {
     jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE" >"$TEMP_FILE2" && mv "$TEMP_FILE2" "$FAVORITE_FULL"
     # which list?
     echo
-    greenprint "Successfull saved the station to your $LIST_NAME list."
+    greenprint "Successfully saved the station to your $LIST_NAME list."
 }
 
 _search_play() {
@@ -36,7 +36,7 @@ _search_play() {
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     mpv "$URL_RESOLVED"
     echo
-    read -rp "Do you want to save this staion? (yes/y/no/n) " RES
+    read -rp "Do you want to save this station? (yes/y/no/n) " RES
     USER_ANS=$(echo "$RES" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
     if [[ $USER_ANS = "Y" ]]; then
         _save_station_to_list "$ANS"
@@ -79,9 +79,9 @@ search_by() {
 advanced_search() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     # curl -X POST -d 'tag=jazz' -d 'state=queensland' http://all.api.radio-browser.info/json/stations/search
-    magentaprint "The format must be -d field=word."
-    magentaprint "For field, use one or more of tag, name, language, country code and state."
-    magentaprint "For example, -d tag=jazz -d state=queensland"
+    magentaprint "The query format is -d field=word."
+    magentaprint "Field can be one of tag, name, language, country code and state."
+    magentaprint "Fields can be combined, for example: -d tag=jazz -d state=queensland"
     magentaprint "Or -d tag=rock -d language=english -d countrycode=uk"
     magentaprint "Or -d tag=rock -d state=IL"
     read -rp "Write your quiry " -a RES

@@ -1,7 +1,8 @@
-<h1  align="center">Terminal Radio (TERA)</h1>
 <p align="center">
 <img width="261" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
 </p>
+
+<h1  align="center">Terminal Radio (TERA)</h1>
 
 ## Overview
 
@@ -17,10 +18,10 @@ Tera is an interactive music radio player. Play your favorite radio station, CRU
 
 - 27780+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
 - [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
+- CRUD favorite lists.
 - Play from a list
 - Search radio station by tag, name, language, country code, state.
 - Save a station to a list after playing.
-- CRUD favorite lists.
 - Delete a radio station from a list.
 - I feel lucky menu.
 - Gist upload.

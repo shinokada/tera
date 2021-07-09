@@ -3,10 +3,11 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.2.11"
-SCRIPT_DOT_DIR="$HOME/.terminalradio"
+VERSION="0.3.1"
+SCRIPT_DOT_DIR="$HOME/.config/tera"
+# CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
-TMP_PATH="$SCRIPT_DOT_DIR/tmp"
+TMP_PATH="$HOME/.cache/tera"
 FAVORITE_FILE="sample.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
@@ -60,7 +61,6 @@ check_cmd jq
 # check ~/.tera/favorite
 if [ ! -d "$FAVORITE_PATH" ]; then
     mkdir -p "$FAVORITE_PATH"
-    mkdir -p "$TMP_PATH"
 fi
 if [ ! -d "$TMP_PATH" ]; then
     mkdir -p "$TMP_PATH"
