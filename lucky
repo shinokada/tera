@@ -24,7 +24,7 @@ fn_lucky() {
     LENGTH=$(jq length "$SEARCH_RESULTS")
     # random number
     if (("$LENGTH" > 0)); then
-        RAN_NUM=$((1 + $RANDOM % "$LENGTH"))
+        RAN_NUM=$((1 + RANDOM % LENGTH))
         # echo "$RAN_NUM"
         _search_play "$RAN_NUM"
     else

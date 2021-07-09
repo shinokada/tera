@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 fn_delete() {
-    _cleanup_tmp "/tmp/radio_delete.json"
+    _cleanup_tmp "$TMP_PATH/radio_delete.json"
     echo
     TEMP_FILE=$(mktemp /tmp/radio_delete.json)
     greenprint "Select a list number to delete from."

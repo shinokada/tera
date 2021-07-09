@@ -139,7 +139,7 @@ $(blueprint 'Choose an option:') "
 }
 
 search_menu() {
-    _cleanup_tmp "/tmp/radio_searches.json"
+    _cleanup_tmp "${TMP_PATH}/radio_searches.json"
     echo -ne "
 $APP_NAME SEARCH MENU:
 $(greenprint '1)') Tag
