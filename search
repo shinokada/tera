@@ -35,10 +35,7 @@ _search_play() {
     jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     if [[ -n $URL_RESOLVED ]]; then
-        mpv "$URL_RESOLVED" || {
-            echo "Search: Can't play mpv."
-            exit 1
-        }
+        mpv "$URL_RESOLVED" || _graceful_exit "Search: Can't play mpv."
     else
         echo "url_resolved can't be found. Exiting ..."
         exit 1
