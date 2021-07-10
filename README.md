@@ -43,7 +43,7 @@ brew install tera
 ```
 
 After installation please run the following to check `mpv` is 
-installed collectly.
+installed correctly.
 
 ```sh
 mpv https://live.musopen.org:8085/streamvbr0
