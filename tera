@@ -82,8 +82,8 @@ $(greenprint '5)') I feel lucky
 $(greenprint '6)') Gist
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
-    read -r a
-    case $a in
+    read -r ans
+    case $ans in
     1)
         fn_play
         menu

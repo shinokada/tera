@@ -37,8 +37,8 @@ $(greenprint '1)') Create a gist
 $(greenprint '2)') Go back to the main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
-    read -r a
-    case $a in
+    read -r ans
+    case $ans in
     1)
         create_gist
         gist_menu

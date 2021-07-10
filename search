@@ -117,8 +117,8 @@ $(greenprint '3)') Go back to the Search menu
 $(greenprint '4)') Go back to the Main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
-    read -r a
-    case $a in
+    read -r ans
+    case $ans in
     1)
         _search_play "$ANS"
         search_menu
@@ -156,8 +156,8 @@ $(greenprint '6)') Advanced search
 $(greenprint '7)') Main Menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
-    read -r a
-    case $a in
+    read -r ans
+    case $ans in
     1)
         search_by tag
         search_menu

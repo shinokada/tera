@@ -80,8 +80,8 @@ $(greenprint '4)') Show all lists
 $(greenprint '5)') Go back to the main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
-    read -r a
-    case $a in
+    read -r ans
+    case $ans in
     1)
         create_list
         list_menu
