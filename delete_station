@@ -4,7 +4,7 @@ fn_delete() {
     TEMP_FILE="$TMP_PATH/radio_delete.json"
     _cleanup_tmp "$TEMP_FILE"
     echo
-    TEMP_FILE=$(touch "$TEMP_FILE")
+    touch "$TEMP_FILE"
     greenprint "Select a list number to delete from."
     echo
     echo "0) CANCEL"
