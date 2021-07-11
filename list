@@ -75,8 +75,8 @@ list_menu() {
 $APP_NAME LIST MENU:
 $(greenprint '1)') Create a list
 $(greenprint '2)') Delete a list
-$(greenprint '3)') Edit a list
-$(greenprint '4)') Show all lists
+$(greenprint '3)') Edit a list name
+$(greenprint '4)') Show all list names
 $(greenprint '5)') Go back to the main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "

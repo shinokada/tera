@@ -10,6 +10,8 @@ Tera is an interactive music radio player. Play your favorite radio station, CRU
 
 ## Requirement
 
+Unix-like environment.
+
 - [mpv](https://mpv.io/) is a free, open source, and cross-platform media player.
 - [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
 - [fzf](https://github.com/junegunn/fzf) is a general-purpose command-line fuzzy finder.
