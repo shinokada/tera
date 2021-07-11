@@ -87,8 +87,8 @@ advanced_search() {
     magentaprint "The query format is -d field=word."
     magentaprint "Field can be one of tag, name, language, country code and state."
     magentaprint "Fields can be combined, for example: -d tag=jazz -d state=queensland"
-    magentaprint "Or -d tag=rock -d language=english -d countrycode=uk"
-    magentaprint "Or -d tag=rock -d state=IL"
+    magentaprint "Or -d tag=rock -d language=spanish -d countrycode=us"
+    magentaprint "Or -d tag=country -d state=IL"
     read -rp "Write your quiry " -a RES
     curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     LENGTH=$(jq length "$SEARCH_RESULTS")
