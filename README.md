@@ -6,7 +6,8 @@
 
 ## Overview
 
-Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal.
+Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal. 
+Tera stores favorite list in the `~/.config/tera/favorite` directory and uses `~/.cache/tera` directory to keep search related results.
 
 ## Requirement
 
@@ -53,6 +54,14 @@ mpv https://live.musopen.org:8085/streamvbr0
 
 If it plays music you're ready to go.
 
+## Uninstallation
+
+Remove followind directories.
+
+- tera directory.
+- `~/.config/tera/` directory
+- `~/.cache/tera` directory
+
 ## Usage
 
 ### Commands
@@ -64,6 +73,20 @@ tera
 ```
 
 ![start](https://raw.githubusercontent.com/shinokada/tera/main/images/radio1.png)
+
+#### Player control
+
+| Keyboard    | Description                          |
+| ----------- | ------------------------------------ |
+| p and SPACE | Toggle pause/unpause.                |
+| [ and ]     | Descrease/increase speed by 10%.     |
+| { and }     | Halve/double current playback speed. |
+| q           | Stop playing and quit.               |
+| / and *     | Descrease/increase volume.           |
+| 9 and 0     | Descrease/increase volume.           |
+| m           | Mute sound.                          |
+
+
 
 #### Search Menu
 
