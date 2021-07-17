@@ -4,9 +4,9 @@
 
 <h1  align="center">Terminal Radio (TERA)</h1>
 
-[Article](https://levelup.gitconnected.com/discover-rejuvenate-your-music-library-with-command-line-f3268db67bba)
-
 ## Overview
+
+[Article](https://levelup.gitconnected.com/discover-rejuvenate-your-music-library-with-command-line-f3268db67bba)
 
 Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal. 
 Tera stores favorite list in the `~/.config/tera/favorite` directory and uses `~/.cache/tera` directory to keep search related results.
