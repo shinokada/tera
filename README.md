@@ -4,6 +4,8 @@
 
 <h1  align="center">Terminal Radio (TERA)</h1>
 
+[Article](https://levelup.gitconnected.com/discover-rejuvenate-your-music-library-with-command-line-f3268db67bba)
+
 ## Overview
 
 Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal. 
