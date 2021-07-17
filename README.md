@@ -17,6 +17,7 @@ Unix-like environment.
 - [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
 - [fzf](https://github.com/junegunn/fzf) is a general-purpose command-line fuzzy finder.
 - [gh](https://cli.github.com/) is the GitHub CLI.
+- curl: Most UNIX-like OS should have it.
 
 ## Features
 

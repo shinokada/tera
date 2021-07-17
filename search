@@ -35,7 +35,10 @@ _search_play() {
     jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     if [[ -n $URL_RESOLVED ]]; then
-        mpv "$URL_RESOLVED" || _graceful_exit "Search: Can't play mpv."
+        mpv "$URL_RESOLVED" || {
+            echo "Not able to play your station."
+            search_menu
+        }
     else
         echo "url_resolved can't be found. Exiting ..."
         exit 1
@@ -110,7 +113,7 @@ advanced_search() {
 
 search_submenu() {
     echo -ne "
-$APP_NAME SEARCH SUB MENU:
+$APP_NAME SEARCH SUBMENU:
 $(greenprint '1)') Play
 $(greenprint '2)') Save
 $(greenprint '3)') Go back to the Search menu

@@ -92,7 +92,10 @@ _play() {
     echo
     yellowprint "Press q to quit."
     echo
-    mpv "$1" || _graceful_exit "Play: Can't play mpv."
+    mpv "$1" || {
+        echo "Not able to play your station."
+        search_menu
+    }
 }
 
 _show_favlist() {
