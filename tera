@@ -109,12 +109,12 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        echo "Bye bye."
+        yellowprint "Bye bye."
         exit 0
         ;;
     *)
         redprint 'Wrong option.'
-        exit 1
+        menu
         ;;
     esac
 }

@@ -108,7 +108,7 @@ $(blueprint 'Choose an option:') "
         ;;
     *)
         redprint "Wrong option."
-        exit 1
+        list_menu
         ;;
     esac
 }

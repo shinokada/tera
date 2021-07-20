@@ -138,10 +138,13 @@ $(blueprint 'Choose an option:') "
         echo "Go back to the Main menu"
         menu
         ;;
-    0) exit 0 ;;
+    0)
+        yellowprint "Bye bye."
+        exit 0
+        ;;
     *)
         redprint 'Wrong option.'
-        exit 1
+        search_menu
         ;;
     esac
 }
@@ -190,12 +193,12 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        echo "Bye bye."
+        yellowprint "Bye bye."
         exit 0
         ;;
     *)
         redprint "Wrong option."
-        exit 1
+        search_menu
         ;;
     esac
 }
