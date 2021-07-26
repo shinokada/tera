@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.3.9"
+VERSION="0.3.10"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -17,42 +17,53 @@ SEARCH_URL="http://all.api.radio-browser.info/json/stations/search"
 
 # rm /tmp/*.json
 
-myrealpath() {
-    local LINK REALPATH
-    local OURPWD=$PWD
-    cd "$(dirname "$1")" || exit
-    LINK=$(readlink "$(basename "$1")")
-    while [ "$LINK" ]; do
-        cd "$(dirname "$LINK")" || exit
-        LINK=$(readlink "$(basename "$1")")
+readlinkf() {
+    [ "${1:-}" ] || return 1
+    max_symlinks=40
+    CDPATH='' # to avoid changing to an unexpected directory
+
+    target=$1
+    [ -e "${target%/}" ] || target=${1%"${1##*[!/]}"} # trim trailing slashes
+    [ -d "${target:-/}" ] && target="$target/"
+
+    cd -P . 2>/dev/null || return 1
+    while [ "$max_symlinks" -ge 0 ] && max_symlinks=$((max_symlinks - 1)); do
+        if [ ! "$target" = "${target%/*}" ]; then
+            case $target in
+            /*) cd -P "${target%/*}/" 2>/dev/null || break ;;
+            *) cd -P "./${target%/*}" 2>/dev/null || break ;;
+            esac
+            target=${target##*/}
+        fi
+
+        if [ ! -L "$target" ]; then
+            target="${PWD%/}${target:+/}${target}"
+            printf '%s\n' "${target:-/}"
+            return 0
+        fi
+
+        # `ls -dl` format: "%s %u %s %s %u %s %s -> %s\n",
+        #   <file mode>, <number of links>, <owner name>, <group name>,
+        #   <size>, <date and time>, <pathname of link>, <contents of link>
+        # https://pubs.opengroup.org/onlinepubs/9699919799/utilities/ls.html
+        link=$(ls -dl -- "$target" 2>/dev/null) || break
+        target=${link#*" $target -> "}
     done
-    REALPATH="$PWD/$(basename "$1")"
-    cd "$OURPWD" || exit
-    echo "$REALPATH"
+    return 1
 }
 
-# $0 may have ./ in ./script_name
-# then use pwd
+self=$(readlinkf "$0")
+script_dir=${self%/*}
 
-if [[ -z $(which "${SCRIPT_NAME}") || $0 = "./${SCRIPT_NAME}" ]]; then
-    # echo "in 1"
-    script_path=$(myrealpath "$0")
-    # script_path=${script_path%/*}
-else
-    # echo "in 2"
-    script_path=$(myrealpath "$(which "${SCRIPT_NAME}")")
-fi
-
-script_dir="${script_path%/*}"
 # shellcheck disable=SC1091
 {
-    source "${script_dir}/lib"
-    source "${script_dir}/search"
-    source "${script_dir}/list"
-    source "${script_dir}/lucky"
-    source "${script_dir}/play"
-    source "${script_dir}/delete_station"
-    source "${script_dir}/gistlib"
+    . "${script_dir}/lib.sh"
+    . "${script_dir}/search.sh"
+    . "${script_dir}/list.sh"
+    . "${script_dir}/lucky.sh"
+    . "${script_dir}/play.sh"
+    . "${script_dir}/delete_station.sh"
+    . "${script_dir}/gistlib.sh"
 }
 
 check_cmd mpv
@@ -72,7 +83,7 @@ if [ ! -f "$FAVORITE_FULL" ]; then
 fi
 
 menu() {
-    echo -ne "
+    printf "%b" "
 $APP_NAME MAIN MENU
 $(greenprint '1)') Play from my list
 $(greenprint '2)') Search radio stations
@@ -109,7 +120,7 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        yellowprint "Bye bye."
+        yellowprint "Bye-bye."
         exit 0
         ;;
     *)
@@ -129,7 +140,7 @@ usage() {
 EOF
 }
 
-while (($# > 0)); do
+while [ $# -gt 0 ]; do
     case $1 in
     -V | --version)
         echo $VERSION

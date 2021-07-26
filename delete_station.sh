@@ -16,7 +16,8 @@ fn_delete() {
     fi
     echo "     0  CANCEL"
     _station_list "$LIST" | nl
-    read -rp "Type your station number to delete. " ANS
+    printf "Type your station number to delete. "
+    read -r ANS
     # echo "$ANS"
     if [[ -z $ANS ]]; then
         menu

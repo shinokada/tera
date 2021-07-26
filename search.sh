@@ -34,7 +34,7 @@ _search_play() {
     ANS=$1
     jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
-    if [[ -n $URL_RESOLVED ]]; then
+    if [ -n "$URL_RESOLVED" ]; then
         mpv "$URL_RESOLVED" || {
             echo "Not able to play your station."
             search_menu
@@ -44,9 +44,10 @@ _search_play() {
         exit 1
     fi
     echo
-    read -rp "Do you want to save this station? (yes/y/no/n) " RES
+    printf "Do you want to save this station? (yes/y/no/n) "
+    read -r RES
     USER_ANS=$(echo "$RES" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
-    if [[ $USER_ANS = "Y" ]]; then
+    if [ "$USER_ANS" = "Y" ]; then
         _save_station_to_list "$ANS"
     fi
 }
@@ -55,10 +56,11 @@ search_by() {
     KEY=$1
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     echo
-    read -rp "Type a $KEY to search: " RES
+    printf "Type a %s to search: " "$KEY"
+    read -r REPLY
     echo
     OPTS=()
-    for TAG in "${RES[@]}"; do
+    for TAG in "${REPLY[@]}"; do
         OPTS+=(-d "$KEY=$TAG")
     done
 
@@ -74,7 +76,8 @@ search_by() {
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf
     yellowprint "     0  Return to Search Menu"
     echo
-    read -rp "Select a number. " ANS
+    printf "Select a number. "
+    read -r ANS
     # echo "$ANS"
     if [[ "$ANS" == 0 ]]; then
         search_menu
@@ -92,7 +95,8 @@ advanced_search() {
     magentaprint "Fields can be combined, for example: -d tag=jazz -d state=queensland"
     magentaprint "Or -d tag=rock -d language=spanish -d countrycode=us"
     magentaprint "Or -d tag=country -d state=IL"
-    read -rp "Write your quiry " -a RES
+    printf "Write your quiry: "
+    read -ra RES
     curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
@@ -101,10 +105,11 @@ advanced_search() {
         echo "No result. Try again."
         search_menu
     fi
-    jq -r '.[].name' <"$SEARCH_RESULTS" | nl
+    jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf
     yellowprint "     0  Return to Search Menu"
     echo
-    read -rp "Select a number. " ANS
+    printf "Select a number. "
+    read -r ANS
     if [[ "$ANS" == 0 ]]; then
         search_menu
     fi
@@ -139,7 +144,7 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        yellowprint "Bye bye."
+        yellowprint "Bye-bye."
         exit 0
         ;;
     *)
@@ -193,7 +198,7 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        yellowprint "Bye bye."
+        yellowprint "Bye-bye."
         exit 0
         ;;
     *)

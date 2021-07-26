@@ -8,7 +8,8 @@ fn_lucky() {
     cyanprint "Use only one word."
     echo
     # ask a tag word
-    read -rp "Genre/keyword: " RES
+    printf "Genre/keyword: "
+    read -r RES
     # find all stations with a key word
     # select one station using
 

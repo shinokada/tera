@@ -29,7 +29,8 @@ fn_play() {
         STATIONS=$(_station_list "$LIST")
         echo "$STATIONS" | nl
         echo
-        read -rp "Type a number to play. " ANS
+        printf "Type a number to play. "
+        read -r ANS
         # find the $ANS line e.g. line 2
         URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
         if [[ -n $URL_RESOLVED ]]; then

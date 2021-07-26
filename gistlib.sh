@@ -47,7 +47,7 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        yellowprint "Bye bye."
+        yellowprint "Bye-bye."
         exit 0
         ;;
     *)

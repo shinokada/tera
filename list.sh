@@ -16,7 +16,8 @@ create_list() {
     greenprint "My lists: "
     _list_intro
     echo
-    read -rp "Type a new list name: " NEW_LIST
+    printf "Type a new list name: "
+    read -r NEW_LIST
     echo
     # replace spaces with - in $NEW_LIST
     NEW=$NEW_LIST
@@ -32,11 +33,12 @@ delete_list() {
     greenprint "My lists: "
     _list_intro
     echo
-    read -rp "Type a new list name to delete: " LIST
+    printf "Type a list name to delete: "
+    read -r LIST
     echo
     rm "$FAVORITE_PATH/$LIST.json" 2>/dev/null || {
-        redprint "$LIST doesn't exist."
-        list_menu
+        redprint "$LIST doesn't exist. Try it again."
+        delete_list
     }
     greenprint "$LIST is deleted"
     echo
@@ -58,15 +60,22 @@ edit_list() {
     greenprint "My lists: "
     _list_intro
     echo
-    read -rp "Type a list name to edit: " LIST
+    printf "Type a list name to edit: "
+    read -r LIST
     yellowprint "Old name: $LIST"
-    read -rp "Type a new name: " NEW
+    if [ ! -f "$FAVORITE_PATH/$LIST.json" ]; then
+        redprint "$LIST doesn't exist. Try again."
+        edit_list
+    fi
+    printf "Type a new name: "
+    read -r NEW
     NAME="${NEW// /-}"
     cyanprint "New name: $NAME"
     mv "$FAVORITE_PATH/$LIST.json" "$FAVORITE_PATH/$NAME.json" &>/dev/null || {
-        echo "$LIST doesn't exist. Try again."
+        redprint "Something went wrong. Try it again."
         list_menu
     }
+    greenprint "Updated the list name."
     show_lists
 }
 
@@ -103,7 +112,7 @@ $(blueprint 'Choose an option:') "
         menu
         ;;
     0)
-        yellowprint "Bye bye."
+        yellowprint "Bye-bye."
         exit 0
         ;;
     *)
