@@ -54,6 +54,7 @@ brew install tera
 git clone https://github.com/shinokada/tera.git
 cd tera/debpkg
 sudo apt install ./tera_0.3.13_all.deb
+rm -rf ./tera_0.3.13_all.deb
 ```
 
 After installation please run the following to check `mpv` is 
