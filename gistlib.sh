@@ -5,7 +5,7 @@ GIST_URL_FILE="$SCRIPT_DOT_DIR/gisturl"
 create_gist() {
     #
     FAV=$(_list_intro)
-    echo "${FAV_ARR[@]}"
+    # echo "${FAV_ARR[@]}"
     ARR=()
     # add fav list to ARR array
     for file in $FAV; do

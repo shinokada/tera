@@ -64,7 +64,10 @@ search_by() {
         OPTS+=(-d "$KEY=$TAG")
     done
 
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" 2>"${TMP_PATH}"/teraerror || {
+        echo "See the error file."
+        exit
+    }
     # cat "$SEARCH_RESULTS"
     LENGTH=$(jq length "$SEARCH_RESULTS")
 

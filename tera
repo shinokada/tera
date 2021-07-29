@@ -3,19 +3,17 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.3.11"
+VERSION="0.3.12"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
-TMP_PATH="$HOME/.cache/tera"
+TMP_PATH="/tmp/tera"
 FAVORITE_FILE="sample.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
 APP_NAME="TERA"
 RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
 SEARCH_URL="http://all.api.radio-browser.info/json/stations/search"
-
-# rm /tmp/*.json
 
 readlinkf() {
     [ "${1:-}" ] || return 1
