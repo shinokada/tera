@@ -54,7 +54,7 @@ _search_play() {
 
 search_by() {
     KEY=$1
-    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+    SEARCH_RESULTS="radio_searches.json"
     echo
     printf "Type a %s to search: " "$KEY"
     read -r REPLY
@@ -63,11 +63,8 @@ search_by() {
     for TAG in "${REPLY[@]}"; do
         OPTS+=(-d "$KEY=$TAG")
     done
-
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" 2>"${TMP_PATH}"/teraerror || {
-        echo "See the error file."
-        exit
-    }
+    cd "$TMP_PATH" || exit
+    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS"
     # cat "$SEARCH_RESULTS"
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
