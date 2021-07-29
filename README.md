@@ -35,17 +35,25 @@ Unix-like environment.
 
 ## Installation
 
-Using [Awesome package manager](https://github.com/shinokada/awesome):
+### Using [Awesome package manager](https://github.com/shinokada/awesome):
 
 ```sh
 awesome install shinokada/tera
 ```
 
-HomeBrew/LinuxBrew
+### HomeBrew/LinuxBrew
 
 ```sh
 brew tap shinokada/tera
 brew install tera
+```
+
+### Debian/Ubuntu
+
+```sh
+git clone https://github.com/shinokada/tera.git
+cd tera/debpkg
+sudo apt install ./tera_0.3.13_all.deb
 ```
 
 After installation please run the following to check `mpv` is 
