@@ -54,23 +54,27 @@ _search_play() {
 
 search_by() {
     KEY=$1
-    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     echo
     printf "Type a %s to search: " "$KEY"
     read -r REPLY
     echo
     # OPTS=()
-    for TAG in "${REPLY[@]}"; do
-        OPTS+="$KEY=$TAG&"
-    done
-    echo "Searching ..."
-    wget --post-data "$OPTS" "$SEARCH_URL" -O "$SEARCH_RESULTS" >&/dev/null
+    _wget_simple_search "$REPLY" "$KEY"
+    # SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+    # for TAG in "${REPLY[@]}"; do
+    #     OPTS+="$KEY=$TAG&"
+    # done
+    # greenprint "Searching ..."
+    # wget --post-data "$OPTS" "$SEARCH_URL" -O "$SEARCH_RESULTS" 2>/tmp/tera_error || {
+    #     redprint "Something went wrong. Please see /tmp/tera_error"
+    #     exit
+    # }
     # cat "$SEARCH_RESULTS"
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
     # check $SEARCH_RESULT has length is more than 0
     if (("$LENGTH" < 1)); then
-        echo "No result. Try again."
+        yellowprint "No result. Try again."
         search_menu
     fi
     jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf
@@ -93,11 +97,12 @@ advanced_search() {
     magentaprint "The query format is -d field=word."
     magentaprint "Field can be one of tag, name, language, country code and state."
     magentaprint "Fields can be combined, for example: -d tag=jazz -d state=queensland"
-    magentaprint "Or -d tag=rock -d language=spanish -d countrycode=us"
-    magentaprint "Or -d tag=country -d state=IL"
+    magentaprint "Or tag=rock language=spanish countrycode=us"
+    magentaprint "Or tag=country state=IL"
     printf "Write your quiry: "
-    read -ra RES
-    curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+    read -ra REPLY
+    _wget_search "${REPLY[@]}"
+    # curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
     # check $SEARCH_RESULT has length is more than 0

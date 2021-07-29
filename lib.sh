@@ -118,3 +118,32 @@ _show_favlist() {
     done
     echo "$LIST"
 }
+
+_wget_simple_search() {
+    REPLY="$1"
+    KEY="$2"
+    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+    greenprint "Searching ..."
+    echo "Key: $KEY and reply: $REPLY"
+    wget --post-data "$KEY=$REPLY" "$SEARCH_URL" -O "$SEARCH_RESULTS" 2>/tmp/tera_error || {
+        redprint "Something went wrong. Please see /tmp/tera_error"
+        exit
+    }
+}
+
+_wget_search() {
+    REPLY=("$1")
+    echo "${REPLY[@]}"
+    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+    OPTS=
+    for TAG in "${REPLY[@]}"; do
+        OPTS+="$KEY=$TAG&"
+    done
+    OPTS="${OPTS%?}"
+    greenprint "Searching ..."
+    echo "$OPTS"
+    wget --post-data "$OPTS" "$SEARCH_URL" -O "$SEARCH_RESULTS" 2>/tmp/tera_error || {
+        redprint "Something went wrong. Please see /tmp/tera_error"
+        exit
+    }
+}
