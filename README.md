@@ -50,7 +50,7 @@ brew install tera
 
 ### Debian/Ubuntu
 
-Download a debian package from [releases page](https://github.com/shinokada/tera/releases).
+Download a Debian package from the [releases page](https://github.com/shinokada/tera/releases).
 
 ```sh
 sudo apt install ./tera_0.3.13_all.deb
