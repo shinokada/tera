@@ -93,7 +93,7 @@ search_by() {
 
 advanced_search() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
-    # curl -X POST -d 'tag=jazz' -d 'state=queensland' http://all.api.radio-browser.info/json/stations/search
+
     magentaprint "The query format is -d field=word."
     magentaprint "Field can be one of tag, name, language, country code and state."
     magentaprint "Fields can be combined, for example: -d tag=jazz -d state=queensland"
@@ -102,7 +102,7 @@ advanced_search() {
     printf "Write your quiry: "
     read -ra REPLY
     _wget_search "${REPLY[@]}"
-    # curl -X POST "${RES[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
+
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
     # check $SEARCH_RESULT has length is more than 0

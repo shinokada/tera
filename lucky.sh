@@ -10,21 +10,7 @@ fn_lucky() {
     # ask a tag word
     printf "Genre/keyword: "
     read -r REPLY
-    # find all stations with a key word
-    # select one station using
-
-    # SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
-    # OPTS=()
-    # for TAG in "${RES[@]}"; do
-    #     OPTS+=(-d "tag=$TAG")
-    # done
-
-    # curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS" >&/dev/null
-    # greenprint "Searching ..."
-    # wget --post-data "$OPTS" "$SEARCH_URL" -O "$SEARCH_RESULTS" 2>/tmp/tera_error || {
-    #     redprint "Something went wrong. Please see /tmp/tera_error"
-    #     exit
-    # }
+    # find all stations with a key word = tag
     _wget_simple_search "$REPLY" "tag"
     # find the list length
     LENGTH=$(jq length "$SEARCH_RESULTS")
