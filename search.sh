@@ -54,17 +54,17 @@ _search_play() {
 
 search_by() {
     KEY=$1
-    SEARCH_RESULTS="radio_searches.json"
+    SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     echo
     printf "Type a %s to search: " "$KEY"
     read -r REPLY
     echo
-    OPTS=()
+    # OPTS=()
     for TAG in "${REPLY[@]}"; do
-        OPTS+=(-d "$KEY=$TAG")
+        OPTS+="$KEY=$TAG&"
     done
-    cd "$TMP_PATH" || exit
-    curl -X POST "${OPTS[@]}" "$SEARCH_URL" -o "$SEARCH_RESULTS"
+    echo "Searching ..."
+    wget --post-data "$OPTS" "$SEARCH_URL" -O "$SEARCH_RESULTS" >&/dev/null
     # cat "$SEARCH_RESULTS"
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
