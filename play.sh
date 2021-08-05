@@ -31,10 +31,18 @@ fn_play() {
         echo
         printf "Type a number to play. "
         read -r ANS
+        # echo "$ANS"
+        # get list path
+        # FAV_FULL=_station_list
+        # echo "LIST: $LIST"
+        # echo "$FAVORITE_PATH/$LIST.json"
+        LIST_PATH="$FAVORITE_PATH/$LIST.json"
+        # echo "${LIST[$ANS]}"
         # find the $ANS line e.g. line 2
-        URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${FAVORITE_FULL}")
+        URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${LIST_PATH}")
+        # echo "url_resolved: $URL_RESOLVED"
         if [[ -n $URL_RESOLVED ]]; then
-            _play "$URL_RESOLVED"
+            _play "$URL_RESOLVED" || menu
         else
             echo "url_resolved can't be found. Exiting ..."
             exit 1

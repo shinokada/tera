@@ -94,7 +94,7 @@ _play() {
     echo
     mpv "$1" || {
         echo "Not able to play your station."
-        search_menu
+        return 1
     }
 }
 
@@ -124,7 +124,7 @@ _wget_simple_search() {
     KEY="$2"
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
     greenprint "Searching ..."
-    echo "Key: $KEY and reply: $REPLY"
+    # echo "Key: $KEY and reply: $REPLY"
     wget --post-data "$KEY=$REPLY" "$SEARCH_URL" -O "$SEARCH_RESULTS" 2>/tmp/tera_error || {
         redprint "Something went wrong. Please see /tmp/tera_error"
         exit
