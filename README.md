@@ -68,7 +68,15 @@ If it plays music you're ready to go.
 
 ## Uninstallation
 
-Remove followind directories.
+### Uninstallation script
+
+```sh
+curl -s https://raw.githubusercontent.com/shinokada/tera/main/uninstall.sh > tmp1 && bash tmp1 && rm tmp1
+```
+
+### Manual
+
+Remove following directories.
 
 - tera directory.
 - `~/.config/tera/` directory
