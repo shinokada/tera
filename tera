@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.3.14"
+VERSION="0.3.15"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -79,14 +79,7 @@ fi
 # 1. If $FAVORITE_PATH has no file copy the sample.json
 # 2. If $FAVORITE_PATH has one file and content is less than
 # 5 lines, copy the sample.json
-files=("$FAVORITE_PATH"/*)
-echo "files are: ${files}"
-if [ ${#files[@]} -eq 0 ]; then
-    echo "huzzah"
-else
-    echo "Hoy"
-fi
-exit
+
 if [ ! -f "$FAVORITE_FULL" ]; then
     touch "$FAVORITE_FULL"
     cp "${script_dir}/sample.json" "$FAVORITE_FULL"

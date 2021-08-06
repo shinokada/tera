@@ -15,7 +15,7 @@ cache_path=$HOME/.cache/tera
 
 if [ -d "$config_path" ]; then
     echo "Removing config dir..."
-    rm -r "$config_path" || {
+    rm -rf "$config_path" || {
         echo "Please removed $config_path."
     }
 fi

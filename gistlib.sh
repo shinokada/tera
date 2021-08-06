@@ -26,15 +26,31 @@ create_gist() {
     gist_menu
 }
 
-download_gist() {
-    echo download a gist
+recover_gist() {
+    greenprint "What is your Gist url?"
+    read -r gist_url
+    greenprint "Cloning a gist..."
+    cd "$FAVORITE_PATH" || {
+        redprint "Something went wrong."
+        gist_menu
+    }
+    git clone "$gist_url" || {
+        redprint "Your gist url doesn't exist."
+        gist_menu
+    }
+    # find the last from the path
+    gist_dir=${gist_url##*/}
+    mv "$FAVORITE_PATH"/"$gist_dir"/*.json "$FAVORITE_PATH"
+    rm -rf "./$gist_dir"
+    greenprint "All your lists are downloaded."
 }
 
 gist_menu() {
     echo -ne "
 $APP_NAME LIST MENU:
 $(greenprint '1)') Create a gist
-$(greenprint '2)') Go back to the main menu
+$(greenprint '2)') Recover favorites from a gist
+$(greenprint '3)') Go back to the main menu
 $(greenprint '0)') Exit
 $(blueprint 'Choose an option:') "
     read -r ans
@@ -44,6 +60,10 @@ $(blueprint 'Choose an option:') "
         gist_menu
         ;;
     2)
+        recover_gist
+        gist_menu
+        ;;
+    3)
         menu
         ;;
     0)
