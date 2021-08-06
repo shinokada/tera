@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+version=0.0.1
 app_name=tera
 echo "Uninstalling $app_name..."
 
