@@ -68,6 +68,8 @@ If it plays music you're ready to go.
 
 ## Uninstallation
 
+You can uninstall by using the  uninstallation script or manually.
+
 ### Uninstallation script
 
 ```sh
