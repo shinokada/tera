@@ -83,7 +83,7 @@ fi
 
 if [ ! -f "$FAVORITE_FULL" ]; then
     touch "$FAVORITE_FULL"
-    cp "${script_dir}/sample.json" "$FAVORITE_FULL"
+    cp "${script_dir}/lib/sample.json" "$FAVORITE_FULL"
 fi
 
 menu() {
