@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.3.16"
+VERSION="0.4.0"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -55,13 +55,13 @@ script_dir=${self%/*}
 
 # shellcheck disable=SC1091
 {
-    . "${script_dir}/lib.sh"
-    . "${script_dir}/search.sh"
-    . "${script_dir}/list.sh"
-    . "${script_dir}/lucky.sh"
-    . "${script_dir}/play.sh"
-    . "${script_dir}/delete_station.sh"
-    . "${script_dir}/gistlib.sh"
+    . "${script_dir}/lib/delete_station.sh"
+    . "${script_dir}/lib/gistlib.sh"
+    . "${script_dir}/lib/lib.sh"
+    . "${script_dir}/lib/list.sh"
+    . "${script_dir}/lib/lucky.sh"
+    . "${script_dir}/lib/play.sh"
+    . "${script_dir}/lib/search.sh"
 }
 
 check_cmd mpv
