@@ -53,12 +53,11 @@ brew install tera
 Download a Debian package from the [releases page](https://github.com/shinokada/tera/releases).
 
 ```sh
-sudo apt install ./tera_0.3.13_all.deb
-rm -rf ./tera_0.3.13_all.deb
+sudo apt install ./tera_0.4.1_all.deb
+rm -rf ./tera_0.4.1_all.deb
 ```
 
-After installation please run the following to check `mpv` is 
-installed correctly.
+After installation please run the following to check `mpv` is installed correctly.
 
 ```sh
 mpv https://live.musopen.org:8085/streamvbr0
