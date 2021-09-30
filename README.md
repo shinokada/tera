@@ -1,5 +1,5 @@
 <p align="center">
-<img width="261" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
+<img width="600" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
 </p>
 
 <h1  align="center">Terminal Radio (TERA)</h1>
