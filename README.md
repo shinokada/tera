@@ -1,5 +1,6 @@
 <p align="center">
 <img width="600" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera.png" />
+<a href="https://shinokada.github.io/tera/">https://shinokada.github.io/tera/</a>
 </p>
 
 <h1 align="center">Terminal Radio (TERA)</h1>
@@ -133,7 +134,7 @@ By selecting 2) Search radio stations, you can search by tag, name, language, co
 
 ## Author
 
-Shinichi Okada
+@shinokada
 
 ## License
 
