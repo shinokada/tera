@@ -9,6 +9,8 @@
 
 [Article](https://levelup.gitconnected.com/discover-rejuvenate-your-music-library-with-command-line-f3268db67bba)
 
+Are you tired of being stuck in a musical rut with the same old songs being recommended to you on Amazon Prime Music or YouTube? Are you sick of the advertisements that come with streaming services like Spotify? If you’re looking for a new and exciting way to discover new music while you work, this article is for you!
+
 Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal. 
 Tera stores favorite list in the `~/.config/tera/favorite` directory and uses `~/.cache/tera` directory to keep search related results.
 
