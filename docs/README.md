@@ -26,7 +26,7 @@ Unix-like environment.
 
 ## Features
 
-- 27780+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
+- 35000+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
 - [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
 - CRUD favorite lists.
 - Play from a list
