@@ -1,5 +1,5 @@
 <p align="center">
-<img width="600" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera-new.png" />
+<img width="600" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera-3.png" />
 <a href="https://tera.codewithshin.com/">https://tera.codewithshin.com/</a>
 </p>
 
