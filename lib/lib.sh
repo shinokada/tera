@@ -119,6 +119,44 @@ _show_favlist() {
     echo "$LIST"
 }
 
+_info_select_radio() {
+  NAMEINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "name\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  TAGSINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "tags\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  COUNTRYINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "country\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  VOTESINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "votes\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  CODECINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "codec\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  BITRATEINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "bitrate\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  echo
+  echo "--------- Info Radio: ------------"
+  echo "NAME: $NAMEINFO"
+  echo "TAGS: $TAGSINFO"
+  echo "COUNTRY: $COUNTRYINFO"
+  echo "VOTES: $VOTESINFO"
+  echo "CODEC: $CODECINFO"
+  echo "BITRATE: $BITRATEINFO"
+  echo "---------------------------------- "
+  echo
+}
+
+_info_select_radio_play() {
+  NAMEINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "name\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  TAGSINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "tags\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  COUNTRYINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "country\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  VOTESINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "votes\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  CODECINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "codec\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  BITRATEINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "bitrate\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
+  echo
+  echo "--------- Info Radio: ------------"
+  echo "NAME: $NAMEINFO"
+  echo "TAGS: $TAGSINFO"
+  echo "COUNTRY: $COUNTRYINFO"
+  echo "VOTES: $VOTESINFO"
+  echo "CODEC: $CODECINFO"
+  echo "BITRATE: $BITRATEINFO"
+  echo "---------------------------------- "
+  echo
+}
+
 _wget_simple_search() {
     REPLY="$1"
     KEY="$2"
@@ -132,17 +170,11 @@ _wget_simple_search() {
 }
 
 _wget_search() {
-    REPLY=("$1")
+    read -rp 'Write your query ' -a REPLY
     echo "${REPLY[@]}"
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
-    OPTS=
-    for TAG in "${REPLY[@]}"; do
-        OPTS+="$KEY=$TAG&"
-    done
-    OPTS="${OPTS%?}"
     greenprint "Searching ..."
-    echo "$OPTS"
-    wget --post-data "$OPTS" "$SEARCH_URL" -O "$SEARCH_RESULTS" 2>/tmp/tera_error || {
+    curl -X POST "${REPLY[@]}" "$SEARCH_URL" > "$SEARCH_RESULTS" 2>/tmp/tera_error || {
         redprint "Something went wrong. Please see /tmp/tera_error"
         exit
     }

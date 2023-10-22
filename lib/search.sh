@@ -35,6 +35,7 @@ _search_play() {
     jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     if [ -n "$URL_RESOLVED" ]; then
+        _info_select_radio "$ANS"
         mpv "$URL_RESOLVED" || {
             echo "Not able to play your station."
             search_menu
@@ -87,6 +88,7 @@ search_by() {
         search_menu
     fi
     # URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
+    _info_select_radio "$ANS"
     search_submenu "$ANS"
     # rm "$SEARCH_RESULTS"
 }
@@ -97,11 +99,9 @@ advanced_search() {
     magentaprint "The query format is -d field=word."
     magentaprint "Field can be one of tag, name, language, country code and state."
     magentaprint "Fields can be combined, for example: -d tag=jazz -d state=queensland"
-    magentaprint "Or tag=rock language=spanish countrycode=us"
-    magentaprint "Or tag=country state=IL"
-    printf "Write your quiry: "
-    read -ra REPLY
-    _wget_search "${REPLY[@]}"
+    magentaprint "Or -d tag=rock -d language=spanish -d countrycode=us"
+    magentaprint "Or -d tag=jazz -d codec=ogg -d bitrateMin=128000"
+    _wget_search
 
     LENGTH=$(jq length "$SEARCH_RESULTS")
 
@@ -118,6 +118,7 @@ advanced_search() {
     if [[ "$ANS" == 0 ]]; then
         search_menu
     fi
+    _info_select_radio "$ANS"
     search_submenu "$ANS"
 }
 
@@ -165,7 +166,7 @@ search_menu() {
 $APP_NAME SEARCH MENU:
 $(greenprint '1)') Tag
 $(greenprint '2)') Name
-$(greenprint '3)') Language 
+$(greenprint '3)') Language
 $(greenprint '4)') Country code
 $(greenprint '5)') State
 $(greenprint '6)') Advanced search

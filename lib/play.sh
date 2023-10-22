@@ -42,6 +42,7 @@ fn_play() {
         URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${LIST_PATH}")
         # echo "url_resolved: $URL_RESOLVED"
         if [[ -n $URL_RESOLVED ]]; then
+            _info_select_radio_play "$ANS" "${LIST_PATH}"
             _play "$URL_RESOLVED" || menu
         else
             echo "url_resolved can't be found. Exiting ..."
