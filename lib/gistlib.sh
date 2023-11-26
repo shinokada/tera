@@ -20,7 +20,8 @@ create_gist() {
     gh gist create -d "Terminal radio favorite lists." "${ARR[@]}" >"$GIST_URL_FILE"
     echo "Created a secret Gist"
     read -r gist_url <"$GIST_URL_FILE"
-    python -m webbrowser "$gist_url"
+    # for mac and linux use python3
+    python3 -m webbrowser "$gist_url"
 
     # fi
     gist_menu

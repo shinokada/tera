@@ -127,14 +127,14 @@ _info_select_radio() {
   CODECINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "codec\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
   BITRATEINFO=$(cat $SEARCH_RESULTS 2>/dev/null | jq -r ".[$ANS-1]" | grep "bitrate\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
   echo
-  echo "--------- Info Radio: ------------"
-  echo "NAME: $NAMEINFO"
-  echo "TAGS: $TAGSINFO"
-  echo "COUNTRY: $COUNTRYINFO"
-  echo "VOTES: $VOTESINFO"
-  echo "CODEC: $CODECINFO"
-  echo "BITRATE: $BITRATEINFO"
-  echo "---------------------------------- "
+  magentaprint "--------- Info Radio: ------------"
+  greenprint "NAME: $NAMEINFO"
+  blueprint "TAGS: $TAGSINFO"
+  redprint "COUNTRY: $COUNTRYINFO"
+  yellowprint "VOTES: $VOTESINFO"
+  magentaprint "CODEC: $CODECINFO"
+  cyanprint "BITRATE: $BITRATEINFO"
+  magentaprint "---------------------------------- "
   echo
 }
 
@@ -146,14 +146,14 @@ _info_select_radio_play() {
   CODECINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "codec\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
   BITRATEINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "bitrate\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
   echo
-  echo "--------- Info Radio: ------------"
-  echo "NAME: $NAMEINFO"
-  echo "TAGS: $TAGSINFO"
-  echo "COUNTRY: $COUNTRYINFO"
-  echo "VOTES: $VOTESINFO"
-  echo "CODEC: $CODECINFO"
-  echo "BITRATE: $BITRATEINFO"
-  echo "---------------------------------- "
+  magentaprint "--------- Info Radio: ------------"
+  greenprint "NAME: $NAMEINFO"
+  blueprint "TAGS: $TAGSINFO"
+  redprint "COUNTRY: $COUNTRYINFO"
+  yellowprint "VOTES: $VOTESINFO"
+  magentaprint "CODEC: $CODECINFO"
+  cyanprint "BITRATE: $BITRATEINFO"
+  magentaprint "---------------------------------- "
   echo
 }
 
