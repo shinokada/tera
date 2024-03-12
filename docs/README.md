@@ -4,6 +4,13 @@
 <a href="https://tera.codewithshin.com/">https://tera.codewithshin.com/</a>
 </p>
 
+<p align="center">
+  To Keep It Going, Please Show Your Love. ❤️<a href='https://ko-fi.com/Z8Z2CHALG' target='_blank'>
+</p>
+<p align="center">
+<img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+</p>
+
 <h1 align="center">Terminal Radio (TERA)</h1>
 
 ## Overview
