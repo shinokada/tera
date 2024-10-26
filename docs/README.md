@@ -76,6 +76,10 @@ mpv https://live.musopen.org:8085/streamvbr0
 
 If it plays music you're ready to go.
 
+### ArchLinux
+
+Please see [aur.archlinux.org](https://aur.archlinux.org/packages/tera)
+
 ## Uninstallation
 
 You can uninstall by using the  uninstallation script or manually.
