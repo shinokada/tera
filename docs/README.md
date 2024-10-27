@@ -76,9 +76,18 @@ mpv https://live.musopen.org:8085/streamvbr0
 
 If it plays music you're ready to go.
 
-### ArchLinux
+### Arch Linux
 
-Please see [aur.archlinux.org](https://aur.archlinux.org/packages/tera)
+See full package details [here](https://aur.archlinux.org/packages/tera).
+
+Pacman:
+```sh
+sudo pacman -S tera
+```
+Yay:
+```sh
+yay -S tera
+```
 
 ## Uninstallation
 
