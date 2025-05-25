@@ -87,6 +87,7 @@ if [ ! -f "$FAVORITE_FULL" ]; then
 fi
 
 menu() {
+clear
     printf "%b" "
 $APP_NAME MAIN MENU
 $(greenprint '1)') Play from my list
