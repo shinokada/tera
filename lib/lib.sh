@@ -145,7 +145,7 @@ _info_select_radio_play() {
   VOTESINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "votes\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
   CODECINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "codec\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
   BITRATEINFO=$(cat $LIST_PATH 2>/dev/null | jq -r ".[$ANS-1]" | grep "bitrate\":" | awk -F': ' '{print $2}' | sed 's/"//g' | sed 's/+/ /g' | sed 's/,//g')
-  echo
+  clear
   magentaprint "--------- Info Radio: ------------"
   greenprint "NAME: $NAMEINFO"
   blueprint "TAGS: $TAGSINFO"
