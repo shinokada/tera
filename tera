@@ -8,6 +8,7 @@ SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 TMP_PATH="$HOME/.cache/tera"
+CONFIG_FILE="$SCRIPT_DOT_DIR/tera_config.conf"
 FAVORITE_FILE="sample.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
@@ -75,6 +76,11 @@ if [ ! -d "$FAVORITE_PATH" ]; then
 fi
 if [ ! -d "$TMP_PATH" ]; then
     mkdir -p "$TMP_PATH"
+fi
+# Ensure the configuration file exists, create it with default settings if not
+if [ ! -f "$CONFIG_FILE" ]; then
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    echo "volume=100" > "$CONFIG_FILE"  # Default volume set to 100%
 fi
 # TODO
 # 1. If $FAVORITE_PATH has no file copy the sample.json

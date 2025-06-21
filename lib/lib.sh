@@ -88,11 +88,24 @@ _station_list() {
     jq -r '.[] | .name' <"$FAVORITE_PATH/$1.json"
 }
 
+# Function to get the saved volume or set it to default
+get_saved_volume() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "volume=100" > "$CONFIG_FILE"
+    fi
+    grep "volume" "$CONFIG_FILE" | cut -d '=' -f2
+}
+
 _play() {
     echo
     yellowprint "Press q to quit."
     echo
-    mpv "$1" || {
+
+    # Get the saved volume from the config file
+    volume=$(get_saved_volume)
+
+    # Start mpv with saved volume level and the Lua script from the lib directory
+    mpv --volume="$volume" --script="./lib/save_volume.lua" "$1" || {
         echo "Not able to play your station."
         return 1
     }
