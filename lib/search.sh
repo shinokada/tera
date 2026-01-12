@@ -79,15 +79,17 @@ search_by() {
         yellowprint "No result. Try again."
         search_menu
     fi
-    jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf
-    yellowprint "     0  Return to Search Menu"
-    echo
-    printf "Select a number. "
-    read -r ANS
-    # echo "$ANS"
-    if [[ "$ANS" == 0 ]]; then
+    # Use fzf to interactively select a station
+    SELECTION=$(jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf --prompt="Select a station (or ESC to return): " --height=40% --reverse)
+    
+    # Check if user cancelled (ESC)
+    if [ -z "$SELECTION" ]; then
         search_menu
+        return
     fi
+    
+    # Extract the number from the selection
+    ANS=$(echo "$SELECTION" | awk '{print $1}')
     # URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     _info_select_radio "$ANS"
     search_submenu "$ANS"
@@ -111,28 +113,41 @@ advanced_search() {
         echo "No result. Try again."
         search_menu
     fi
-    jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf
-    yellowprint "     0  Return to Search Menu"
-    echo
-    printf "Select a number. "
-    read -r ANS
-    if [[ "$ANS" == 0 ]]; then
+    # Use fzf to interactively select a station
+    SELECTION=$(jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf --prompt="Select a station (or ESC to return): " --height=40% --reverse)
+    
+    # Check if user cancelled (ESC)
+    if [ -z "$SELECTION" ]; then
         search_menu
+        return
     fi
+    
+    # Extract the number from the selection
+    ANS=$(echo "$SELECTION" | awk '{print $1}')
     _info_select_radio "$ANS"
     search_submenu "$ANS"
 }
 
 search_submenu() {
-    echo -ne "
-$APP_NAME SEARCH SUBMENU:
-$(greenprint '1)') Play
-$(greenprint '2)') Save
-$(greenprint '3)') Go back to the Search menu
-$(greenprint '4)') Go back to the Main menu
-$(greenprint '0)') Exit
-$(blueprint 'Choose an option:') "
-    read -r ans
+    clear
+    cyanprint "$APP_NAME SEARCH SUBMENU"
+    echo
+    
+    MENU_OPTIONS="1) Play
+2) Save
+3) Go back to the Search menu
+4) Go back to the Main menu
+0) Exit"
+    
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
+    
+    if [ -z "$CHOICE" ]; then
+        search_menu
+        return
+    fi
+    
+    ans=$(echo "$CHOICE" | cut -d')' -f1)
+    
     case $ans in
     1)
         _search_play "$ANS"
@@ -163,18 +178,28 @@ $(blueprint 'Choose an option:') "
 
 search_menu() {
     _cleanup_tmp "${TMP_PATH}/radio_searches.json"
-    echo -ne "
-$APP_NAME SEARCH MENU:
-$(greenprint '1)') Tag
-$(greenprint '2)') Name
-$(greenprint '3)') Language
-$(greenprint '4)') Country code
-$(greenprint '5)') State
-$(greenprint '6)') Advanced search
-$(greenprint '7)') Main Menu
-$(greenprint '0)') Exit
-$(blueprint 'Choose an option:') "
-    read -r ans
+    clear
+    cyanprint "$APP_NAME SEARCH MENU"
+    echo
+    
+    MENU_OPTIONS="1) Tag
+2) Name
+3) Language
+4) Country code
+5) State
+6) Advanced search
+7) Main Menu
+0) Exit"
+    
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
+    
+    if [ -z "$CHOICE" ]; then
+        menu
+        return
+    fi
+    
+    ans=$(echo "$CHOICE" | cut -d')' -f1)
+    
     case $ans in
     1)
         search_by tag

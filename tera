@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.4.9"
+VERSION="0.5.0"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -87,18 +87,31 @@ if [ ! -f "$FAVORITE_FULL" ]; then
 fi
 
 menu() {
-clear
-    printf "%b" "
-$APP_NAME MAIN MENU
-$(greenprint '1)') Play from my list
-$(greenprint '2)') Search radio stations
-$(greenprint '3)') List (Create/Read/Update/Delete)
-$(greenprint '4)') Delete a radio station 
-$(greenprint '5)') I feel lucky
-$(greenprint '6)') Gist
-$(greenprint '0)') Exit
-$(blueprint 'Choose an option:') "
-    read -r ans
+    clear
+    cyanprint "$APP_NAME MAIN MENU"
+    echo
+    
+    # Create menu options
+    MENU_OPTIONS="1) Play from my list
+2) Search radio stations
+3) List (Create/Read/Update/Delete)
+4) Delete a radio station
+5) I feel lucky
+6) Gist
+0) Exit"
+    
+    # Use fzf for selection
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
+    
+    # Check if user cancelled
+    if [ -z "$CHOICE" ]; then
+        yellowprint "Bye-bye."
+        exit 0
+    fi
+    
+    # Extract the number from the choice
+    ans=$(echo "$CHOICE" | cut -d')' -f1)
+    
     case $ans in
     1)
         fn_play

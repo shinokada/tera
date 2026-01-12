@@ -12,25 +12,35 @@ fn_play() {
         cyanprint "Try $SCRIPT_NAME search"
     fi
     echo
-    greenprint "Select a list."
+    greenprint "Select a list (use arrow keys, ESC to cancel):"
     echo
-    PS3="Enter a number: "
-    select LIST in $(_fav_list); do
-        # echo "Selected list: $LIST"
-        break
-    done
+    LIST=$(echo "$lists" | tr ' ' '\n' | fzf --prompt="Select a list: " --height=40% --reverse)
+    
+    # Check if user cancelled
+    if [ -z "$LIST" ]; then
+        menu
+        return
+    fi
 
     # read -rp "Type a list number.   " LIST
     if [ -n "$LIST" ]; then
         echo
         magentaprint "Which station do you want to play?"
-        greenprint "Select a number to play from $LIST list."
+        greenprint "Select a station from $LIST list (use arrow keys, ESC to cancel):"
         echo
         STATIONS=$(_station_list "$LIST")
-        echo "$STATIONS" | nl
-        echo
-        printf "Type a number to play. "
-        read -r ANS
+        
+        # Use fzf to select station
+        SELECTION=$(echo "$STATIONS" | nl | fzf --prompt="Select a station: " --height=40% --reverse)
+        
+        # Check if user cancelled
+        if [ -z "$SELECTION" ]; then
+            menu
+            return
+        fi
+        
+        # Extract the number from the selection
+        ANS=$(echo "$SELECTION" | awk '{print $1}')
         # echo "$ANS"
         # get list path
         # FAV_FULL=_station_list

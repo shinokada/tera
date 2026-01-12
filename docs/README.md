@@ -34,6 +34,8 @@ Unix-like environment.
 
 ## Features
 
+- **Modern Arrow Key Navigation**: Navigate all menus and selections using arrow keys (↑/↓), press Enter to select, and ESC to go back
+- **Interactive Selection**: Use fuzzy search to quickly find radio stations and lists
 - 35000+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
 - [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
 - CRUD favorite lists.
@@ -109,6 +111,23 @@ tera
 ```
 
 ![start](https://raw.githubusercontent.com/shinokada/tera/main/images/radio1.png)
+
+#### Navigation Controls
+
+Tera features modern, intuitive navigation throughout the application:
+
+| Key             | Description                                      |
+| --------------- | ------------------------------------------------ |
+| ↑ / ↓           | Navigate through menu options and selections     |
+| Enter           | Select the highlighted option                     |
+| ESC             | Cancel and return to previous menu               |
+| Type to search  | Fuzzy search within any list (powered by fzf)    |
+
+**Navigation Features:**
+- All menus support arrow key navigation
+- List selections use interactive fuzzy finder
+- Radio station searches display results in an interactive selector
+- Press ESC at any time to go back without exiting the application
 
 #### Player control
 

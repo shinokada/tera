@@ -47,14 +47,24 @@ recover_gist() {
 }
 
 gist_menu() {
-    echo -ne "
-$APP_NAME LIST MENU:
-$(greenprint '1)') Create a gist
-$(greenprint '2)') Recover favorites from a gist
-$(greenprint '3)') Go back to the main menu
-$(greenprint '0)') Exit
-$(blueprint 'Choose an option:') "
-    read -r ans
+    clear
+    cyanprint "$APP_NAME GIST MENU"
+    echo
+    
+    MENU_OPTIONS="1) Create a gist
+2) Recover favorites from a gist
+3) Go back to the main menu
+0) Exit"
+    
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
+    
+    if [ -z "$CHOICE" ]; then
+        menu
+        return
+    fi
+    
+    ans=$(echo "$CHOICE" | cut -d')' -f1)
+    
     case $ans in
     1)
         create_gist
