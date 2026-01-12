@@ -41,8 +41,9 @@ _search_play() {
             search_menu
         }
     else
-        echo "url_resolved can't be found. Exiting ..."
-        exit 1
+        redprint "url_resolved can't be found. Returning to search menu..."
+        search_menu
+        return
     fi
     echo
     printf "Do you want to save this station? (yes/y/no/n) "
