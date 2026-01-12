@@ -13,7 +13,7 @@ FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
 APP_NAME="TERA"
 RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
-SEARCH_URL="http://all.api.radio-browser.info/json/stations/search"
+SEARCH_URL="https://all.api.radio-browser.info/json/stations/search"
 
 readlinkf() {
     [ "${1:-}" ] || return 1
