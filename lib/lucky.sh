@@ -2,14 +2,30 @@
 
 fn_lucky() {
     _cleanup_tmp "${TMP_PATH}/radio_searches.json"
+    clear
+    cyanprint "$APP_NAME - I Feel Lucky"
     echo
     magentaprint "Type a genre of music, rock, classical, jazz, pop, country, hip, heavy, blues, soul."
     magentaprint "Or type a keyword, like meditation, relax, mozart, Beatles etc."
     cyanprint "Use only one word."
     echo
     # ask a tag word
-    printf "Genre/keyword: "
+    printf "Genre/keyword (or type 'menu' to return to Main Menu): "
     read -r REPLY
+    
+    # Check if user wants to return to main menu
+    if [ "$REPLY" = "menu" ] || [ "$REPLY" = "Menu" ] || [ "$REPLY" = "MENU" ]; then
+        menu
+        return
+    fi
+    
+    # Check if input is empty
+    if [ -z "$REPLY" ]; then
+        yellowprint "No input provided. Returning to Main Menu."
+        menu
+        return
+    fi
+    
     # find all stations with a key word = tag
     _wget_simple_search "$REPLY" "tag"
     # find the list length

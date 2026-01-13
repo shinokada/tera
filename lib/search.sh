@@ -56,6 +56,10 @@ _search_play() {
 
 search_by() {
     KEY=$1
+    clear
+    # Capitalize first letter of KEY for heading
+    KEY_DISPLAY="$(echo ${KEY:0:1} | tr '[:lower:]' '[:upper:]')${KEY:1}"
+    cyanprint "$APP_NAME - Search by $KEY_DISPLAY"
     echo
     printf "Type a %s to search: " "$KEY"
     read -r REPLY
@@ -79,17 +83,32 @@ search_by() {
         yellowprint "No result. Try again."
         search_menu
     fi
-    # Use fzf to interactively select a station
-    SELECTION=$(jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf --prompt="Select a station (or ESC to return): " --height=40% --reverse)
     
-    # Check if user cancelled (ESC)
+    # Get station names and add Main Menu option
+    STATIONS=$(jq -r '.[].name' <"$SEARCH_RESULTS")
+    STATIONS_WITH_MENU=$(printf "<< Main Menu >>\n%s" "$STATIONS")
+    
+    # Use fzf to interactively select a station
+    SELECTION=$(echo "$STATIONS_WITH_MENU" | nl | fzf --prompt="> " --header="$APP_NAME - Search Results" --header-first --height=40% --reverse)
+    
+    # Check if user cancelled (ESC) or selected Main Menu
     if [ -z "$SELECTION" ]; then
         search_menu
         return
     fi
     
-    # Extract the number from the selection
+    # Extract the selection text and number
+    SELECTED_TEXT=$(echo "$SELECTION" | awk '{$1=""; print $0}' | sed 's/^ //')
     ANS=$(echo "$SELECTION" | awk '{print $1}')
+    
+    # Check if Main Menu was selected
+    if [ "$SELECTED_TEXT" = "<< Main Menu >>" ]; then
+        search_menu
+        return
+    fi
+    
+    # Adjust ANS to account for the Main Menu option (subtract 1)
+    ANS=$((ANS - 1))
     # URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
     _info_select_radio "$ANS"
     search_submenu "$ANS"
@@ -98,6 +117,9 @@ search_by() {
 
 advanced_search() {
     SEARCH_RESULTS="${TMP_PATH}/radio_searches.json"
+    clear
+    cyanprint "$APP_NAME - Advanced Search"
+    echo
 
     magentaprint "The query format is -d field=word."
     magentaprint "Field can be one of tag, name, language, country code and state."
@@ -113,17 +135,32 @@ advanced_search() {
         echo "No result. Try again."
         search_menu
     fi
-    # Use fzf to interactively select a station
-    SELECTION=$(jq -r '.[].name' <"$SEARCH_RESULTS" | nl | fzf --prompt="Select a station (or ESC to return): " --height=40% --reverse)
     
-    # Check if user cancelled (ESC)
+    # Get station names and add Main Menu option
+    STATIONS=$(jq -r '.[].name' <"$SEARCH_RESULTS")
+    STATIONS_WITH_MENU=$(printf "<< Main Menu >>\n%s" "$STATIONS")
+    
+    # Use fzf to interactively select a station
+    SELECTION=$(echo "$STATIONS_WITH_MENU" | nl | fzf --prompt="> " --header="$APP_NAME - Search Results" --header-first --height=40% --reverse)
+    
+    # Check if user cancelled (ESC) or selected Main Menu
     if [ -z "$SELECTION" ]; then
         search_menu
         return
     fi
     
-    # Extract the number from the selection
+    # Extract the selection text and number
+    SELECTED_TEXT=$(echo "$SELECTION" | awk '{$1=""; print $0}' | sed 's/^ //')
     ANS=$(echo "$SELECTION" | awk '{print $1}')
+    
+    # Check if Main Menu was selected
+    if [ "$SELECTED_TEXT" = "<< Main Menu >>" ]; then
+        search_menu
+        return
+    fi
+    
+    # Adjust ANS to account for the Main Menu option (subtract 1)
+    ANS=$((ANS - 1))
     _info_select_radio "$ANS"
     search_submenu "$ANS"
 }
@@ -133,11 +170,11 @@ search_submenu() {
     cyanprint "$APP_NAME SEARCH SUBMENU"
     echo
     
-    MENU_OPTIONS="1) Play
+    MENU_OPTIONS="0) Main Menu
+1) Play
 2) Save
 3) Go back to the Search menu
-4) Go back to the Main menu
-0) Exit"
+4) Exit"
     
     CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
     
@@ -149,6 +186,10 @@ search_submenu() {
     ans=$(echo "$CHOICE" | cut -d')' -f1)
     
     case $ans in
+    0)
+        echo "Go back to the Main menu"
+        menu
+        ;;
     1)
         _search_play "$ANS"
         search_menu
@@ -162,10 +203,6 @@ search_submenu() {
         search_menu
         ;;
     4)
-        echo "Go back to the Main menu"
-        menu
-        ;;
-    0)
         yellowprint "Bye-bye."
         exit 0
         ;;
@@ -182,14 +219,14 @@ search_menu() {
     cyanprint "$APP_NAME SEARCH MENU"
     echo
     
-    MENU_OPTIONS="1) Tag
+    MENU_OPTIONS="0) Main Menu
+1) Tag
 2) Name
 3) Language
 4) Country code
 5) State
 6) Advanced search
-7) Main Menu
-0) Exit"
+7) Exit"
     
     CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
     
@@ -201,6 +238,9 @@ search_menu() {
     ans=$(echo "$CHOICE" | cut -d')' -f1)
     
     case $ans in
+    0)
+        menu
+        ;;
     1)
         search_by tag
         search_menu
@@ -227,9 +267,6 @@ search_menu() {
         search_menu
         ;;
     7)
-        menu
-        ;;
-    0)
         yellowprint "Bye-bye."
         exit 0
         ;;

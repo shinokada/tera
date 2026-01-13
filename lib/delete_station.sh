@@ -3,23 +3,25 @@
 fn_delete() {
     TEMP_FILE="$TMP_PATH/radio_delete.json"
     _cleanup_tmp "$TEMP_FILE"
+    clear
+    cyanprint "$APP_NAME - Delete a Radio Station"
     echo
     touch "$TEMP_FILE"
     greenprint "Select a list number to delete from."
     echo
-    echo "0) CANCEL"
+    echo "0) Main Menu"
     LIST=$(_show_favlist)
     echo
     # echo "LIST: $LIST"
     if [[ -z $LIST ]]; then
         menu
     fi
-    echo "     0  CANCEL"
+    echo "     0  Main Menu"
     _station_list "$LIST" | nl
     printf "Type your station number to delete. "
     read -r ANS
     # echo "$ANS"
-    if [[ -z $ANS ]]; then
+    if [[ -z $ANS ]] || [[ $ANS == "0" ]]; then
         menu
     else
         FAVLIST_PATH="${FAVORITE_PATH}/${LIST}.json"

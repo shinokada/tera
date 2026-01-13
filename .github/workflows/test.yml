@@ -1,0 +1,48 @@
+name: TERA Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Install BATS (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bats
+    
+    - name: Install BATS (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install bats-core
+    
+    - name: Verify BATS installation
+      run: bats --version
+    
+    - name: Run all tests
+      run: |
+        cd tests
+        bats .
+    
+    - name: Test summary
+      if: always()
+      run: |
+        if [ $? -eq 0 ]; then
+          echo "✅ All tests passed!"
+        else
+          echo "❌ Some tests failed"
+          exit 1
+        fi

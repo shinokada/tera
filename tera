@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.5.0"
+VERSION="0.6.0"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -91,7 +91,10 @@ menu() {
     cyanprint "$APP_NAME MAIN MENU"
     echo
     
-    # Create menu options
+    # Define the favorite stations file path
+    FAVORITE_STATIONS_FILE="${script_dir}/lib/favorite.json"
+    
+    # Create base menu options
     MENU_OPTIONS="1) Play from my list
 2) Search radio stations
 3) List (Create/Read/Update/Delete)
@@ -100,8 +103,31 @@ menu() {
 6) Gist
 0) Exit"
     
+    # Check if favorite.json exists and has stations
+    if [ -f "$FAVORITE_STATIONS_FILE" ]; then
+        STATION_COUNT=$(jq 'length' "$FAVORITE_STATIONS_FILE" 2>/dev/null || echo 0)
+        
+        if [ "$STATION_COUNT" -gt 0 ]; then
+            # Add separator and favorite stations section
+            MENU_OPTIONS="${MENU_OPTIONS}
+
+--- Quick Play Favorites ---"
+            
+            # Add each favorite station (limit to first 10)
+            LIMIT=$((STATION_COUNT < 10 ? STATION_COUNT : 10))
+            for i in $(seq 0 $((LIMIT - 1))); do
+                STATION_NAME=$(jq -r ".[$i].name" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
+                if [ -n "$STATION_NAME" ] && [ "$STATION_NAME" != "null" ]; then
+                    MENU_NUM=$((i + 10))
+                    MENU_OPTIONS="${MENU_OPTIONS}
+${MENU_NUM}) ▶ ${STATION_NAME}"
+                fi
+            done
+        fi
+    fi
+    
     # Use fzf for selection
-    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info --ansi)
     
     # Check if user cancelled
     if [ -z "$CHOICE" ]; then
@@ -110,7 +136,13 @@ menu() {
     fi
     
     # Extract the number from the choice
-    ans=$(echo "$CHOICE" | cut -d')' -f1)
+    ans=$(echo "$CHOICE" | grep -oE '^[0-9]+' || echo "")
+    
+    # Handle separator line (no number)
+    if [ -z "$ans" ]; then
+        menu
+        return
+    fi
     
     case $ans in
     1)
@@ -142,8 +174,15 @@ menu() {
         exit 0
         ;;
     *)
-        redprint 'Wrong option.'
-        menu
+        # Check if it's a favorite station (10+)
+        if [ "$ans" -ge 10 ]; then
+            STATION_INDEX=$((ans - 10))
+            _play_favorite_station "$STATION_INDEX"
+            menu
+        else
+            redprint 'Wrong option.'
+            menu
+        fi
         ;;
     esac
 }

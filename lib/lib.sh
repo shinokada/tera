@@ -167,6 +167,8 @@ _wget_simple_search() {
         redprint "Something went wrong. Please see /tmp/tera_error"
         exit
     }
+    # Clear the "Searching..." message
+    echo -ne "\r\033[K"
 }
 
 _wget_search() {
@@ -178,4 +180,56 @@ _wget_search() {
         redprint "Something went wrong. Please see /tmp/tera_error"
         exit
     }
+    # Clear the "Searching..." message
+    echo -ne "\r\033[K"
+}
+
+_play_favorite_station() {
+    STATION_INDEX=$1
+    FAVORITE_STATIONS_FILE="${script_dir}/lib/favorite.json"
+    
+    if [ ! -f "$FAVORITE_STATIONS_FILE" ]; then
+        redprint "Favorite stations file not found."
+        return 1
+    fi
+    
+    # Get station details
+    URL_RESOLVED=$(jq -r ".[${STATION_INDEX}].url_resolved" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
+    STATION_NAME=$(jq -r ".[${STATION_INDEX}].name" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
+    
+    if [ -z "$URL_RESOLVED" ] || [ "$URL_RESOLVED" = "null" ]; then
+        redprint "Could not find station URL."
+        return 1
+    fi
+    
+    # Display station info
+    clear
+    cyanprint "$APP_NAME - Playing Favorite Station"
+    echo
+    _info_favorite_station "$STATION_INDEX" "$FAVORITE_STATIONS_FILE"
+    
+    # Play the station
+    _play "$URL_RESOLVED"
+}
+
+_info_favorite_station() {
+    STATION_INDEX=$1
+    FAV_FILE=$2
+    
+    NAMEINFO=$(jq -r ".[${STATION_INDEX}].name" "$FAV_FILE" 2>/dev/null)
+    TAGSINFO=$(jq -r ".[${STATION_INDEX}].tags" "$FAV_FILE" 2>/dev/null)
+    COUNTRYINFO=$(jq -r ".[${STATION_INDEX}].country" "$FAV_FILE" 2>/dev/null)
+    VOTESINFO=$(jq -r ".[${STATION_INDEX}].votes" "$FAV_FILE" 2>/dev/null)
+    CODECINFO=$(jq -r ".[${STATION_INDEX}].codec" "$FAV_FILE" 2>/dev/null)
+    BITRATEINFO=$(jq -r ".[${STATION_INDEX}].bitrate" "$FAV_FILE" 2>/dev/null)
+    
+    magentaprint "--------- Info Radio: ------------"
+    greenprint "NAME: $NAMEINFO"
+    blueprint "TAGS: $TAGSINFO"
+    redprint "COUNTRY: $COUNTRYINFO"
+    yellowprint "VOTES: $VOTESINFO"
+    magentaprint "CODEC: $CODECINFO"
+    cyanprint "BITRATE: $BITRATEINFO"
+    magentaprint "----------------------------------"
+    echo
 }

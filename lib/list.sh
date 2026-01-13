@@ -84,12 +84,12 @@ list_menu() {
     cyanprint "$APP_NAME LIST MENU"
     echo
     
-    MENU_OPTIONS="1) Create a list
+    MENU_OPTIONS="0) Main Menu
+1) Create a list
 2) Delete a list
 3) Edit a list name
 4) Show all list names
-5) Go back to the main menu
-0) Exit"
+5) Exit"
     
     CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
     
@@ -101,6 +101,10 @@ list_menu() {
     ans=$(echo "$CHOICE" | cut -d')' -f1)
     
     case $ans in
+    0)
+        echo "Go back to the main menu"
+        menu
+        ;;
     1)
         create_list
         list_menu
@@ -118,10 +122,6 @@ list_menu() {
         list_menu
         ;;
     5)
-        echo "Go back to the main menu"
-        menu
-        ;;
-    0)
         yellowprint "Bye-bye."
         exit 0
         ;;

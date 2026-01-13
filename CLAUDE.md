@@ -1,0 +1,2 @@
+- When a new feature is added, create a unit test. 
+- Before creating a unit test, remove confilicting unit test(s).

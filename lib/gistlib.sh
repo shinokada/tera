@@ -3,6 +3,9 @@
 GIST_URL_FILE="$SCRIPT_DOT_DIR/gisturl"
 
 create_gist() {
+    clear
+    cyanprint "$APP_NAME - Create a Gist"
+    echo
     #
     FAV=$(_list_intro)
     # echo "${FAV_ARR[@]}"
@@ -28,6 +31,9 @@ create_gist() {
 }
 
 recover_gist() {
+    clear
+    cyanprint "$APP_NAME - Recover Favorites from a Gist"
+    echo
     greenprint "What is your Gist url?"
     read -r gist_url
     greenprint "Cloning a gist..."
@@ -51,10 +57,10 @@ gist_menu() {
     cyanprint "$APP_NAME GIST MENU"
     echo
     
-    MENU_OPTIONS="1) Create a gist
+    MENU_OPTIONS="0) Main Menu
+1) Create a gist
 2) Recover favorites from a gist
-3) Go back to the main menu
-0) Exit"
+3) Exit"
     
     CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
     
@@ -66,6 +72,9 @@ gist_menu() {
     ans=$(echo "$CHOICE" | cut -d')' -f1)
     
     case $ans in
+    0)
+        menu
+        ;;
     1)
         create_gist
         gist_menu
@@ -75,9 +84,6 @@ gist_menu() {
         gist_menu
         ;;
     3)
-        menu
-        ;;
-    0)
         yellowprint "Bye-bye."
         exit 0
         ;;
