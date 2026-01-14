@@ -10,7 +10,7 @@ fn_lucky() {
     cyanprint "Use only one word."
     echo
     # ask a tag word
-    printf "Genre/keyword (or type 'menu' to return to Main Menu): "
+    printf "Genre/keyword (or press Enter to return to Main Menu): "
     read -r REPLY
     
     # Check if user wants to return to main menu

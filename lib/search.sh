@@ -7,22 +7,67 @@ _save_station_to_list() {
     _cleanup_tmp "$TEMP_FILE2"
     echo
     ANS=$1
-    # echo $ANS
-    greenprint "Select the list to save to: "
-    # echo saving
-    LIST_NAME=$(_show_favlist all)
-    echo "$LIST_NAME"
+    
+    clear
+    cyanprint "$APP_NAME - Save Station"
+    echo
+    greenprint "Select the list to save to:"
+    echo
+    
+    # Get all favorite lists
+    LISTS=$(_fav_list all)
+    
+    # Add Main Menu option and format for fzf
+    MENU_OPTIONS="0) Main Menu"
+    INDEX=1
+    for list in $LISTS; do
+        # Display "My Favorites" for myfavorites.json
+        if [ "$list" = "myfavorites" ]; then
+            DISPLAY_NAME="My Favorites"
+        else
+            DISPLAY_NAME="$list"
+        fi
+        MENU_OPTIONS="${MENU_OPTIONS}\n${INDEX}) ${DISPLAY_NAME}"
+        INDEX=$((INDEX + 1))
+    done
+    
+    # Use fzf for selection with arrow keys
+    CHOICE=$(echo -e "$MENU_OPTIONS" | fzf --prompt="Choose a list (arrow keys to navigate): " --height=40% --reverse --no-info)
+    
+    # Check if user cancelled
+    if [ -z "$CHOICE" ]; then
+        menu
+        return
+    fi
+    
+    # Extract the number and list name
+    LIST_NUM=$(echo "$CHOICE" | cut -d')' -f1)
+    
+    # Check if Main Menu was selected
+    if [ "$LIST_NUM" = "0" ]; then
+        menu
+        return
+    fi
+    
+    DISPLAY_NAME=$(echo "$CHOICE" | cut -d')' -f2- | sed 's/^ //')
+    
+    # Convert "My Favorites" display name back to "myfavorites" for file operations
+    if [ "$DISPLAY_NAME" = "My Favorites" ]; then
+        LIST_NAME="myfavorites"
+    else
+        LIST_NAME="$DISPLAY_NAME"
+    fi
+    
     FAVORITE_FULL="${FAVORITE_PATH}/${LIST_NAME}.json"
-    # echo "$FAVORITE_FULL"
+    
     # get item from "$SEARCH_RESULTS" using $ANS
-
     jq ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     # add the item to the fav list
-    # jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE"
     jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE" >"$TEMP_FILE2" && mv "$TEMP_FILE2" "$FAVORITE_FULL"
-    # which list?
+    
     echo
-    greenprint "Successfully saved the station to your $LIST_NAME list."
+    greenprint "Successfully saved the station to your $DISPLAY_NAME list."
+    sleep 2
 }
 
 _search_play() {
@@ -61,8 +106,26 @@ search_by() {
     KEY_DISPLAY="$(echo ${KEY:0:1} | tr '[:lower:]' '[:upper:]')${KEY:1}"
     cyanprint "$APP_NAME - Search by $KEY_DISPLAY"
     echo
+    yellowprint "Type '0' to go back to Search Menu, '00' for Main Menu"
     printf "Type a %s to search: " "$KEY"
     read -r REPLY
+    
+    # Check for navigation commands
+    case "$REPLY" in
+        "0"|"back")
+            search_menu
+            return
+            ;;
+        "00"|"main")
+            menu
+            return
+            ;;
+        "")
+            search_menu
+            return
+            ;;
+    esac
+    
     echo
     # OPTS=()
     _wget_simple_search "$REPLY" "$KEY"

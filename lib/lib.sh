@@ -186,7 +186,9 @@ _wget_search() {
 
 _play_favorite_station() {
     STATION_INDEX=$1
-    FAVORITE_STATIONS_FILE="${script_dir}/lib/favorite.json"
+    # Use the user's My Favorites list from config directory (My-favorites.json)
+    # This is the same file users save to when they select "My Favorites"
+    FAVORITE_STATIONS_FILE="${FAVORITE_PATH}/My-favorites.json"
     
     if [ ! -f "$FAVORITE_STATIONS_FILE" ]; then
         redprint "Favorite stations file not found."

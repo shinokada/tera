@@ -8,7 +8,7 @@ SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
 TMP_PATH="$HOME/.cache/tera"
-FAVORITE_FILE="sample.json"
+FAVORITE_FILE="My-favorites.json"
 FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
 SCRIPT_NAME=$(basename "$0")
 APP_NAME="TERA"
@@ -76,14 +76,11 @@ fi
 if [ ! -d "$TMP_PATH" ]; then
     mkdir -p "$TMP_PATH"
 fi
-# TODO
-# 1. If $FAVORITE_PATH has no file copy the sample.json
-# 2. If $FAVORITE_PATH has one file and content is less than
-# 5 lines, copy the sample.json
 
+# Initialize My-favorites.json if it doesn't exist
 if [ ! -f "$FAVORITE_FULL" ]; then
+    # Create new My-favorites.json from template
     touch "$FAVORITE_FULL"
-    cp "${script_dir}/lib/sample.json" "$FAVORITE_FULL"
 fi
 
 menu() {
@@ -91,8 +88,10 @@ menu() {
     cyanprint "$APP_NAME MAIN MENU"
     echo
     
-    # Define the favorite stations file path
-    FAVORITE_STATIONS_FILE="${script_dir}/lib/favorite.json"
+    # Quick Play Favorites: Shows stations from "My Favorites" list
+    # Stations are saved to this list when you select "My Favorites" after searching
+    # File location: ~/.config/tera/favorite/My-favorites.json
+    FAVORITE_STATIONS_FILE="${FAVORITE_PATH}/My-favorites.json"
     
     # Create base menu options
     MENU_OPTIONS="1) Play from my list

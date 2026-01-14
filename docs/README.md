@@ -35,16 +35,18 @@ Unix-like environment.
 ## Features
 
 - **Modern Arrow Key Navigation**: Navigate all menus and selections using arrow keys (↑/↓), press Enter to select, and ESC to go back
+- **Seamless Main Menu Navigation**: Return to Main Menu from anywhere by pressing Enter on empty prompts or selecting "0) Main Menu"
 - **Interactive Selection**: Use fuzzy search to quickly find radio stations and lists
+- **Quick Play Favorites**: Access your top 10 favorite stations directly from the main menu (from your "My Favorites" list)
 - 35000+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
 - [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
-- CRUD favorite lists.
+- CRUD favorite lists with intuitive interface.
 - Play from a list
 - Search radio station by tag, name, language, country code, state.
-- Save a station to a list after playing.
+- Save a station to your "My Favorites" list or custom lists after searching.
 - Delete a radio station from a list.
-- I feel lucky menu.
-- Gist upload.
+- I feel lucky menu for random discovery.
+- Gist upload for sharing your favorite stations.
 
 ## Installation
 
@@ -120,14 +122,19 @@ Tera features modern, intuitive navigation throughout the application:
 | --------------- | ------------------------------------------------ |
 | ↑ / ↓           | Navigate through menu options and selections     |
 | Enter           | Select the highlighted option                     |
+| Enter (empty)   | Return to Main Menu from search prompts          |
 | ESC             | Cancel and return to previous menu               |
+| 0               | Return to Main Menu from numbered selections     |
 | Type to search  | Fuzzy search within any list (powered by fzf)    |
 
 **Navigation Features:**
 - All menus support arrow key navigation
-- List selections use interactive fuzzy finder
+- List selections use interactive fuzzy finder with arrow key support
 - Radio station searches display results in an interactive selector
 - Press ESC at any time to go back without exiting the application
+- Press Enter on empty prompts to return to Main Menu
+- Select "0) Main Menu" option to quickly navigate back
+- Main menu shows your top 10 favorite stations from "My Favorites" for quick access
 
 #### Player control
 
@@ -146,6 +153,40 @@ Tera features modern, intuitive navigation throughout the application:
 By selecting 2) Search radio stations, you can search by tag, name, language, country code, state, and advanced(todo).
 
 ![start](https://raw.githubusercontent.com/shinokada/tera/main/images/searchmenu.png)
+
+**Search Tips:**
+- Press Enter without typing to return to Main Menu
+- Use arrow keys to select from search results
+- After playing a station, you can save it to your "My Favorites" list or custom lists
+- The save dialog uses arrow keys for easy list selection
+
+#### I Feel Lucky Menu
+
+Discover new stations randomly! Enter a genre or keyword (like jazz, rock, classical, meditation), or press Enter to return to Main Menu.
+
+#### Saving Stations
+
+After searching and playing a station:
+1. Choose whether to save the station
+2. Use arrow keys to select from your lists
+3. "My Favorites" is your default list (stored in `~/.config/tera/favorite/myfavorites.json`)
+4. Select "0) Main Menu" to cancel and return
+
+**About "My Favorites" List:**
+- This is your primary list for favorite stations
+- Stations saved here appear in "Quick Play Favorites" on the main menu
+- Quick access to your top 10 most recent additions
+
+#### Deleting Stations
+
+From the Main Menu, select "4) Delete a radio station":
+1. Choose the list to delete from using arrow keys
+2. Select the station number to delete
+3. Press 0 to return to Main Menu at any time
+
+#### Gist Upload
+
+Share your favorite stations by uploading lists to GitHub Gist.
 
 #### Music player
 
