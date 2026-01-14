@@ -53,6 +53,15 @@ readlinkf() {
 self=$(readlinkf "$0")
 script_dir=${self%/*}
 
+# Load environment variables from .env file if it exists
+if [ -f "${script_dir}/.env" ]; then
+    # Export variables from .env file
+    set -a
+    # shellcheck disable=SC1091
+    source "${script_dir}/.env"
+    set +a
+fi
+
 # shellcheck disable=SC1091
 {
     . "${script_dir}/lib/delete_station.sh"

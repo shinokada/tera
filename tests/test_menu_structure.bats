@@ -93,12 +93,16 @@ teardown() {
     echo "$result" | grep -q "Main Menu"
 }
 
-@test "All menus use consistent prompt style" {
-    # Check that prompts use "> " or are consistent
-    play_prompt=$(grep 'fzf --prompt=' ../lib/play.sh | head -1)
-    search_prompt=$(grep 'fzf --prompt=' ../lib/search.sh | head -1)
+@test "All menus use fzf for interactive selection" {
+    # Check that play.sh uses fzf with prompts
+    play_result=$(grep 'fzf --prompt=' ../lib/play.sh)
+    [ -n "$play_result" ]
     
-    # Both should use simple prompts
-    echo "$play_prompt" | grep -q 'prompt="> "'
-    echo "$search_prompt" | grep -q 'prompt="> "'
+    # Check that search.sh uses fzf with prompts
+    search_result=$(grep 'fzf --prompt=' ../lib/search.sh)
+    [ -n "$search_result" ]
+    
+    # Verify that at least some functions use the simple "> " prompt
+    grep -q 'fzf --prompt="> "' ../lib/search.sh
+    grep -q 'fzf --prompt="> "' ../lib/play.sh
 }

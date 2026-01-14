@@ -7,31 +7,121 @@ fn_delete() {
     cyanprint "$APP_NAME - Delete a Radio Station"
     echo
     touch "$TEMP_FILE"
-    greenprint "Select a list number to delete from."
+    greenprint "Select a list to delete from."
     echo
-    echo "0) Main Menu"
-    LIST=$(_show_favlist)
     
-    # Check if user selected Main Menu during list selection
-    if [[ -z $LIST ]] || [[ $LIST == "0" ]]; then
+    # Get all favorite lists
+    LISTS=$(_fav_list)
+    
+    if [ -z "$LISTS" ]; then
+        redprint "Lists are empty."
+        cyanprint "Try $SCRIPT_NAME search"
+        sleep 2
         menu
         return
     fi
-    echo
-    # echo "LIST: $LIST"
-    echo
-    echo "     0  Main Menu"
-    _station_list "$LIST" | nl
-    printf "Type your station number to delete (or 0 for Main Menu): "
-    read -r ANS
-    # echo "$ANS"
-    if [[ -z $ANS ]] || [[ $ANS == "0" ]]; then
+    
+    # Add Main Menu option and format for fzf
+    MENU_OPTIONS="0) Main Menu"
+    INDEX=1
+    for list in $LISTS; do
+        # Display "My Favorites" for myfavorites
+        if [ "$list" = "My-favorites" ]; then
+            DISPLAY_NAME="My Favorites"
+        else
+            DISPLAY_NAME="$list"
+        fi
+        MENU_OPTIONS="${MENU_OPTIONS}
+${INDEX}) ${DISPLAY_NAME}"
+        INDEX=$((INDEX + 1))
+    done
+    
+    # Use fzf for list selection with arrow keys
+    CHOICE=$(echo -e "$MENU_OPTIONS" | fzf --prompt="Choose a list (arrow keys to navigate): " --height=40% --reverse --no-info)
+    
+    # Check if user cancelled
+    if [ -z "$CHOICE" ]; then
         menu
-    else
-        FAVLIST_PATH="${FAVORITE_PATH}/${LIST}.json"
-        jq "del(.[$ANS-1])" <"${FAVLIST_PATH}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVLIST_PATH"
-        _station_list "$LIST" | nl
-        greenprint "Successfully deleted."
-        menu
+        return
     fi
+    
+    # Extract the number and list name
+    LIST_NUM=$(echo "$CHOICE" | cut -d')' -f1)
+    
+    # Check if Main Menu was selected
+    if [ "$LIST_NUM" = "0" ]; then
+        menu
+        return
+    fi
+    
+    DISPLAY_NAME=$(echo "$CHOICE" | cut -d')' -f2- | sed 's/^ //')
+    
+    # Convert "My Favorites" display name back to "My-favorites" for file operations
+    if [ "$DISPLAY_NAME" = "My Favorites" ]; then
+        LIST="My-favorites"
+    else
+        LIST="$DISPLAY_NAME"
+    fi
+    
+    clear
+    cyanprint "$APP_NAME - Delete from $DISPLAY_NAME"
+    echo
+    
+    # Get stations from the selected list
+    STATIONS=$(_station_list "$LIST")
+    
+    if [ -z "$STATIONS" ]; then
+        yellowprint "This list is empty."
+        sleep 2
+        menu
+        return
+    fi
+    
+    # Add Main Menu option
+    STATIONS_WITH_MENU=$(printf "<< Main Menu >>\n%s" "$STATIONS")
+    
+    # Use fzf to select station with arrow keys
+    SELECTION=$(echo "$STATIONS_WITH_MENU" | nl | fzf --prompt="Choose station to delete (arrow keys): " --height=40% --reverse --header="Delete from: $DISPLAY_NAME")
+    
+    # Check if user cancelled
+    if [ -z "$SELECTION" ]; then
+        menu
+        return
+    fi
+    
+    # Extract the selection text and number
+    SELECTED_TEXT=$(echo "$SELECTION" | awk '{$1=""; print $0}' | sed 's/^ //')
+    ANS=$(echo "$SELECTION" | awk '{print $1}')
+    
+    # Check if Main Menu was selected
+    if [ "$SELECTED_TEXT" = "<< Main Menu >>" ]; then
+        menu
+        return
+    fi
+    
+    # Adjust ANS to account for the Main Menu option (subtract 1)
+    ANS=$((ANS - 1))
+    
+    # Show confirmation
+    STATION_TO_DELETE=$(echo "$STATIONS" | sed -n "${ANS}p")
+    echo
+    yellowprint "Are you sure you want to delete: $STATION_TO_DELETE"
+    printf "Type 'yes' or 'y' to confirm, anything else to cancel: "
+    read -r CONFIRM
+    
+    USER_CONFIRM=$(echo "$CONFIRM" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
+    
+    if [ "$USER_CONFIRM" = "Y" ]; then
+        FAVLIST_PATH="${FAVORITE_PATH}/${LIST}.json"
+        jq "del(.[${ANS}-1])" <"${FAVLIST_PATH}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVLIST_PATH"
+        echo
+        greenprint "Successfully deleted: $STATION_TO_DELETE"
+        sleep 2
+    else
+        echo
+        yellowprint "Deletion cancelled."
+        sleep 1
+    fi
+    
+    menu
 }
