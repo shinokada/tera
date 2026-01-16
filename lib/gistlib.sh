@@ -67,7 +67,8 @@ create_gist() {
     
     FIRST_FILE=true
     for file in "${ARR[@]}"; do
-        filename=$(basename "$file")
+        # Escape filename properly for JSON
+        filename=$(basename "$file" | jq -Rs '.[:-1]')  # Remove trailing newline from jq output
         # Read file content and escape for JSON
         content=$(jq -Rs . < "$file")
         
@@ -77,7 +78,7 @@ create_gist() {
             JSON_PAYLOAD="${JSON_PAYLOAD},"
         fi
         
-        JSON_PAYLOAD="${JSON_PAYLOAD}\"${filename}\":{\"content\":${content}}"
+        JSON_PAYLOAD="${JSON_PAYLOAD}${filename}:{\"content\":${content}}"
     done
     
     JSON_PAYLOAD="${JSON_PAYLOAD}}}"
@@ -152,7 +153,15 @@ recover_gist() {
     
     if git clone "$gist_url" 2>/dev/null; then
         # find the last from the path
-        gist_dir=${gist_url##*/}
+        gist_dir=${gist_url%/}      # Remove trailing slash if present
+        gist_dir=${gist_dir##*/}    # Extract last path segment
+        
+        if [ -z "$gist_dir" ] || [ ! -d "$FAVORITE_PATH/$gist_dir" ]; then
+            redprint "Error: Could not determine gist directory."
+            read -p "Press Enter to return to menu..."
+            gist_menu
+            return
+        fi
         
         # Count how many files we're moving
         file_count=$(find "$FAVORITE_PATH/$gist_dir" -name "*.json" -type f 2>/dev/null | wc -l)

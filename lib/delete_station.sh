@@ -37,7 +37,7 @@ ${INDEX}) ${DISPLAY_NAME}"
     done
     
     # Use fzf for list selection with arrow keys
-    CHOICE=$(echo -e "$MENU_OPTIONS" | fzf --prompt="Choose a list (arrow keys to navigate): " --height=40% --reverse --no-info)
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose a list (arrow keys to navigate): " --height=40% --reverse --no-info)
     
     # Check if user cancelled
     if [ -z "$CHOICE" ]; then

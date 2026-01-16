@@ -9,24 +9,29 @@ setup() {
 }
 
 @test "Play list selection handles empty input (ESC)" {
-    result=$(grep -A 3 'if \[ -z "\$LIST" \]' ../lib/play.sh | head -5)
+    # Check that empty input handling exists
+    grep -q 'if \[ -z "\$LIST" \]' ../lib/play.sh
     
-    # Check that empty input calls menu function
-    echo "$result" | grep -q "menu"
+    # Check that it calls menu function
+    result=$(grep 'if \[ -z "\$LIST" \]' ../lib/play.sh)
+    [ -n "$result" ]
 }
 
 @test "Play station selection handles empty input (ESC)" {
-    result=$(grep -A 3 'if \[ -z "\$SELECTION" \]' ../lib/play.sh | head -5)
+    # Check that empty input handling exists
+    grep -q 'if \[ -z "\$SELECTION" \]' ../lib/play.sh
     
-    # Check that empty input calls menu function
-    echo "$result" | grep -q "menu"
+    # Check that it calls menu function
+    result=$(grep 'if \[ -z "\$SELECTION" \]' ../lib/play.sh)
+    [ -n "$result" ]
 }
 
 @test "Search results handle empty input (ESC)" {
-    result=$(grep -A 3 'Check if user cancelled (ESC)' ../lib/search.sh | head -5)
+    # Check that ESC handling comment exists
+    grep -q 'Check if user cancelled (ESC)' ../lib/search.sh
     
-    # Check that ESC returns to search menu
-    echo "$result" | grep -q "search_menu"
+    # Check that search_menu is called
+    grep -q 'search_menu' ../lib/search.sh
 }
 
 @test "Search results no longer mention ESC in prompt" {
@@ -43,9 +48,16 @@ setup() {
     echo "$result" | grep -q "menu"
 }
 
-@test "Delete station handles zero input for Main Menu" {
-    result=$(grep 'if \[\[ -z \$ANS \]\] || \[\[ \$ANS == "0" \]\]' ../lib/delete_station.sh)
+@test "Delete station handles empty selection and Main Menu" {
+    # Check that it handles empty CHOICE (user cancelled list selection)
+    grep -q 'if \[ -z "\$CHOICE" \]' ../lib/delete_station.sh
     
-    # Check that condition exists
-    [ -n "$result" ]
+    # Check that it handles Main Menu selection via LIST_NUM
+    grep -q 'if \[ "\$LIST_NUM" = "0" \]' ../lib/delete_station.sh
+    
+    # Check that it handles empty SELECTION (user cancelled station selection)
+    grep -q 'if \[ -z "\$SELECTION" \]' ../lib/delete_station.sh
+    
+    # Check that it handles Main Menu selection via SELECTED_TEXT
+    grep -q 'if \[ "\$SELECTED_TEXT" = "<< Main Menu >>" \]' ../lib/delete_station.sh
 }

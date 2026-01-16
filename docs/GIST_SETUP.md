@@ -10,7 +10,7 @@ TERA uses GitHub Gists to backup and restore your favorite radio station lists. 
    ```
 
 2. **Create a GitHub Personal Access Token:**
-   - Go to https://github.com/settings/tokens
+   - Go to [GitHub Token Settings](https://github.com/settings/tokens)
    - Click "Generate new token (classic)"
    - Give it a name like "TERA Gist Access"
    - Select **only** the `gist` scope

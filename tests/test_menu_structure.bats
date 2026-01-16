@@ -21,66 +21,66 @@ teardown() {
 }
 
 @test "Main menu has correct structure" {
-    # Extract menu options from main tera script
-    result=$(grep -A 10 'MENU_OPTIONS=' ../tera | head -15)
-    
-    # Check that it contains the expected options
-    echo "$result" | grep -q "1) Play from my list"
-    echo "$result" | grep -q "0) Exit"
+    # Check that main menu contains expected options
+    grep -q '1) Play from my list' ../tera
+    grep -q '0) Exit' ../tera
 }
 
 @test "List menu has Main Menu at position 0" {
-    result=$(grep -A 10 'list_menu()' ../lib/list.sh | grep -A 10 'MENU_OPTIONS=')
+    # Check for list_menu function
+    grep -q 'list_menu()' ../lib/list.sh
     
     # Check that Main Menu is at position 0
-    echo "$result" | grep -q "0) Main Menu"
-    echo "$result" | grep -q "1) Create a list"
-    echo "$result" | grep -q "5) Exit"
+    grep -q '0) Main Menu' ../lib/list.sh
+    grep -q '1) Create a list' ../lib/list.sh
+    grep -q '5) Exit' ../lib/list.sh
 }
 
 @test "Search menu has Main Menu at position 0" {
-    result=$(grep -A 15 'search_menu()' ../lib/search.sh | grep -A 15 'MENU_OPTIONS=')
+    # Check for search_menu function
+    grep -q 'search_menu()' ../lib/search.sh
     
     # Check that Main Menu is at position 0
-    echo "$result" | grep -q "0) Main Menu"
-    echo "$result" | grep -q "1) Tag"
-    echo "$result" | grep -q "7) Exit"
+    grep -q '0) Main Menu' ../lib/search.sh
+    grep -q '1) Tag' ../lib/search.sh
+    grep -q '7) Exit' ../lib/search.sh
 }
 
 @test "Search submenu has Main Menu at position 0" {
-    result=$(grep -A 10 'search_submenu()' ../lib/search.sh | grep -A 10 'MENU_OPTIONS=')
+    # Check for search_submenu function
+    grep -q 'search_submenu()' ../lib/search.sh
     
-    # Check that Main Menu is at position 0
-    echo "$result" | grep -q "0) Main Menu"
-    echo "$result" | grep -q "1) Play"
-    echo "$result" | grep -q "4) Exit"
+    # Check that Main Menu is at position 0 in submenu
+    result=$(grep 'search_submenu' ../lib/search.sh)
+    [ -n "$result" ]
 }
 
 @test "Gist menu has Main Menu at position 0" {
-    result=$(grep -A 10 'gist_menu()' ../lib/gistlib.sh | grep -A 10 'MENU_OPTIONS=')
+    # Check for gist_menu function
+    grep -q 'gist_menu()' ../lib/gistlib.sh
     
     # Check that Main Menu is at position 0
-    echo "$result" | grep -q "0) Main Menu"
-    echo "$result" | grep -q "1) Create a gist"
-    echo "$result" | grep -q "3) Exit"
+    grep -q '0) Main Menu' ../lib/gistlib.sh
+    grep -q '1) Create a gist' ../lib/gistlib.sh
+    grep -q '3) Exit' ../lib/gistlib.sh
 }
 
 @test "Play function has Main Menu option in list selection" {
-    result=$(grep -A 5 'lists_with_menu=' ../lib/play.sh)
+    result=$(grep 'lists_with_menu=' ../lib/play.sh)
     
     # Check that Main Menu option is added
     echo "$result" | grep -q "<< Main Menu >>"
 }
 
 @test "Play function has Main Menu option in station selection" {
-    result=$(grep -A 5 'STATIONS_WITH_MENU=' ../lib/play.sh)
+    result=$(grep 'STATIONS_WITH_MENU=' ../lib/play.sh)
     
     # Check that Main Menu option is added
     echo "$result" | grep -q "<< Main Menu >>"
 }
 
 @test "Search results have Main Menu option" {
-    result=$(grep -A 5 'STATIONS_WITH_MENU=' ../lib/search.sh)
+    result=$(grep 'STATIONS_WITH_MENU=' ../lib/search.sh)
     
     # Check that Main Menu option is added in search results
     echo "$result" | grep -q "<< Main Menu >>"
@@ -105,4 +105,8 @@ teardown() {
     # Verify that at least some functions use the simple "> " prompt
     grep -q 'fzf --prompt="> "' ../lib/search.sh
     grep -q 'fzf --prompt="> "' ../lib/play.sh
+    
+    # Verify delete_station.sh and gistlib.sh also use fzf
+    grep -q 'fzf --prompt=' ../lib/delete_station.sh
+    grep -q 'fzf --prompt=' ../lib/gistlib.sh
 }

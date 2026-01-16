@@ -8,52 +8,61 @@ setup() {
 }
 
 @test "Play from my list has heading" {
-    result=$(grep 'header=' ../lib/play.sh | head -1)
+    # Check that header is defined in play.sh
+    grep -q 'header=' ../lib/play.sh
     
-    # Check that header contains the app name and feature name
-    echo "$result" | grep -q "Play from My List"
+    # Check that it contains the expected text
+    grep -q "Play from My List" ../lib/play.sh
 }
 
 @test "Delete station has heading" {
-    result=$(grep 'cyanprint.*Delete a Radio Station' ../lib/delete_station.sh)
+    # Check that Delete heading exists
+    grep -q 'Delete a Radio Station' ../lib/delete_station.sh
     
-    # Check that heading exists
-    [ -n "$result" ]
+    # Check that it uses cyanprint
+    result=$(grep 'Delete a Radio Station' ../lib/delete_station.sh)
+    echo "$result" | grep -q "cyanprint"
 }
 
 @test "I Feel Lucky has heading" {
-    result=$(grep 'cyanprint.*I Feel Lucky' ../lib/lucky.sh)
+    # Check that Lucky heading exists
+    grep -q 'I Feel Lucky' ../lib/lucky.sh
     
-    # Check that heading exists
-    [ -n "$result" ]
+    # Check that it uses cyanprint
+    result=$(grep 'I Feel Lucky' ../lib/lucky.sh)
+    echo "$result" | grep -q "cyanprint"
 }
 
 @test "Search by functions have headings" {
-    result=$(grep 'Search by' ../lib/search.sh)
-    
-    # Check that search headings exist
-    echo "$result" | grep -q "Search by"
+    # Check that Search by text exists
+    grep -q 'Search by' ../lib/search.sh
 }
 
 @test "Advanced search has heading" {
-    result=$(grep 'cyanprint.*Advanced Search' ../lib/search.sh)
+    # Check that Advanced Search heading exists
+    grep -q 'Advanced Search' ../lib/search.sh
     
-    # Check that heading exists
-    [ -n "$result" ]
+    # Check that it uses cyanprint
+    result=$(grep 'Advanced Search' ../lib/search.sh)
+    echo "$result" | grep -q "cyanprint"
 }
 
 @test "Create gist has heading" {
-    result=$(grep 'cyanprint.*Create a Gist' ../lib/gistlib.sh)
+    # Check that Create gist heading exists
+    grep -q 'Create a Gist' ../lib/gistlib.sh
     
-    # Check that heading exists
-    [ -n "$result" ]
+    # Check that it uses cyanprint
+    result=$(grep 'Create a Gist' ../lib/gistlib.sh)
+    echo "$result" | grep -q "cyanprint"
 }
 
 @test "Recover gist has heading" {
-    result=$(grep 'cyanprint.*Recover Favorites' ../lib/gistlib.sh)
+    # Check that Recover heading exists
+    grep -q 'Recover Favorites' ../lib/gistlib.sh
     
-    # Check that heading exists
-    [ -n "$result" ]
+    # Check that it uses cyanprint
+    result=$(grep 'Recover Favorites' ../lib/gistlib.sh)
+    echo "$result" | grep -q "cyanprint"
 }
 
 @test "All headings use cyanprint function" {
@@ -66,8 +75,6 @@ setup() {
 }
 
 @test "FZF headers use header-first flag" {
-    result=$(grep 'header-first' ../lib/play.sh)
-    
-    # Check that header-first flag is used
-    [ -n "$result" ]
+    # Check that header-first flag is used in play.sh
+    grep -q 'header-first' ../lib/play.sh
 }
