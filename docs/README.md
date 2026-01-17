@@ -1,8 +1,14 @@
+<p align="center">
+<img width="600" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera-3.png" />
+<br />
+<a href="https://tera.codewithshin.com/">https://tera.codewithshin.com/</a>
+</p>
+
 # TERA - Terminal Radio
 
 **Version 0.7.0**
 
-A modern, interactive radio player for your terminal with 35,000+ stations worldwide.
+A modern, interactive radio player for your terminal with 50,000+ stations worldwide.
 
 [![Website](https://img.shields.io/badge/website-tera.codewithshin.com-blue)](https://tera.codewithshin.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -123,14 +129,14 @@ You'll see the main menu with options to:
 
 ### Navigation Quick Reference
 
-| Context | Action | Navigation |
-|---------|--------|------------|
-| Any menu | Arrow keys ↑↓ | Navigate options |
-| Any menu | Enter | Select option |
-| Any menu | ESC | Go back |
-| Text prompt | Type `0` | Go back |
-| Text prompt | Type `00` | Main menu |
-| Text prompt | Empty + Enter | Go back |
+| Context     | Action        | Navigation       |
+| ----------- | ------------- | ---------------- |
+| Any menu    | Arrow keys ↑↓ | Navigate options |
+| Any menu    | Enter         | Select option    |
+| Any menu    | ESC           | Go back          |
+| Text prompt | Type `0`      | Go back          |
+| Text prompt | Type `00`     | Main menu        |
+| Text prompt | Empty + Enter | Go back          |
 
 **See [Navigation Guide](NAVIGATION_GUIDE.md) for complete details.**
 
@@ -207,15 +213,15 @@ Share and backup your station lists:
 
 While playing:
 
-| Key | Action |
-|-----|--------|
-| `p` / `SPACE` | Pause/unpause |
-| `q` | Stop and quit |
-| `9` / `0` | Volume down/up |
-| `/` / `*` | Volume down/up |
-| `m` | Mute |
-| `[` / `]` | Decrease/increase speed 10% |
-| `{` / `}` | Halve/double speed |
+| Key           | Action                      |
+| ------------- | --------------------------- |
+| `p` / `SPACE` | Pause/unpause               |
+| `q`           | Stop and quit               |
+| `9` / `0`     | Volume down/up              |
+| `/` / `*`     | Volume down/up              |
+| `m`           | Mute                        |
+| `[` / `]`     | Decrease/increase speed 10% |
+| `{` / `}`     | Halve/double speed          |
 
 See [MPV manual](https://mpv.io/manual/master/) for all controls.
 
