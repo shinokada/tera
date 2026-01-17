@@ -17,7 +17,7 @@ A modern, interactive radio player for your terminal with 50,000+ stations world
 
 ## Overview
 
-TERA (TErminal RAdio) is an interactive music radio player that brings the world's radio stations to your command line. Discover new music, manage favorite lists, and explore 35,000+ stations—all without leaving your terminal.
+TERA (TErminal RAdio) is an interactive music radio player that brings the world's radio stations to your command line. Discover new music, manage favorite lists, and explore 50,000+ stations—all without leaving your terminal.
 
 **Why TERA?**
 - 🎵 Escape algorithmic recommendations and discover real variety
