@@ -4,7 +4,8 @@
 # Quick test script to verify station name improvements
 # Run this after the updates to check functionality
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get project root directory (one level up from tests/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../" && pwd)"
 source "$SCRIPT_DIR/lib/lib.sh"
 
 echo "================================"
