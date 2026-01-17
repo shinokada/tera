@@ -62,6 +62,19 @@ _save_station_to_list() {
     
     # get item from "$SEARCH_RESULTS" using $ANS
     jq ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
+    
+    # Check if station already exists in the list (by stationuuid)
+    STATION_UUID=$(jq -r '.stationuuid' "$TEMP_FILE")
+    EXISTING_STATION=$(jq --arg uuid "$STATION_UUID" '.[] | select(.stationuuid == $uuid)' "$FAVORITE_FULL" 2>/dev/null)
+    
+    if [ -n "$EXISTING_STATION" ]; then
+        echo
+        yellowprint "This station is already in your $DISPLAY_NAME list!"
+        echo
+        read -p "Press Enter to continue..."
+        return
+    fi
+    
     # add the item to the fav list
     jq '. += [input]' "$FAVORITE_FULL" "$TEMP_FILE" >"$TEMP_FILE2" && mv "$TEMP_FILE2" "$FAVORITE_FULL"
     

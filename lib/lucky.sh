@@ -9,22 +9,23 @@ fn_lucky() {
     magentaprint "Or type a keyword, like meditation, relax, mozart, Beatles etc."
     cyanprint "Use only one word."
     echo
+    yellowprint "Type '0' to go back to Main Menu"
     # ask a tag word
-    printf "Genre/keyword (or press Enter to return to Main Menu): "
+    printf "Genre/keyword: "
     read -r REPLY
     
-    # Check if user wants to return to main menu
-    if [ "$REPLY" = "menu" ] || [ "$REPLY" = "Menu" ] || [ "$REPLY" = "MENU" ]; then
-        menu
-        return
-    fi
-    
-    # Check if input is empty
-    if [ -z "$REPLY" ]; then
-        yellowprint "No input provided. Returning to Main Menu."
-        menu
-        return
-    fi
+    # Check for navigation commands
+    case "$REPLY" in
+        "0"|"main"|"menu")
+            menu
+            return
+            ;;
+        "")
+            yellowprint "No input provided. Returning to Main Menu."
+            menu
+            return
+            ;;
+    esac
     
     # find all stations with a key word = tag
     _wget_simple_search "$REPLY" "tag"

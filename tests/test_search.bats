@@ -9,21 +9,27 @@ setup() {
 }
 
 @test "wget_simple_search clears 'Searching...' message" {
-    result=$(grep -A 15 '_wget_simple_search()' ../lib/lib.sh)
+    result=$(grep '_wget_simple_search()' ../lib/lib.sh)
     
-    # Check that cleanup code exists
-    echo "$result" | grep -q 'echo -ne'
+    # Check that function exists
+    [ -n "$result" ]
+    
+    # Check that cleanup code exists in the function
+    awk '/_wget_simple_search\(\)/,/^}/' ../lib/lib.sh | grep -q 'echo -ne'
 }
 
 @test "wget_search clears 'Searching...' message" {
-    result=$(grep -A 15 '_wget_search()' ../lib/lib.sh)
+    result=$(grep '_wget_search()' ../lib/lib.sh)
     
-    # Check that cleanup code exists
-    echo "$result" | grep -q 'echo -ne'
+    # Check that function exists
+    [ -n "$result" ]
+    
+    # Check that cleanup code exists in the function
+    awk '/_wget_search\(\)/,/^}/' ../lib/lib.sh | grep -q 'echo -ne'
 }
 
 @test "Search results include Main Menu option" {
-    result=$(grep -B 2 -A 2 'STATIONS_WITH_MENU=' ../lib/search.sh)
+    result=$(grep 'STATIONS_WITH_MENU=' ../lib/search.sh)
     
     # Check that Main Menu is added to search results
     echo "$result" | grep -q "<< Main Menu >>"

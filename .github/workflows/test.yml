@@ -11,12 +11,13 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false  # Continue running other jobs even if one fails
       matrix:
         os: [ubuntu-latest, macos-latest]
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Install BATS (Ubuntu)
       if: runner.os == 'Linux'
@@ -35,14 +36,9 @@ jobs:
     - name: Run all tests
       run: |
         cd tests
-        bats .
+        bats . --formatter tap
     
     - name: Test summary
       if: always()
       run: |
-        if [ $? -eq 0 ]; then
-          echo "✅ All tests passed!"
-        else
-          echo "❌ Some tests failed"
-          exit 1
-        fi
+        echo "Tests completed for ${{ matrix.os }}"

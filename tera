@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.6.0"
+VERSION="0.7.0"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -52,6 +52,15 @@ readlinkf() {
 
 self=$(readlinkf "$0")
 script_dir=${self%/*}
+
+# Load environment variables from .env file if it exists
+if [ -f "${script_dir}/.env" ]; then
+    # Export variables from .env file
+    set -a
+    # shellcheck disable=SC1091
+    source "${script_dir}/.env"
+    set +a
+fi
 
 # shellcheck disable=SC1091
 {
