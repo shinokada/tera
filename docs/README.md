@@ -1,215 +1,358 @@
-<p align="center">
-<img width="600" src="https://raw.githubusercontent.com/shinokada/tera/main/images/tera-3.png" />
-<br />
-<a href="https://tera.codewithshin.com/">https://tera.codewithshin.com/</a>
-</p>
+# TERA - Terminal Radio
 
-<p align="center">
-  To Keep It Going, Please Show Your Love. ❤️<a href='https://ko-fi.com/Z8Z2CHALG' target='_blank'>
-</p>
-<p align="center">
-<img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
-</p>
+**Version 0.7.0**
 
-<h1 align="center">Terminal Radio (TERA)</h1>
+A modern, interactive radio player for your terminal with 35,000+ stations worldwide.
+
+[![Website](https://img.shields.io/badge/website-tera.codewithshin.com-blue)](https://tera.codewithshin.com/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+---
 
 ## Overview
 
-[Article](https://levelup.gitconnected.com/discover-rejuvenate-your-music-library-with-command-line-f3268db67bba)
+TERA (TErminal RAdio) is an interactive music radio player that brings the world's radio stations to your command line. Discover new music, manage favorite lists, and explore 35,000+ stations—all without leaving your terminal.
 
-Are you tired of being stuck in a musical rut with the same old songs being recommended to you on Amazon Prime Music or YouTube? Are you sick of the advertisements that come with streaming services like Spotify? If you’re looking for a new and exciting way to discover new music while you work, Tera (TErminal RAdio) is for you!
+**Why TERA?**
+- 🎵 Escape algorithmic recommendations and discover real variety
+- 🚫 No ads, no subscriptions, completely free
+- ⚡ Fast, keyboard-driven interface with arrow key navigation
+- 📻 Access to global radio stations via Radio Browser API
+- 💾 Save and organize your favorite stations
 
-Tera is an interactive music radio player. Play your favorite radio station, CRUD your favorite lists, and explore new radio stations from your terminal. 
-Tera stores favorite list in the `~/.config/tera/favorite` directory and uses `~/.cache/tera` directory to keep search related results.
-
-## Requirement
-
-Unix-like environment.
-
-- [mpv](https://mpv.io/) is a free, open source, and cross-platform media player.
-- [jq](https://stedolan.github.io/jq/) is a lightweight and flexible command-line JSON processor.
-- [fzf](https://github.com/junegunn/fzf) is a general-purpose command-line fuzzy finder.
-- [gh](https://cli.github.com/) is the GitHub CLI.
-- wget: Most UNIX-like OS should have it. macOS can install with `brew install wget`.
+---
 
 ## Features
 
-- **Modern Arrow Key Navigation**: Navigate all menus and selections using arrow keys (↑/↓), press Enter to select, and ESC to go back
-- **Seamless Main Menu Navigation**: Return to Main Menu from anywhere by pressing Enter on empty prompts or selecting "0) Main Menu"
-- **Interactive Selection**: Use fuzzy search to quickly find radio stations and lists
-- **Quick Play Favorites**: Access your top 10 favorite stations directly from the main menu (from your "My Favorites" list)
-- 35000+ radio stations powered by [Radio Browser API](https://de1.api.radio-browser.info/).
-- [MPV, a free, open source, and cross-platform media player](https://mpv.io/).
-- CRUD favorite lists with intuitive interface.
-- Play from a list
-- Search radio station by tag, name, language, country code, state.
-- Save a station to your "My Favorites" list or custom lists after searching.
-- Delete a radio station from a list.
-- I feel lucky menu for random discovery.
-- Gist upload for sharing your favorite stations.
+### Core Features
+- **35,000+ Radio Stations** powered by [Radio Browser API](https://de1.api.radio-browser.info/)
+- **Arrow Key Navigation** throughout the entire application
+- **Quick Play Favorites** - Top 10 favorites accessible from main menu
+- **Duplicate Detection** - Prevents saving the same station twice
+- **Smart Search** - Find stations by tag, name, language, country, or state
+- **List Management** - Create, edit, and delete custom station lists
+- **Gist Integration** - Share your favorite lists via GitHub Gist
+- **I Feel Lucky** - Random station discovery mode
+
+### User Experience
+- **Modern Interface** - fzf-powered fuzzy search and selection
+- **Seamless Navigation** - Return to main menu from anywhere with `0` or ESC
+- **Interactive Menus** - All menus support arrow keys and keyboard shortcuts
+- **No Setup Required** - Works immediately after installation
+
+---
+
+## Requirements
+
+- **Unix-like environment** (Linux, macOS, BSD)
+- [mpv](https://mpv.io/) - Media player
+- [jq](https://stedolan.github.io/jq/) - JSON processor
+- [fzf](https://github.com/junegunn/fzf) - Fuzzy finder
+- [wget](https://www.gnu.org/software/wget/) - Network downloader
+- [git](https://git-scm.com/) - For Gist features (optional)
+
+---
 
 ## Installation
 
-### Using [Awesome package manager](https://github.com/shinokada/awesome):
+### Using Awesome Package Manager
 
-```sh
+```bash
 awesome install shinokada/tera
 ```
 
-### HomeBrew/LinuxBrew
+### Homebrew (macOS/Linux)
 
-```sh
+```bash
 brew tap shinokada/tera
 brew install tera
 ```
 
 ### Debian/Ubuntu
 
-Download a Debian package from the [releases page](https://github.com/shinokada/tera/releases).
+Download from [releases page](https://github.com/shinokada/tera/releases):
 
-```sh
-sudo apt install ./tera_0.4.1_all.deb
-rm -rf ./tera_0.4.1_all.deb
+```bash
+sudo apt install ./tera_0.7.0_all.deb
+rm ./tera_0.7.0_all.deb
 ```
 
-After installation please run the following to check `mpv` is installed correctly.
+### Arch Linux
 
-```sh
+```bash
+# Available on AUR
+yay -S tera
+```
+
+See [aur.archlinux.org/packages/tera](https://aur.archlinux.org/packages/tera)
+
+### Verify Installation
+
+Test that mpv is working:
+
+```bash
 mpv https://live.musopen.org:8085/streamvbr0
 ```
 
-If it plays music you're ready to go.
+If music plays, you're ready to go!
 
-### ArchLinux
+---
 
-Please see [aur.archlinux.org](https://aur.archlinux.org/packages/tera)
+## Quick Start
 
-## Uninstallation
+### Launch TERA
 
-You can uninstall by using the  uninstallation script or manually.
-
-### Uninstallation script
-
-```sh
-curl -s https://raw.githubusercontent.com/shinokada/tera/main/uninstall.sh > tmp1 && bash tmp1 && rm tmp1
-```
-
-### Manual
-
-Remove following directories.
-
-- tera directory.
-- `~/.config/tera/` directory
-- `~/.cache/tera` directory
-
-## Usage
-
-### Commands
-
-#### Main Menu
-
-```sh
+```bash
 tera
 ```
 
-![start](https://raw.githubusercontent.com/shinokada/tera/main/images/radio1.png)
+You'll see the main menu with options to:
+1. Play from your lists
+2. Search for stations
+3. Manage lists
+4. Delete stations
+5. Try "I Feel Lucky" mode
+6. Upload/recover lists via Gist
 
-#### Navigation Controls
+### First-Time Users
 
-Tera features modern, intuitive navigation throughout the application:
+1. **Try the defaults**: TERA comes with sample stations in "My Favorites"
+2. **Search for music**: Select `2) Search radio stations`
+3. **Save favorites**: After playing, save stations to your lists
+4. **Quick access**: Saved stations appear in main menu for instant playback
 
-| Key             | Description                                      |
-| --------------- | ------------------------------------------------ |
-| ↑ / ↓           | Navigate through menu options and selections     |
-| Enter           | Select the highlighted option                     |
-| Enter (empty)   | Return to Main Menu from search prompts          |
-| ESC             | Cancel and return to previous menu               |
-| 0               | Return to Main Menu from numbered selections     |
-| Type to search  | Fuzzy search within any list (powered by fzf)    |
+### Navigation Quick Reference
 
-**Navigation Features:**
-- All menus support arrow key navigation
-- List selections use interactive fuzzy finder with arrow key support
-- Radio station searches display results in an interactive selector
-- Press ESC at any time to go back without exiting the application
-- Press Enter on empty prompts to return to Main Menu
-- Select "0) Main Menu" option to quickly navigate back
-- Main menu shows your top 10 favorite stations from "My Favorites" for quick access
+| Context | Action | Navigation |
+|---------|--------|------------|
+| Any menu | Arrow keys ↑↓ | Navigate options |
+| Any menu | Enter | Select option |
+| Any menu | ESC | Go back |
+| Text prompt | Type `0` | Go back |
+| Text prompt | Type `00` | Main menu |
+| Text prompt | Empty + Enter | Go back |
 
-#### Player control
+**See [Navigation Guide](NAVIGATION_GUIDE.md) for complete details.**
 
-| Keyboard    | Description                          |
-| ----------- | ------------------------------------ |
-| p and SPACE | Toggle pause/unpause.                |
-| [ and ]     | Descrease/increase speed by 10%.     |
-| { and }     | Halve/double current playback speed. |
-| q           | Stop playing and quit.               |
-| / and *     | Descrease/increase volume.           |
-| 9 and 0     | Descrease/increase volume.           |
-| m           | Mute sound.                          |
+---
 
-#### Search Menu
+## Usage
 
-By selecting 2) Search radio stations, you can search by tag, name, language, country code, state, and advanced(todo).
+### Searching for Stations
 
-![start](https://raw.githubusercontent.com/shinokada/tera/main/images/searchmenu.png)
+```bash
+# From main menu
+2) Search radio stations
 
-**Search Tips:**
-- Press Enter without typing to return to Main Menu
-- Use arrow keys to select from search results
-- After playing a station, you can save it to your "My Favorites" list or custom lists
-- The save dialog uses arrow keys for easy list selection
+# Search by:
+- Tag (jazz, rock, classical, etc.)
+- Name (station name)
+- Language
+- Country code
+- State
 
-#### I Feel Lucky Menu
-
-Discover new stations randomly! Enter a genre or keyword (like jazz, rock, classical, meditation), or press Enter to return to Main Menu.
-
-#### Saving Stations
-
-After searching and playing a station:
-1. Choose whether to save the station
-2. Use arrow keys to select from your lists
-3. "My Favorites" is your default list (stored in `~/.config/tera/favorite/myfavorites.json`)
-4. Select "0) Main Menu" to cancel and return
-
-**About "My Favorites" List:**
-- This is your primary list for favorite stations
-- Stations saved here appear in "Quick Play Favorites" on the main menu
-- Quick access to your top 10 most recent additions
-
-#### Deleting Stations
-
-From the Main Menu, select "4) Delete a radio station":
-1. Choose the list to delete from using arrow keys
-2. Select the station number to delete
-3. Press 0 to return to Main Menu at any time
-
-#### Gist Upload
-
-Share your favorite stations by uploading lists to GitHub Gist.
-
-#### Music player
-
-- Pause: `q` or `space`.
-- Forward: Right arrow.
-- Backward: Left arrow.
-- [More MPV control](https://mpv.io/manual/master/)
-
-### Options
-
-```sh
--h | --help
---version
+# After search:
+- Use arrow keys to select
+- Press Enter to play
+- Save to "My Favorites" or custom lists
 ```
 
-## Reference
+### Managing Lists
 
-- [Bash menu](https://devdojo.com/bobbyiliev/how-to-create-an-interactive-menu-in-bash)
+```bash
+# From main menu
+3) List (Create/Read/Update/Delete)
 
-## Author
+# Operations:
+- Create new lists
+- View list contents
+- Rename lists
+- Delete lists
+- Protected: "My Favorites" cannot be deleted/renamed
+```
 
-@shinokada
+**See [List Navigation Guide](LIST_NAVIGATION_GUIDE.md) for details.**
+
+### Quick Play Favorites
+
+Your "My Favorites" list appears on the main menu:
+
+```
+--- Quick Play Favorites ---
+10) ▶ BBC World Service
+11) ▶ Jazz FM
+12) ▶ Classical KDFC
+```
+
+Just select the number to play instantly!
+
+**See [Favorites Guide](FAVORITES.md) for advanced usage.**
+
+### Gist Integration
+
+Share and backup your station lists:
+
+```bash
+# From main menu
+6) Gist
+
+# Features:
+1) Create a gist - Upload all your lists
+2) Recover from gist - Download lists from URL
+```
+
+**Setup required**: See [Gist Setup Guide](GIST_SETUP.md)
+
+### Player Controls
+
+While playing:
+
+| Key | Action |
+|-----|--------|
+| `p` / `SPACE` | Pause/unpause |
+| `q` | Stop and quit |
+| `9` / `0` | Volume down/up |
+| `/` / `*` | Volume down/up |
+| `m` | Mute |
+| `[` / `]` | Decrease/increase speed 10% |
+| `{` / `}` | Halve/double speed |
+
+See [MPV manual](https://mpv.io/manual/master/) for all controls.
+
+---
+
+## Documentation
+
+- **[Navigation Guide](NAVIGATION_GUIDE.md)** - Complete navigation reference
+- **[List Navigation Guide](LIST_NAVIGATION_GUIDE.md)** - List management details
+- **[Favorites Guide](FAVORITES.md)** - Quick play favorites setup
+- **[Gist Setup](GIST_SETUP.md)** - GitHub Gist integration
+- **[Changelog](CHANGELOG.md)** - Recent updates and features
+
+---
+
+## File Locations
+
+```
+~/.config/tera/          # Configuration directory
+├── favorite/            # Your favorite lists
+│   ├── myfavorites.json # "My Favorites" list
+│   └── *.json          # Custom lists
+└── gisturl             # Last gist URL (if used)
+
+~/.cache/tera/           # Temporary files
+└── radio_searches.json  # Search results cache
+```
+
+---
+
+## Uninstallation
+
+### Using Script
+
+```bash
+curl -s https://raw.githubusercontent.com/shinokada/tera/main/uninstall.sh | bash
+```
+
+### Manual Removal
+
+```bash
+# Remove executable
+rm $(which tera)
+
+# Remove configuration and cache
+rm -rf ~/.config/tera
+rm -rf ~/.cache/tera
+```
+
+---
+
+## Options
+
+```bash
+tera              # Start TERA
+tera --version    # Show version
+tera -h           # Show help
+tera --help       # Show help
+```
+
+---
+
+## Tips & Tricks
+
+1. **Fast Navigation**: Type `0` in any text prompt to go back
+2. **Emergency Exit**: Use `Ctrl+C` to force quit
+3. **No Duplicates**: TERA prevents saving the same station twice
+4. **ESC is Safe**: Press ESC anywhere without fear—it just goes back
+5. **Quick Access**: Add stations to "My Favorites" for main menu access
+6. **Fuzzy Search**: In any list, start typing to filter results
+
+---
+
+## Troubleshooting
+
+### Station Won't Play
+
+```bash
+# Test mpv directly
+mpv https://live.musopen.org:8085/streamvbr0
+
+# Check if station URL is valid
+# Some stations may be offline or have changed URLs
+```
+
+### Navigation Not Working
+
+```bash
+# Ensure fzf is installed
+which fzf
+
+# Update fzf if needed
+brew upgrade fzf  # macOS
+```
+
+### Gist Features Not Working
+
+See [Gist Setup Guide](GIST_SETUP.md) for GitHub token configuration.
+
+---
+
+## Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Test your changes thoroughly
+4. Submit a pull request
+
+---
+
+## Support
+
+- 📖 **Documentation**: [tera.codewithshin.com](https://tera.codewithshin.com/)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/shinokada/tera/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/shinokada/tera/discussions)
+
+---
+
+## Acknowledgments
+
+- **Radio Browser API** - Station database
+- **MPV** - Media playback
+- **fzf** - Fuzzy finding interface
+
+---
 
 ## License
 
-Please see LICENSE.
+MIT License - See [LICENSE](LICENSE) file for details.
+
+---
+
+## Author
+
+**Shinichi Okada** ([@shinokada](https://github.com/shinokada))
+
+---
+
+**Made with ❤️ for music lovers who live in the terminal**
