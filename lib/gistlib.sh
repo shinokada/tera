@@ -106,6 +106,7 @@ create_gist() {
         echo
         read -p "Press Enter to return to menu..."
         gist_menu
+        return
     else
         redprint "✗ Failed to create gist!"
         echo
@@ -144,7 +145,7 @@ recover_gist() {
     
     echo
     greenprint "Cloning gist..."
-    cd "$FAVORITE_PATH" || {
+    pushd "$FAVORITE_PATH" > /dev/null || {
         redprint "Error: Could not access favorites directory."
         sleep 2
         gist_menu
@@ -157,6 +158,7 @@ recover_gist() {
         gist_dir=${gist_dir##*/}    # Extract last path segment
         
         if [ -z "$gist_dir" ] || [ ! -d "$FAVORITE_PATH/$gist_dir" ]; then
+            popd > /dev/null
             redprint "Error: Could not determine gist directory."
             read -p "Press Enter to return to menu..."
             gist_menu
@@ -183,6 +185,7 @@ recover_gist() {
         echo "3. You have internet connection"
     fi
     
+    popd > /dev/null
     echo
     read -p "Press Enter to return to menu..."
     gist_menu
