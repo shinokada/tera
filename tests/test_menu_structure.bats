@@ -51,8 +51,7 @@ teardown() {
     grep -q 'search_submenu()' ../lib/search.sh
     
     # Check that Main Menu is at position 0 in submenu
-    result=$(grep 'search_submenu' ../lib/search.sh)
-    [ -n "$result" ]
+    awk '/search_submenu\(\)/,/^[[:space:]]*}/' ../lib/search.sh | grep -q '0) Main Menu'
 }
 
 @test "Gist menu has Main Menu at position 0" {

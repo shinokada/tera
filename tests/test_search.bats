@@ -14,8 +14,8 @@ setup() {
     # Check that function exists
     [ -n "$result" ]
     
-    # Check that cleanup code exists
-    grep -q 'echo -ne' ../lib/lib.sh
+    # Check that cleanup code exists in the function
+    awk '/_wget_simple_search\(\)/,/^}/' ../lib/lib.sh | grep -q 'echo -ne'
 }
 
 @test "wget_search clears 'Searching...' message" {
@@ -24,8 +24,8 @@ setup() {
     # Check that function exists
     [ -n "$result" ]
     
-    # Check that cleanup code exists after the function declaration
-    grep -q 'echo -ne' ../lib/lib.sh
+    # Check that cleanup code exists in the function
+    awk '/_wget_search\(\)/,/^}/' ../lib/lib.sh | grep -q 'echo -ne'
 }
 
 @test "Search results include Main Menu option" {

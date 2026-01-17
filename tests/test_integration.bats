@@ -72,20 +72,18 @@
 }
 
 @test "All clear commands come before headings" {
-    # Check that clear exists in delete_station.sh
-    grep -q 'clear' ../lib/delete_station.sh
+    # Check delete_station.sh: clear comes before heading
+    clear_line=$(grep -n 'clear' ../lib/delete_station.sh | head -n1 | cut -d: -f1)
+    heading_line=$(grep -n 'Delete a Radio Station' ../lib/delete_station.sh | head -n1 | cut -d: -f1)
+    [ "$clear_line" -lt "$heading_line" ]
     
-    # Check that Delete heading exists
-    grep -q 'Delete a Radio Station' ../lib/delete_station.sh
-    
-    # Check that clear exists in lucky.sh
-    grep -q 'clear' ../lib/lucky.sh
-    
-    # Check that Lucky heading exists
-    grep -q 'I Feel Lucky' ../lib/lucky.sh
+    # Check lucky.sh: clear comes before heading
+    clear_line=$(grep -n 'clear' ../lib/lucky.sh | head -n1 | cut -d: -f1)
+    heading_line=$(grep -n 'I Feel Lucky' ../lib/lucky.sh | head -n1 | cut -d: -f1)
+    [ "$clear_line" -lt "$heading_line" ]
 }
 
-@test "No double Main Menu entries in any menu" {
+@test "Main Menu entry exists in menus" {
     # Check that menus don't have duplicate Main Menu entries
     # Each menu file should have Main Menu mentioned a reasonable number of times
     list_count=$(grep -c 'Main Menu' ../lib/list.sh || true)
