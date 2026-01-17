@@ -33,8 +33,8 @@ TERA uses GitHub Gists to backup and restore your favorite radio station lists. 
 
 - ⚠️ **Never commit the `.env` file to git** - it's already in `.gitignore`
 - ⚠️ **Keep your token secret** - don't share it with anyone
-- ℹ️ The token is only stored locally on your machine
-- ℹ️ Only the `gist` scope is needed - don't add unnecessary permissions
+- ℹ️ The token is stored locally on your machine
+- ℹ️ The `gist` scope is the only permission needed - don't add unnecessary permissions
 
 ## Troubleshooting
 

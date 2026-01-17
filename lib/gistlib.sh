@@ -17,7 +17,7 @@ create_gist() {
         echo "3. Make sure to select the 'gist' scope"
         echo "4. Paste your token in the .env file"
         echo
-        yellowprint "Or run: cp ${script_dir}/.env.example ${script_dir}/.env"
+        yellowprint "Or run: cp .env.example .env"
         yellowprint "Then edit the .env file with your token"
         echo
         read -p "Press Enter to return to menu..."
