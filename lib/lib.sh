@@ -85,7 +85,8 @@ _graceful_exit() {
 }
 
 _station_list() {
-    jq -r '.[] | .name' <"$FAVORITE_PATH/$1.json"
+    # Trim whitespace and sort alphabetically (case-insensitive)
+    jq -r '.[] | .name | gsub("^\\s+|\\s+$";"")' <"$FAVORITE_PATH/$1.json" | sort -f
 }
 
 _play() {

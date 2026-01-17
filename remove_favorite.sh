@@ -10,7 +10,8 @@ if [ $# -eq 0 ]; then
     echo "Usage: $0 <index>"
     echo ""
     echo "Current favorites:"
-    jq -r 'to_entries[] | "\(.key)) \(.value.name)"' "$FAVORITE_FILE"
+    # Sort by station name (case-insensitive) and trim whitespace
+    jq -r 'to_entries | sort_by(.value.name | ascii_downcase) | .[] | "\(.key)) \(.value.name | gsub("^\\s+|\\s+$";""))"' "$FAVORITE_FILE"
     exit 1
 fi
 
