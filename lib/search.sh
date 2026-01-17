@@ -60,8 +60,8 @@ _save_station_to_list() {
     
     FAVORITE_FULL="${FAVORITE_PATH}/${LIST_NAME}.json"
     
-    # get item from "$SEARCH_RESULTS" using $ANS
-    jq ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
+    # get item from "$SEARCH_RESULTS" using $ANS and trim station name
+    jq ".[$ANS-1] | .name |= gsub(\"^\\\\s+|\\\\s+$\";\"\")" <"$SEARCH_RESULTS" >"$TEMP_FILE"
     
     # Check if station already exists in the list (by stationuuid)
     STATION_UUID=$(jq -r '.stationuuid' "$TEMP_FILE")

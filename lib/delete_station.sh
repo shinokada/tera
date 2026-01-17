@@ -102,8 +102,11 @@ ${INDEX}) ${DISPLAY_NAME}"
     # Adjust ANS to account for the Main Menu option (subtract 1)
     ANS=$((ANS - 1))
     
+    # Since stations are sorted alphabetically, we need to find by name instead of index
+    # Get the trimmed station name from the selection
+    STATION_TO_DELETE=$(echo "$SELECTED_TEXT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    
     # Show confirmation
-    STATION_TO_DELETE=$(echo "$STATIONS" | sed -n "${ANS}p")
     echo
     yellowprint "Are you sure you want to delete: $STATION_TO_DELETE"
     printf "Type 'yes' or 'y' to confirm, anything else to cancel: "
@@ -113,7 +116,8 @@ ${INDEX}) ${DISPLAY_NAME}"
     
     if [ "$USER_CONFIRM" = "Y" ]; then
         FAVLIST_PATH="${FAVORITE_PATH}/${LIST}.json"
-        jq "del(.[${ANS}-1])" <"${FAVLIST_PATH}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVLIST_PATH"
+        # Delete by matching the trimmed station name
+        jq --arg name "$STATION_TO_DELETE" 'del(.[] | select(.name | gsub("^\\s+|\\s+$";"") == $name))' <"${FAVLIST_PATH}" >"$TEMP_FILE" && mv "$TEMP_FILE" "$FAVLIST_PATH"
         echo
         greenprint "Successfully deleted: $STATION_TO_DELETE"
         sleep 2

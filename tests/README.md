@@ -49,6 +49,15 @@ bats -t .
 
 ## Test Files
 
+### `test_station_names.bats` ⭐ NEW
+Tests station name trimming and alphabetical sorting:
+- Verifies whitespace trimming from station names
+- Tests alphabetical sorting (case-insensitive)
+- Validates jq gsub pattern for trimming
+- Tests edge cases (special characters, long names, duplicates)
+- Performance tests with large lists
+- Real-world station name handling
+
 ### `test_menu_structure.bats`
 Tests menu structure and consistency:
 - Verifies all menus have Main Menu at position 0
@@ -85,12 +94,29 @@ Integration tests for overall consistency:
 ## Expected Test Results
 
 All tests should pass if the recent changes are correctly implemented:
+- ✓ Station names have whitespace trimmed (NEW)
+- ✓ Stations displayed in alphabetical order (NEW)
+- ✓ Case-insensitive sorting works correctly (NEW)
 - ✓ Main Menu at position 0 in all menus
 - ✓ << Main Menu >> option in all FZF selections
 - ✓ Clear headings on all pages
 - ✓ ESC key returns to menu (not quit)
 - ✓ "Searching..." message cleaned up after search
 - ✓ Consistent prompts and navigation
+
+## Manual Testing
+
+For quick manual verification of station name improvements:
+```bash
+cd tests
+chmod +x manual_test_station_improvements.sh
+./manual_test_station_improvements.sh
+```
+
+This script tests:
+- Alphabetical sorting of your actual favorite lists
+- Whitespace detection in station names
+- jq trimming pattern functionality
 
 ## Continuous Integration
 

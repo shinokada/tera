@@ -65,9 +65,8 @@ _fav_list() {
             name=$(basename "$f")
             list+=("${name%.*}")
         else
-            content_length=$(jq length "$f")
-            # echo "$content_length"
-            if (("$content_length" > 0)); then
+            # Use jq -e to check if file has content (more robust)
+            if jq -e 'length > 0' "$f" >/dev/null 2>&1; then
                 # otherwise show files with content
                 name=$(basename "$f")
                 list+=("${name%.*}")
@@ -85,7 +84,9 @@ _graceful_exit() {
 }
 
 _station_list() {
-    jq -r '.[] | .name' <"$FAVORITE_PATH/$1.json"
+    # Trim whitespace and sort alphabetically (case-insensitive)
+    # Use .name? | strings to safely handle missing or non-string values
+    jq -r '.[] | .name? | strings | gsub("^\\s+|\\s+$";"")' <"$FAVORITE_PATH/$1.json" | sort -f
 }
 
 _play() {

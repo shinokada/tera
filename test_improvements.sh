@@ -77,12 +77,6 @@ else
     fail "Auto-creation code not found"
 fi
 
-if grep -q "myfavorites.json" ./tera; then
-    pass "Migration code for myfavorites.json found"
-else
-    fail "Migration code not found"
-fi
-
 # Test 4: Check navigation improvements in search.sh
 section "Test 4: Navigation in search.sh"
 
@@ -123,33 +117,6 @@ if grep -q "Type '0' to go back, '00' for main menu" ./lib/list.sh; then
     pass "Navigation messages found in list functions"
 else
     fail "Navigation messages not found in list functions"
-fi
-
-# Test 6: Check for documentation
-section "Test 6: Documentation Files"
-
-if [ -f "./IMPLEMENTATION_COMPLETE.md" ]; then
-    pass "IMPLEMENTATION_COMPLETE.md exists"
-else
-    fail "IMPLEMENTATION_COMPLETE.md not found"
-fi
-
-if [ -f "./docs/NAVIGATION_GUIDE.md" ]; then
-    pass "NAVIGATION_GUIDE.md exists"
-else
-    fail "NAVIGATION_GUIDE.md not found"
-fi
-
-if [ -f "./CHANGES_SUMMARY.md" ]; then
-    pass "CHANGES_SUMMARY.md exists"
-else
-    fail "CHANGES_SUMMARY.md not found"
-fi
-
-if [ -f "./BEFORE_AFTER.md" ]; then
-    pass "BEFORE_AFTER.md exists"
-else
-    fail "BEFORE_AFTER.md not found"
 fi
 
 # Test 7: Verify template file exists

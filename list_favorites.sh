@@ -23,4 +23,5 @@ echo "  Favorite Radio Stations ($COUNT)"
 echo "==================================="
 echo ""
 
-jq -r 'to_entries[] | "\(.key)) \(.value.name)\n   Tags: \(.value.tags)\n   Country: \(.value.country)\n"' "$FAVORITE_FILE"
+# Sort by station name (case-insensitive) and trim whitespace
+jq -r 'to_entries | sort_by(.value.name | ascii_downcase) | .[] | "\(.key)) \(.value.name | gsub("^\\s+|\\s+$";""))\n   Tags: \(.value.tags)\n   Country: \(.value.country)\n"' "$FAVORITE_FILE"

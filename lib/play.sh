@@ -55,18 +55,37 @@ fn_play() {
         
         # Adjust ANS to account for the Main Menu option (subtract 1)
         ANS=$((ANS - 1))
-        # echo "$ANS"
-        # get list path
-        # FAV_FULL=_station_list
-        # echo "LIST: $LIST"
-        # echo "$FAVORITE_PATH/$LIST.json"
+        
         LIST_PATH="$FAVORITE_PATH/$LIST.json"
-        # echo "${LIST[$ANS]}"
-        # find the $ANS line e.g. line 2
-        URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"${LIST_PATH}")
-        # echo "url_resolved: $URL_RESOLVED"
-        if [[ -n $URL_RESOLVED ]]; then
-            _info_select_radio_play "$ANS" "${LIST_PATH}"
+        
+        # Since stations are sorted alphabetically, we need to find by name instead of index
+        # Get the trimmed station name from the selection
+        STATION_NAME=$(echo "$SELECTED_TEXT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        # Find the station in the JSON by matching the (trimmed) name
+        STATION_DATA=$(jq --arg name "$STATION_NAME" '.[] | select(.name | gsub("^\\s+|\\s+$";"") == $name)' "${LIST_PATH}")
+        
+        if [ -z "$STATION_DATA" ]; then
+            redprint "Could not find station in list."
+            menu
+            return
+        fi
+        
+        URL_RESOLVED=$(echo "$STATION_DATA" | jq -r '.url_resolved')
+        
+        if [[ -n $URL_RESOLVED ]] && [[ $URL_RESOLVED != "null" ]]; then
+            # Display station info
+            clear
+            magentaprint "--------- Info Radio: ------------"
+            greenprint "NAME: $(echo "$STATION_DATA" | jq -r '.name | gsub("^\\s+|\\s+$";"")')"
+            blueprint "TAGS: $(echo "$STATION_DATA" | jq -r '.tags')"
+            redprint "COUNTRY: $(echo "$STATION_DATA" | jq -r '.country')"
+            yellowprint "VOTES: $(echo "$STATION_DATA" | jq -r '.votes')"
+            magentaprint "CODEC: $(echo "$STATION_DATA" | jq -r '.codec')"
+            cyanprint "BITRATE: $(echo "$STATION_DATA" | jq -r '.bitrate')"
+            magentaprint "----------------------------------"
+            echo
+            
             _play "$URL_RESOLVED" || menu
         else
             echo "url_resolved can't be found. Exiting ..."
