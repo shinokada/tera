@@ -20,8 +20,15 @@ echo "----------------------------------------"
 # Check if there are any favorite lists
 FAVORITE_PATH="${HOME}/.config/tera/favorite"
 if [ -d "$FAVORITE_PATH" ]; then
-    for json_file in "$FAVORITE_PATH"/*.json; do
-        if [ -f "$json_file" ] && [ "$(jq 'length' "$json_file" 2>/dev/null)" -gt 0 ]; then
+    shopt -s nullglob
+    json_files=("$FAVORITE_PATH"/*.json)
+    
+    if [ ${#json_files[@]} -eq 0 ]; then
+        yellowprint "No JSON files found in $FAVORITE_PATH"
+        echo
+    else
+        for json_file in "${json_files[@]}"; do
+            if [ -f "$json_file" ] && jq -e 'length > 0' "$json_file" >/dev/null 2>&1; then
             basename="${json_file##*/}"
             list_name="${basename%.json}"
             echo "List: $list_name"
@@ -45,6 +52,7 @@ if [ -d "$FAVORITE_PATH" ]; then
             echo
         fi
     done
+    fi
 else
     yellowprint "No favorite lists found at $FAVORITE_PATH"
 fi
