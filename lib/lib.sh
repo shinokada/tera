@@ -90,13 +90,22 @@ _station_list() {
 }
 
 _play() {
+    URL=$1
+    STATION_DATA=$2
+    LIST_NAME=$3
+    
     echo
     yellowprint "Press q to quit."
     echo
-    mpv "$1" || {
+    mpv "$URL" || {
         echo "Not able to play your station."
         return 1
     }
+    
+    # After mpv exits, ask if user wants to save to favorites
+    if [ -n "$STATION_DATA" ]; then
+        _prompt_save_to_favorites "$STATION_DATA" "$LIST_NAME"
+    fi
 }
 
 _show_favlist() {
@@ -196,9 +205,10 @@ _play_favorite_station() {
         return 1
     fi
     
-    # Get station details
-    URL_RESOLVED=$(jq -r ".[${STATION_INDEX}].url_resolved" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
-    STATION_NAME=$(jq -r ".[${STATION_INDEX}].name" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
+    # Get station data
+    STATION_DATA=$(jq -r ".[${STATION_INDEX}]" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
+    URL_RESOLVED=$(echo "$STATION_DATA" | jq -r '.url_resolved')
+    STATION_NAME=$(echo "$STATION_DATA" | jq -r '.name')
     
     if [ -z "$URL_RESOLVED" ] || [ "$URL_RESOLVED" = "null" ]; then
         redprint "Could not find station URL."
@@ -211,8 +221,9 @@ _play_favorite_station() {
     echo
     _info_favorite_station "$STATION_INDEX" "$FAVORITE_STATIONS_FILE"
     
-    # Play the station
-    _play "$URL_RESOLVED"
+    # Play the station - no need to prompt for favorites since it's already in favorites
+    # Pass empty string for station data and list name to skip the prompt
+    _play "$URL_RESOLVED" "" ""
 }
 
 _info_favorite_station() {
@@ -235,4 +246,80 @@ _info_favorite_station() {
     cyanprint "BITRATE: $BITRATEINFO"
     magentaprint "----------------------------------"
     echo
+}
+
+# Prompt user to save station to Quick Play Favorites after playing
+_prompt_save_to_favorites() {
+    STATION_DATA=$1
+    LIST_NAME=$2
+    
+    clear
+    cyanprint "Did you enjoy this station?"
+    echo
+    
+    STATION_NAME=$(echo "$STATION_DATA" | jq -r '.name | gsub("^\\s+|\\s+$";"")')
+    greenprint "Station: $STATION_NAME"
+    if [ -n "$LIST_NAME" ]; then
+        blueprint "From list: $LIST_NAME"
+    fi
+    echo
+    
+    OPTIONS="1) ⭐ Add to Quick Play Favorites
+2) Return to Main Menu"
+    
+    CHOICE=$(echo "$OPTIONS" | fzf --prompt="Choose an option: " --height=40% --reverse --no-info)
+    
+    # User cancelled or no choice
+    if [ -z "$CHOICE" ]; then
+        return 0
+    fi
+    
+    ANS=$(echo "$CHOICE" | cut -d')' -f1)
+    
+    case $ANS in
+    1)
+        _add_to_quick_favorites "$STATION_DATA"
+        ;;
+    2)
+        return 0
+        ;;
+    *)
+        return 0
+        ;;
+    esac
+}
+
+# Add station to Quick Play Favorites (My-favorites.json)
+_add_to_quick_favorites() {
+    STATION_DATA=$1
+    FAVORITES_FILE="${FAVORITE_PATH}/My-favorites.json"
+    
+    # Initialize file if it doesn't exist
+    if [ ! -f "$FAVORITES_FILE" ]; then
+        echo "[]" > "$FAVORITES_FILE"
+    fi
+    
+    # Get station UUID for duplicate check
+    STATION_UUID=$(echo "$STATION_DATA" | jq -r '.stationuuid')
+    
+    # Check if station already exists
+    EXISTS=$(jq --arg uuid "$STATION_UUID" 'any(.[]; .stationuuid == $uuid)' "$FAVORITES_FILE")
+    
+    if [ "$EXISTS" = "true" ]; then
+        yellowprint "⭐ Station is already in Quick Play Favorites!"
+        echo
+        yellowprint "You can access it from the Main Menu."
+        sleep 2
+        return 0
+    fi
+    
+    # Add station to favorites
+    TEMP_FILE="${FAVORITES_FILE}.tmp"
+    jq --argjson station "$STATION_DATA" '. += [$station]' "$FAVORITES_FILE" > "$TEMP_FILE"
+    mv "$TEMP_FILE" "$FAVORITES_FILE"
+    
+    greenprint "✓ Added to Quick Play Favorites!"
+    echo
+    yellowprint "You can now access this station from the Main Menu."
+    sleep 2
 }
