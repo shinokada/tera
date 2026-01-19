@@ -86,7 +86,7 @@ fn_play() {
             magentaprint "----------------------------------"
             echo
             
-            _play "$URL_RESOLVED" || menu
+            _play "$URL_RESOLVED" "$STATION_DATA" "$LIST" || menu
         else
             echo "url_resolved can't be found. Exiting ..."
             exit 1

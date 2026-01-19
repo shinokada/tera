@@ -84,17 +84,17 @@ _save_station_to_list() {
 }
 
 _search_play() {
-    # FILE="/tmp/radio_listening.json"
     TEMP_FILE="${TMP_PATH}/radio_favorite.json"
-    # TEMP_FILE2="${TMP_PATH}/radio_favorite2.json"
     _cleanup_tmp "$TEMP_FILE"
-    # echo "$1" # this is a list number in "$SEARCH_RESULTS"
     ANS=$1
-    jq -r ".[$ANS-1]" <"$SEARCH_RESULTS" >"$TEMP_FILE"
-    URL_RESOLVED=$(jq -r ".[$ANS-1] |.url_resolved" <"$SEARCH_RESULTS")
-    if [ -n "$URL_RESOLVED" ]; then
+    
+    # Get the station data
+    STATION_DATA=$(jq -r ".[$ANS-1]" <"$SEARCH_RESULTS")
+    URL_RESOLVED=$(echo "$STATION_DATA" | jq -r '.url_resolved')
+    
+    if [ -n "$URL_RESOLVED" ] && [ "$URL_RESOLVED" != "null" ]; then
         _info_select_radio "$ANS"
-        mpv "$URL_RESOLVED" || {
+        _play "$URL_RESOLVED" "$STATION_DATA" "Search Results" || {
             echo "Not able to play your station."
             search_menu
         }
@@ -102,13 +102,6 @@ _search_play() {
         redprint "url_resolved can't be found. Returning to search menu..."
         search_menu
         return
-    fi
-    echo
-    printf "Do you want to save this station? (yes/y/no/n) "
-    read -r RES
-    USER_ANS=$(echo "$RES" | cut -c 1-1 | tr "[:lower:]" "[:upper:]")
-    if [ "$USER_ANS" = "Y" ]; then
-        _save_station_to_list "$ANS"
     fi
 }
 
