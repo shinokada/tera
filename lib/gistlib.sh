@@ -102,8 +102,12 @@ create_gist() {
         cyanprint "Gist URL: $GIST_URL"
         echo "$GIST_URL" > "$GIST_URL_FILE"
         
-        # Save gist metadata
-        save_gist_metadata "$GIST_ID" "$GIST_URL" "Terminal radio favorite lists"
+        # Save gist metadata (only when ID is present)
+        if [ -n "$GIST_ID" ] && [ "$GIST_ID" != "null" ]; then
+            save_gist_metadata "$GIST_ID" "$GIST_URL" "Terminal radio favorite lists"
+        else
+            yellowprint "Warning: Gist ID missing; metadata not saved."
+        fi
         
         echo
         greenprint "Opening in browser..."
@@ -219,6 +223,130 @@ list_my_gists() {
     list_my_gists
 }
 
+# Update a gist description
+update_gist() {
+    clear
+    cyanprint "$APP_NAME - Update Gist"
+    echo
+    
+    # Check if GitHub token is available
+    if [ -z "$GITHUB_TOKEN" ]; then
+        redprint "Error: GitHub token not found!"
+        echo
+        yellowprint "To update gists, you need a GitHub token configured."
+        echo
+        read -p "Press Enter to return to menu..."
+        gist_menu
+        return
+    fi
+    
+    local gist_count=$(get_gist_count)
+    
+    if [ "$gist_count" -eq 0 ]; then
+        yellowprint "You don't have any gists to update."
+        echo
+        read -p "Press Enter to return to menu..."
+        gist_menu
+        return
+    fi
+    
+    greenprint "Your gists:"
+    echo
+    cyanprint "$(printf "%-50s | %s" "Description" "Created")"
+    echo "$(printf '%.0s-' {1..80})"
+    
+    # Get all gists and display them
+    local gists=$(get_all_gists)
+    local index=0
+    
+    echo "$gists" | jq -c '.[]' | while IFS= read -r gist; do
+        index=$((index + 1))
+        local desc=$(echo "$gist" | jq -r '.description')
+        local created=$(echo "$gist" | jq -r '.created_at')
+        local created_date=$(date -d "$created" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "$created")
+        
+        printf "%2d) %-47s | %s\n" "$index" "$desc" "$created_date"
+    done
+    
+    echo
+    echo "$(printf '%.0s-' {1..80})"
+    echo
+    yellowprint "Type '0' to go back to Gist Menu"
+    printf "Enter gist number to update (or press Enter to cancel): "
+    read -r choice
+    
+    # Navigation
+    if [ "$choice" = "0" ] || [ -z "$choice" ]; then
+        gist_menu
+        return
+    fi
+    
+    # Validate choice
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$gist_count" ]; then
+        redprint "Invalid choice."
+        sleep 1
+        update_gist
+        return
+    fi
+    
+    # Get the selected gist
+    local selected_index=$((choice - 1))
+    local selected_gist=$(echo "$gists" | jq -r ".[$selected_index]")
+    local gist_id=$(echo "$selected_gist" | jq -r '.id')
+    local current_desc=$(echo "$selected_gist" | jq -r '.description')
+    
+    # Show current description and prompt for new one
+    echo
+    cyanprint "Current description: $current_desc"
+    echo
+    printf "Enter new description (or press Enter to cancel): "
+    read -r new_description
+    
+    if [ -z "$new_description" ]; then
+        yellowprint "Update cancelled."
+        sleep 1
+        update_gist
+        return
+    fi
+    
+    # Update on GitHub
+    greenprint "Updating gist on GitHub..."
+    
+    # Build JSON payload
+    JSON_PAYLOAD=$(jq -n --arg desc "$new_description" '{description: $desc}')
+    
+    RESPONSE=$(curl -s -X PATCH \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        "https://api.github.com/gists/$gist_id" \
+        -d "$JSON_PAYLOAD")
+    
+    # Check if update was successful
+    UPDATED_DESC=$(echo "$RESPONSE" | jq -r '.description // empty')
+    ERROR_MSG=$(echo "$RESPONSE" | jq -r '.message // empty')
+    
+    if [ -n "$UPDATED_DESC" ] && [ "$UPDATED_DESC" != "null" ]; then
+        # Update local metadata
+        update_gist_metadata "$gist_id" "$new_description"
+        greenprint "✓ Gist updated successfully!"
+        echo
+        cyanprint "New description: $new_description"
+    else
+        redprint "✗ Failed to update gist on GitHub!"
+        echo
+        if [ -n "$ERROR_MSG" ]; then
+            redprint "Error: $ERROR_MSG"
+        else
+            yellowprint "Unknown error occurred"
+        fi
+    fi
+    
+    echo
+    read -p "Press Enter to continue..."
+    update_gist
+}
+
 # Delete a gist (both from GitHub and local metadata)
 delete_gist() {
     clear
@@ -308,12 +436,6 @@ delete_gist() {
     
     # Delete from GitHub
     greenprint "Deleting gist from GitHub..."
-    RESPONSE=$(curl -s -X DELETE \
-        -H "Accept: application/vnd.github+json" \
-        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        "https://api.github.com/gists/$gist_id")
-    
     # Check response (DELETE returns 204 No Content on success)
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
         -X DELETE \
@@ -462,8 +584,9 @@ gist_menu() {
 1) Create a gist
 2) My Gists
 3) Recover favorites from a gist
-4) Delete a gist
-5) Exit"
+4) Update a gist
+5) Delete a gist
+6) Exit"
     
     CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info)
     
@@ -488,9 +611,12 @@ gist_menu() {
         recover_gist
         ;;
     4)
-        delete_gist
+        update_gist
         ;;
     5)
+        delete_gist
+        ;;
+    6)
         yellowprint "Bye-bye."
         exit 0
         ;;

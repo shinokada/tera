@@ -4,9 +4,9 @@
 # Verifies proper return statements and directory handling
 
 @test "create_gist has return after successful gist creation" {
-    # Check that the success path has a return statement
-    # Look for the success message and verify return comes after gist_menu
-    awk '/Successfully created a secret Gist/,/^[[:space:]]*else/' ../lib/gistlib.sh | grep -A1 'gist_menu' | grep -q 'return'
+    # Check that the success path has a return statement after gist_menu
+    # Need more context since there are several lines between success message and gist_menu
+    grep -A20 'Successfully created a secret Gist' ../lib/gistlib.sh | grep -A1 'gist_menu' | grep -q 'return'
 }
 
 @test "create_gist has return after gist creation failure" {

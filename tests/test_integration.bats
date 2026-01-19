@@ -22,8 +22,8 @@
     # Search menu - 7) Exit
     grep -q '7) Exit' ../lib/search.sh
     
-    # Gist menu - 3) Exit
-    grep -q '3) Exit' ../lib/gistlib.sh
+    # Gist menu - 6) Exit
+    grep -q '6) Exit' ../lib/gistlib.sh
 }
 
 @test "All interactive selections have Main Menu option" {
