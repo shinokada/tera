@@ -65,6 +65,7 @@ fi
 # shellcheck disable=SC1091
 {
     . "${script_dir}/lib/delete_station.sh"
+    . "${script_dir}/lib/gist_storage.sh"
     . "${script_dir}/lib/gistlib.sh"
     . "${script_dir}/lib/lib.sh"
     . "${script_dir}/lib/list.sh"
