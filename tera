@@ -3,7 +3,7 @@
 set -eu
 
 # shellcheck disable=SC2034
-VERSION="0.7.1"
+VERSION="0.7.2"
 SCRIPT_DOT_DIR="$HOME/.config/tera"
 # CACHE_DIR="$HOME/.cache"
 FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
@@ -97,12 +97,12 @@ menu() {
     clear
     cyanprint "$APP_NAME MAIN MENU"
     echo
-    
+
     # Quick Play Favorites: Shows stations from "My Favorites" list
     # Stations are saved to this list when you select "My Favorites" after searching
     # File location: ~/.config/tera/favorite/My-favorites.json
     FAVORITE_STATIONS_FILE="${FAVORITE_PATH}/My-favorites.json"
-    
+
     # Create base menu options
     MENU_OPTIONS="1) Play from my list
 2) Search radio stations
@@ -111,17 +111,17 @@ menu() {
 5) I feel lucky
 6) Gist
 0) Exit"
-    
+
     # Check if favorite.json exists and has stations
     if [ -f "$FAVORITE_STATIONS_FILE" ]; then
         STATION_COUNT=$(jq 'length' "$FAVORITE_STATIONS_FILE" 2>/dev/null || echo 0)
-        
+
         if [ "$STATION_COUNT" -gt 0 ]; then
             # Add separator and favorite stations section
             MENU_OPTIONS="${MENU_OPTIONS}
 
 --- Quick Play Favorites ---"
-            
+
             # Add each favorite station (limit to first 10)
             LIMIT=$((STATION_COUNT < 10 ? STATION_COUNT : 10))
             for i in $(seq 0 $((LIMIT - 1))); do
@@ -134,25 +134,25 @@ ${MENU_NUM}) ▶ ${STATION_NAME}"
             done
         fi
     fi
-    
+
     # Use fzf for selection
     CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info --ansi)
-    
+
     # Check if user cancelled
     if [ -z "$CHOICE" ]; then
         yellowprint "Bye-bye."
         exit 0
     fi
-    
+
     # Extract the number from the choice
     ans=$(echo "$CHOICE" | grep -oE '^[0-9]+' || echo "")
-    
+
     # Handle separator line (no number)
     if [ -z "$ans" ]; then
         menu
         return
     fi
-    
+
     case $ans in
     1)
         fn_play
