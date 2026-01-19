@@ -42,7 +42,8 @@ tera
 ### Feature Guides
 
 - **[Gist Setup](GIST_SETUP.md)** - Backup and share lists via GitHub
-- **[Gist CRUD Guide](GIST_CRUD_GUIDE.md)** - Complete gist management (create, view, delete)
+- **[Gist CRUD Guide](GIST_CRUD_GUIDE.md)** - Complete gist management (create, view, update, delete)
+- **[Update Gist Quick Guide](UPDATE_GIST_QUICK_GUIDE.md)** - How to update gist descriptions
 - **[Gist Quick Reference](GIST_QUICK_REFERENCE.md)** - One-page gist cheatsheet
 
 ### Reference
@@ -116,12 +117,13 @@ See [Gist Setup](GIST_SETUP.md) for details.
 - **Duplicate Detection** - Prevents saving stations twice
 - **I Feel Lucky** - Random station discovery
 
-### Gist Features (NEW)
+### Gist Features
 
 - **Create Gists** - Backup all lists to GitHub
 - **My Gists** - View all your saved gists
-- **Quick Recovery** - Select gist by number or URL
+- **Update Gists** - Change gist descriptions
 - **Delete Gists** - Remove old backups
+- **Quick Recovery** - Select gist by number or URL
 - **Auto-Tracking** - Metadata saved locally
 
 ---
@@ -165,6 +167,12 @@ See [Gist Setup](GIST_SETUP.md) for details.
 1. Set up GitHub token (see [Gist Setup](GIST_SETUP.md))
 2. Main Menu → `6) Gist`
 3. Select `1) Create a gist`
+
+### Update Gist Description
+
+1. Main Menu → `6) Gist`
+2. Select `4) Update a gist`
+3. Choose gist and enter new description
 
 ### Restore Lists
 
