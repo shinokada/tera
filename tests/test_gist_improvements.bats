@@ -6,7 +6,13 @@
 @test "create_gist has return after successful gist creation" {
     # Check that the success path has a return statement after gist_menu
     # Need more context since there are several lines between success message and gist_menu
-    grep -A20 'Successfully created a secret Gist' ../lib/gistlib.sh | grep -A1 'gist_menu' | grep -q 'return'
+    awk '
+  /^create_gist[[:space:]]*\(\)[[:space:]]*{/ { in_fn=1 }
+  in_fn { print }
+  in_fn && /^}/ { exit }
+' ../lib/gistlib.sh |
+        grep -A1 'gist_menu' |
+        grep -q 'return'
 }
 
 @test "create_gist has return after gist creation failure" {
@@ -29,7 +35,7 @@
     # Verify that popd happens before returning to menu
     popd_line=$(grep -n 'popd > /dev/null' ../lib/gistlib.sh | tail -n1 | cut -d: -f1)
     final_menu_line=$(grep -n 'read -p.*Press Enter to return to menu' ../lib/gistlib.sh | tail -n1 | cut -d: -f1)
-    
+
     # popd should come before the final menu prompt
     [ "$popd_line" -lt "$final_menu_line" ]
 }
@@ -43,10 +49,10 @@
 @test "all gist_menu calls followed by return in create_gist" {
     # Count gist_menu calls in create_gist function
     menu_calls=$(awk '/^create_gist\(\)/,/^}/' ../lib/gistlib.sh | grep -c 'gist_menu')
-    
+
     # Count return statements after gist_menu in create_gist
     returns=$(awk '/^create_gist\(\)/,/^}/' ../lib/gistlib.sh | grep -A1 'gist_menu' | grep -c 'return')
-    
+
     # Every gist_menu call should have a return
     [ "$menu_calls" -eq "$returns" ]
 }
