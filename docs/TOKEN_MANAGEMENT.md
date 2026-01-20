@@ -312,7 +312,7 @@ If you prefer the environment variable approach:
 cp .env.example .env
 
 # Edit .env
-GITHUB_TOKEN=ghp_YourTokenHere
+GITHUB_TOKEN=ghp_YourActualTokenHere123456789
 
 # TERA will load from .env if no token in ~/.config/tera/tokens/
 ```
