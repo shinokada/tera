@@ -156,7 +156,7 @@ See [Token Management Guide](TOKEN_MANAGEMENT.md) for complete details.
 
 **Full details:** [Navigation Guide](NAVIGATION_GUIDE.md)
 
----
+**Full details:** [Navigation Guide](NAVIGATION_GUIDE.md)
 
 ## Common Tasks
 
