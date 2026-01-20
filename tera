@@ -53,15 +53,6 @@ readlinkf() {
 self=$(readlinkf "$0")
 script_dir=${self%/*}
 
-# Load environment variables from .env file if it exists
-if [ -f "${script_dir}/.env" ]; then
-    # Export variables from .env file
-    set -a
-    # shellcheck disable=SC1091
-    source "${script_dir}/.env"
-    set +a
-fi
-
 # shellcheck disable=SC1091
 {
     . "${script_dir}/lib/delete_station.sh"
@@ -73,6 +64,10 @@ fi
     . "${script_dir}/lib/play.sh"
     . "${script_dir}/lib/search.sh"
 }
+
+# Load GITHUB_TOKEN from secure storage
+GITHUB_TOKEN=$(load_github_token)
+export GITHUB_TOKEN
 
 check_cmd mpv
 check_cmd jq
