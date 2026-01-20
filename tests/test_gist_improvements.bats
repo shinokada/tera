@@ -28,16 +28,16 @@
 
 @test "recover_gist restores directory with popd" {
     # Check that popd is called to restore directory
-    grep -q 'popd > /dev/null' ../lib/gistlib.sh
+    grep -q 'popd >/dev/null' ../lib/gistlib.sh
 }
 
 @test "recover_gist popd comes before final gist_menu call" {
     # Verify that popd happens before returning to menu
-    popd_line=$(grep -n 'popd > /dev/null' ../lib/gistlib.sh | tail -n1 | cut -d: -f1)
+    popd_line=$(grep -n 'popd >/dev/null' ../lib/gistlib.sh | tail -n1 | cut -d: -f1)
     final_menu_line=$(grep -n 'read -p.*Press Enter to return to menu' ../lib/gistlib.sh | tail -n1 | cut -d: -f1)
 
     # popd should come before the final menu prompt
-    [ "$popd_line" -lt "$final_menu_line" ]
+    [ -n "$popd_line" ] && [ -n "$final_menu_line" ] && [ "$popd_line" -lt "$final_menu_line" ]
 }
 
 @test "recover_gist popd on error path when gist_dir determination fails" {
