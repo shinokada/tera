@@ -25,12 +25,12 @@ This dual system gives you:
 
 When you see a menu with numbered options:
 
-| Key | Action |
-|-----|--------|
-| ↑ / ↓ | Navigate options |
-| Enter | Select highlighted option |
-| ESC | Cancel and go back |
-| Type text | Fuzzy search/filter |
+| Key            | Action                        |
+| -------------- | ----------------------------- |
+| ↑ / ↓          | Navigate options              |
+| Enter          | Select highlighted option     |
+| ESC            | Cancel and go back            |
+| Type text      | Fuzzy search/filter           |
 | `0) Main Menu` | Select to return to main menu |
 
 **Examples:**
@@ -44,12 +44,12 @@ When you see a menu with numbered options:
 
 When you see a prompt asking you to type:
 
-| Input | Action |
-|-------|--------|
-| `0` or `back` | Go back to previous menu |
-| `00` or `main` | Return to Main Menu |
-| Empty + Enter | Go back to previous menu |
-| Type content | Enter your data |
+| Input          | Action                                                        |
+| -------------- | ------------------------------------------------------------- |
+| `0` or `back`  | Go back to previous menu                                      |
+| `00` or `main` | Return to Main Menu                                           |
+| Empty + Enter  | Context-dependent: goes back in search, shows error in lists  |
+| Type content   | Enter your data                                               |
 
 **Examples:**
 - "Type a name to search:"
@@ -60,14 +60,15 @@ When you see a prompt asking you to type:
 
 ## Navigation Commands Summary
 
-| Context | Want to... | Do this |
-|---------|------------|---------|
-| fzf Menu | Go back | Press ESC or select "0) Main Menu" |
-| fzf Menu | Main menu | Select "0) Main Menu" |
-| Text Prompt | Go back | Type `0` or press Enter (empty) |
-| Text Prompt | Main menu | Type `00` |
-| View/Info Page | Continue | Press Enter |
-| Anywhere | Force quit | Ctrl+C (emergency) |
+| Context                  | Want to... | Do this                            |
+| ------------------------ | ---------- | ---------------------------------- |
+| fzf Menu                 | Go back    | Press ESC or select "0) Main Menu" |
+| fzf Menu                 | Main menu  | Select "0) Main Menu"              |
+| Text Prompt (Search)     | Go back    | Type `0` or press Enter (empty)    |
+| Text Prompt (List Mgmt)  | Go back    | Type `0` (empty shows error)       |
+| Text Prompt              | Main menu  | Type `00`                          |
+| View/Info Page           | Continue   | Press Enter                        |
+| Anywhere                 | Force quit | Ctrl+C (emergency)                 |
 
 ---
 
@@ -75,7 +76,7 @@ When you see a prompt asking you to type:
 
 ### Example 1: Searching for Stations
 
-```
+```text
 TERA - Search by Name
 
 Type '0' to go back to Search Menu, '00' for Main Menu
@@ -83,7 +84,7 @@ Type a name to search: jazz      ← Type your search
 ```
 
 **Navigation options:**
-```
+```text
 Type a name to search: 0         ← Go back to Search Menu
 Type a name to search: 00        ← Go to Main Menu
 Type a name to search: [Enter]   ← Go back to Search Menu (empty)
@@ -91,7 +92,7 @@ Type a name to search: [Enter]   ← Go back to Search Menu (empty)
 
 ### Example 2: Creating a List
 
-```
+```text
 TERA - Create New List
 
 My lists:
@@ -103,7 +104,7 @@ Type a new list name: chill      ← Create new list
 ```
 
 **Navigation options:**
-```
+```text
 Type a new list name: 0          ← Cancel, go back to List Menu
 Type a new list name: 00         ← Cancel, go to Main Menu
 Type a new list name: [Enter]    ← Error (empty name not allowed)
@@ -111,7 +112,7 @@ Type a new list name: [Enter]    ← Error (empty name not allowed)
 
 ### Example 3: Using fzf Menus
 
-```
+```text
 TERA SEARCH MENU
 
   0) Main Menu         ← Use ↑↓ arrows to navigate
@@ -134,7 +135,7 @@ Choose an option (arrow keys to navigate): _
 
 ### Example 4: Deleting a List
 
-```
+```text
 TERA - Delete List
 
 My lists: 
@@ -146,7 +147,7 @@ Type a list name to delete: rock    ← Delete rock list
 ```
 
 **Navigation options:**
-```
+```text
 Type a list name to delete: 0       ← Cancel deletion
 Type a list name to delete: 00      ← Cancel, go to Main Menu
 Type a list name to delete: [Enter] ← Error (empty not allowed)
@@ -175,7 +176,7 @@ Special navigation rules when managing lists:
 ### Common Workflows
 
 **Creating multiple lists:**
-```
+```text
 Main Menu → List Menu → Create → Type name → (created)
                 ↑                                    |
                 └────────────────────────────────────┘
@@ -183,13 +184,13 @@ Automatically returns to List Menu, ready for more
 ```
 
 **Quick cancel:**
-```
+```text
 List Menu → Create → Type '0' → Back to List Menu (no changes)
 List Menu → Create → Type '00' → Main Menu (no changes)
 ```
 
 **Safe editing:**
-```
+```text
 List Menu → Edit → Type list name → Type '0' → Canceled (no changes)
 ```
 
@@ -200,31 +201,31 @@ List Menu → Edit → Type list name → Type '0' → Canceled (no changes)
 TERA protects you from common mistakes:
 
 ### ❌ Cannot Delete "My Favorites"
-```
+```text
 Type a list name to delete: My-favorites
 ❌ Cannot delete My-favorites list!
 ```
 
 ### ❌ Cannot Rename "My Favorites"
-```
+```text
 Type a list name to edit: My-favorites
 ❌ Cannot rename My-favorites list!
 ```
 
 ### ❌ Cannot Create Duplicate Lists
-```
+```text
 Type a new list name: jazz
 ❌ List 'jazz' already exists!
 ```
 
 ### ❌ Cannot Use Empty Names
-```
+```text
 Type a new list name: 
 ❌ List name cannot be empty.
 ```
 
 ### ✅ Duplicate Station Detection
-```
+```text
 Saving station to: Jazz Collection
 ⚠️ This station is already in your Jazz Collection list!
 Press Enter to continue...
@@ -238,7 +239,7 @@ Press Enter to continue...
 
 Your "My Favorites" list shows on main menu:
 
-```
+```text
 TERA MAIN MENU
 
 1) Play from my list
@@ -260,7 +261,7 @@ TERA MAIN MENU
 
 After searching, results appear in an interactive list:
 
-```
+```text
 TERA - Search Results
 
   << Main Menu >>      ← Special option to go back
@@ -402,7 +403,7 @@ sudo pacman -S fzf           # Arch Linux
 
 Print this for quick reference:
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │         TERA NAVIGATION REFERENCE           │
 ├─────────────────────────────────────────────┤

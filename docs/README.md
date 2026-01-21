@@ -42,6 +42,7 @@ tera
 ### Feature Guides
 
 - **[Gist Setup](GIST_SETUP.md)** - Backup and share lists via GitHub
+- **[Token Management](TOKEN_MANAGEMENT.md)** - Manage GitHub tokens securely
 - **[Gist CRUD Guide](GIST_CRUD_GUIDE.md)** - Complete gist management (create, view, update, delete)
 - **[Update Gist Quick Guide](UPDATE_GIST_QUICK_GUIDE.md)** - How to update gist descriptions
 - **[Gist Quick Reference](GIST_QUICK_REFERENCE.md)** - One-page gist cheatsheet
@@ -82,26 +83,31 @@ sudo apt install ./tera_*.deb
 
 ### File Locations
 
-```
+```text
 ~/.config/tera/
 ├── favorite/
 │   ├── My-favorites.json    # Your favorites
 │   └── *.json              # Custom lists
-└── gist_metadata.json      # Saved gists (auto-created)
+├── tokens/
+│   └── github_token         # GitHub token (secure storage)
+└── gist_metadata.json       # Saved gists (auto-created)
 
 ~/.cache/tera/
-└── radio_searches.json     # Search cache
+└── radio_searches.json      # Search cache
 ```
 
-### GitHub Token (Optional)
+### GitHub Token Setup (For Gist Features)
 
-For gist features, create `.env` in TERA directory:
+**Interactive Setup (Recommended):**
+1. Run TERA
+2. Select `6) Gist`
+3. Select `1) Token Management`
+4. Choose `1) Setup/Change Token`
+5. Follow the prompts
 
-```bash
-GITHUB_TOKEN="your_token_here"
-```
+Token is stored securely in `~/.config/tera/tokens/github_token`
 
-See [Gist Setup](GIST_SETUP.md) for details.
+See [Token Management Guide](TOKEN_MANAGEMENT.md) for complete details.
 
 ---
 
@@ -130,21 +136,21 @@ See [Gist Setup](GIST_SETUP.md) for details.
 
 ## Navigation Quick Reference
 
-| Context     | Action       | Key/Command      |
-| ----------- | ------------ | ---------------- |
-| Any menu    | Navigate     | Arrow keys ↑↓    |
-| Any menu    | Select       | Enter            |
-| Any menu    | Go back      | ESC              |
-| Text prompt | Go back      | `0`              |
-| Text prompt | Main menu    | `00`             |
-| Text prompt | Go back      | Empty + Enter    |
-| Playing     | Pause/Resume | Space            |
-| Playing     | Quit         | `q`              |
-| Playing     | Volume +/-   | `9` / `0`        |
+| Context                      | Action       | Key/Command                          |
+| ---------------------------- | ------------ | ------------------------------------ |
+| Any menu                     | Navigate     | Arrow keys ↑↓                        |
+| Any menu                     | Select       | Enter                                |
+| Any menu                     | Go back      | ESC                                  |
+| Text prompt (search)         | Go back      | `0` or Empty + Enter                 |
+| Text prompt (list mgmt)      | Go back      | `0` (empty shows error)              |
+| Text prompt                  | Main menu    | `00`                                 |
+| Playing                      | Pause/Resume | Space                                |
+| Playing                      | Quit         | `q`                                  |
+| Playing                      | Volume +/-   | `9` / `0`                            |
 
 **Full details:** [Navigation Guide](NAVIGATION_GUIDE.md)
 
----
+**Full details:** [Navigation Guide](NAVIGATION_GUIDE.md)
 
 ## Common Tasks
 
@@ -164,9 +170,19 @@ See [Gist Setup](GIST_SETUP.md) for details.
 
 ### Backup Lists
 
-1. Set up GitHub token (see [Gist Setup](GIST_SETUP.md))
-2. Main Menu → `6) Gist`
-3. Select `1) Create a gist`
+1. Main Menu → `6) Gist`
+2. `1) Token Management` - Set up your GitHub token (first time only)
+3. `2) Create a gist` - Backup your lists
+4. Check `3) My Gists` to see your backups
+
+### Manage Your Token
+
+1. Main Menu → `6) Gist` → `1) Token Management`
+2. Options:
+   - `1) Setup/Change Token` - Add or update token
+   - `2) View Current Token` - See masked token
+   - `3) Validate Token` - Test if token works
+   - `4) Delete Token` - Remove token securely
 
 ### Update Gist Description
 
@@ -203,11 +219,12 @@ brew upgrade fzf  # macOS
 
 ### Gist Issues
 
-- **Token not found:** Check `.env` file exists with `GITHUB_TOKEN`
-- **Failed to create:** Verify token has 'gist' scope
-- **Can't recover:** Check internet connection and URL
+- **No token set up:** Go to `6) Gist` → `1) Token Management` → `1) Setup Token`
+- **Token validation failed:** Run `3) Validate Token` to check status
+- **Failed to create gist:** Verify token is valid, check internet connection
+- **Can't recover:** Ensure gist URL is correct and token has access
 
-**Full troubleshooting:** [Gist CRUD Guide](GIST_CRUD_GUIDE.md)
+**Full troubleshooting:** [Token Management](TOKEN_MANAGEMENT.md) | [Gist CRUD Guide](GIST_CRUD_GUIDE.md)
 
 ---
 

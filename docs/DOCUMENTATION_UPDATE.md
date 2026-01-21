@@ -30,7 +30,7 @@ These files should be deleted as their content is now in other guides:
 
 ### 🎯 Recommended File Structure
 
-```
+```text
 docs/
 ├── README.md                    # Main documentation (UPDATED)
 ├── NAVIGATION_GUIDE.md          # Complete navigation reference (UPDATED)
@@ -60,15 +60,15 @@ images/                          # Can be removed (not used in docs)
 
 ### 🔄 Content Distribution
 
-| Topic | Primary Location | Also Mentioned |
-|-------|-----------------|----------------|
-| Installation | README.md | - |
-| Basic navigation | README.md (quick ref) | NAVIGATION_GUIDE.md (complete) |
-| List management | NAVIGATION_GUIDE.md | README.md (brief) |
-| Quick play favorites | FAVORITES.md | README.md (brief) |
-| Gist features | GIST_SETUP.md | README.md (brief) |
-| Duplicate detection | CHANGELOG.md | README.md (features) |
-| Version info | README.md | tera script |
+| Topic                | Primary Location      | Also Mentioned                 |
+| -------------------- | --------------------- | ------------------------------ |
+| Installation         | README.md             | -                              |
+| Basic navigation     | README.md (quick ref) | NAVIGATION_GUIDE.md (complete) |
+| List management      | NAVIGATION_GUIDE.md   | README.md (brief)              |
+| Quick play favorites | FAVORITES.md          | README.md (brief)              |
+| Gist features        | GIST_SETUP.md         | README.md (brief)              |
+| Duplicate detection  | CHANGELOG.md          | README.md (features)           |
+| Version info         | README.md             | tera script                    |
 
 ### ✨ Key Improvements
 
@@ -101,7 +101,7 @@ rm README_UPDATES.md
 
 After cleanup, users will have:
 
-```
+```text
 docs/
 ├── README.md              # Main entry point ⭐
 ├── NAVIGATION_GUIDE.md    # Navigation reference

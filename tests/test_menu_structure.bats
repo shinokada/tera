@@ -61,7 +61,7 @@ teardown() {
     # Check that Main Menu is at position 0
     grep -q '0) Main Menu' ../lib/gistlib.sh
     grep -q '1) Create a gist' ../lib/gistlib.sh
-    grep -q '6) Exit' ../lib/gistlib.sh
+    grep -q '7) Exit' ../lib/gistlib.sh
 }
 
 @test "Play function has Main Menu option in list selection" {

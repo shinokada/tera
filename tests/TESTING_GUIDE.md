@@ -17,7 +17,7 @@ A comprehensive test suite has been created to validate all recent improvements 
 
 ## 📁 Test Files Created
 
-```
+```text
 tests/
 ├── README.md                    # Test documentation
 ├── TEST_COVERAGE.md            # Detailed coverage documentation
