@@ -83,7 +83,7 @@ sudo apt install ./tera_*.deb
 
 ### File Locations
 
-```
+```text
 ~/.config/tera/
 ├── favorite/
 │   ├── My-favorites.json    # Your favorites
@@ -106,12 +106,6 @@ sudo apt install ./tera_*.deb
 5. Follow the prompts
 
 Token is stored securely in `~/.config/tera/tokens/github_token`
-
-**Or use .env file (for development):**
-```bash
-cp .env.example .env
-# Edit .env and add: GITHUB_TOKEN="your_token_here"
-```
 
 See [Token Management Guide](TOKEN_MANAGEMENT.md) for complete details.
 

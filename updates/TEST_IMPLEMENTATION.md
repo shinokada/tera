@@ -48,7 +48,7 @@ bats test_station_names.bats
 ```
 
 Expected output:
-```
+```text
  ✓ station names have whitespace trimmed
  ✓ stations are sorted alphabetically (case-insensitive)
  ✓ jq gsub pattern correctly trims whitespace

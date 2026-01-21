@@ -15,7 +15,7 @@ The GitHub token management system has been fully implemented, comprehensively t
 | **Documentation**  | 8 guides + 2 implementation summaries           |
 | **Code Quality**   | All scripts pass syntax validation              |
 | **Security**       | File perms 600, directory perms 700             |
-| **Compatibility**  | Works with all install methods + legacy .env    |
+| **Compatibility**  | Works with all install methods                  |
 
 ---
 
@@ -38,7 +38,7 @@ The GitHub token management system has been fully implemented, comprehensively t
 
 ## Test Results Summary
 
-```
+```text
 Total Tests: 22
 Passing: 22 (100%)
 Failing: 0
@@ -85,7 +85,6 @@ Test Categories:
 ✓ Homebrew package  
 ✓ Debian (.deb) package  
 ✓ /awesome package manager  
-✓ Legacy .env files (backward compatible)
 
 ---
 
@@ -137,7 +136,7 @@ bats -t tests/test_token_management.bats
 ```
 
 ### Sample Test Output
-```
+```text
 1..22
 ok 1 init_token_directory creates tokens directory
 ok 2 save_github_token saves token to file
@@ -178,15 +177,12 @@ ok 22 delete followed by file check
 
 ## Key Improvements Over Legacy System
 
-| Feature           | Before                     | After                        |
-| ----------------- | -------------------------- | ---------------------------- |
-| **Token Storage** | .env file (unencrypted)    | Secure directory (600 perms) |
-| **Security**      | Anyone could read .env     | Only owner can access        |
-| **Installation**  | Manual .env setup required | Interactive menu setup       |
-| **UI**            | None - edit file manually  | Full menu system             |
-| **Validation**    | None                       | GitHub API testing           |
-| **Tests**         | None                       | 22 comprehensive tests       |
-| **Documentation** | Minimal                    | 2000+ lines                  |
+| Feature           | Before                    | After                  |
+| ----------------- | ------------------------- | ---------------------- |
+| **UI**            | None - edit file manually | Full menu system       |
+| **Validation**    | None                      | GitHub API testing     |
+| **Tests**         | None                      | 22 comprehensive tests |
+| **Documentation** | Minimal                   | 2000+ lines            |
 
 ---
 
@@ -276,7 +272,6 @@ The GitHub token management system is **production-ready** with:
 - ✅ Extensive documentation (8 files, 2000+ lines)
 - ✅ Clean code organization (no root pollution)
 - ✅ Security best practices (encrypted permissions)
-- ✅ Full backward compatibility (legacy .env works)
 
 **Recommended Action:** Deploy to production immediately.
 

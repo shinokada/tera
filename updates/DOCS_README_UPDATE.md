@@ -111,12 +111,12 @@
 
 ## Total Changes
 
-| Section | Lines Added | Lines Changed | Purpose |
-|---------|-------------|---------------|---------|
-| Feature Guides | +1 | +1 | Added Update guide link, updated CRUD description |
-| Gist Features | +1 | +1 | Added Update feature, removed (NEW) tag, reordered |
-| Common Tasks | +6 | 0 | Added Update task section |
-| **Total** | **+8** | **+2** | Minimal, focused updates |
+| Section        | Lines Added | Lines Changed | Purpose                                            |
+| -------------- | ----------- | ------------- | -------------------------------------------------- |
+| Feature Guides | +1          | +1            | Added Update guide link, updated CRUD description  |
+| Gist Features  | +1          | +1            | Added Update feature, removed (NEW) tag, reordered |
+| Common Tasks   | +6          | 0             | Added Update task section                          |
+| **Total**      | **+8**      | **+2**        | Minimal, focused updates                           |
 
 ---
 
@@ -133,7 +133,7 @@ To keep it concise, we did NOT:
 
 ## Documentation Structure (After Update)
 
-```
+```text
 docs/
 ├── README.md                      ← UPDATED (main index, concise)
 ├── GIST_SETUP.md                  (setup instructions)

@@ -14,7 +14,6 @@ All requirements have been successfully implemented, tested, and documented.
 - [x] Token masking for display (ghp_...xxxx format)
 - [x] Token validation (API testing capability)
 - [x] Menu integration (interactive UI)
-- [x] Backward compatibility (.env files still work)
 - [x] All installation methods supported (source, brew, .deb, /awesome)
 
 ### 2. Testing ✓
@@ -68,12 +67,12 @@ All requirements have been successfully implemented, tested, and documented.
 ## File Structure
 
 ### Root Directory (Clean ✓)
-```
+```text
 CLAUDE.md (pre-existing)
 ```
 
 ### Documentation Files
-```
+```text
 docs/
   ├── TOKEN_MANAGEMENT.md (2000+ lines, comprehensive guide)
   ├── TOKEN_MANAGEMENT_VISUAL_GUIDE.md (visual reference)
@@ -82,7 +81,7 @@ docs/
 ```
 
 ### Update/Tracking Documents
-```
+```text
 updates/
   ├── TOKEN_MANAGEMENT_IMPLEMENTATION.md (dev reference)
   ├── TOKEN_MANAGEMENT_TESTING.md (QA checklist)
@@ -93,14 +92,14 @@ updates/
 ```
 
 ### Test Files
-```
+```text
 tests/
   ├── test_token_management.bats (22 tests, all passing)
   └── (other existing test files)
 ```
 
 ### Core Implementation
-```
+```text
 lib/
   ├── gist_storage.sh (token storage functions)
   ├── gistlib.sh (token management UI)
@@ -139,7 +138,6 @@ tera (main script - updated token loading)
 5. `delete_token_interactive()` - Guided deletion
 
 ### Script Updates
-- **tera:** Updated token loading logic (checks .env, then secure storage)
 - **gist_menu:** Added token management option to main menu
 
 ---
@@ -152,7 +150,7 @@ bats tests/test_token_management.bats
 ```
 
 ### Sample Output
-```
+```text
  ✓ init_token_directory creates tokens directory
  ✓ save_github_token saves token to file
  ✓ save_github_token overwrites existing token
@@ -202,7 +200,6 @@ bats tests/test_token_management.bats
 - Interactive setup menu
 - Clear status indicators
 - Guided deletion process
-- Backward compatible with .env
 - Works with all installation methods
 
 ### Reliability ✓

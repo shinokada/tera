@@ -124,7 +124,7 @@ jq --arg name "$STATION_NAME" 'del(.[] | select(.name | gsub("^\\s+|\\s+$";"") =
 ## Example Before/After
 
 ### Before:
-```
+```text
 1) SmoothJazz.com 64k aac+
 2)   BBC Radio 1
 3) Jazz FM
@@ -132,7 +132,7 @@ jq --arg name "$STATION_NAME" 'del(.[] | select(.name | gsub("^\\s+|\\s+$";"") =
 ```
 
 ### After:
-```
+```text
 1) BBC Radio 1
 2) Classical Music
 3) Jazz FM

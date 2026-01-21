@@ -1,7 +1,7 @@
 # TERA Gist Features - Quick Reference
 
 ## Gist Menu Access
-```
+```text
 Main Menu → 6) Gist
 ```
 
@@ -31,7 +31,7 @@ Main Menu → 6) Gist
 - Press Enter → Back to menu
 
 **Example:**
-```
+```text
  1) Terminal radio favorite lists | 2026-01-19 10:30
  2) Terminal radio favorite lists | 2026-01-18 15:45
 ```
@@ -43,7 +43,7 @@ Main Menu → 6) Gist
 **Two ways:**
 
 #### A) Select from your saved gists
-```
+```text
 Your saved gists:
  1) Gist from Jan 19
  2) Gist from Jan 18
@@ -52,7 +52,7 @@ Enter: 1          ← Type the number
 ```
 
 #### B) Enter any gist URL
-```
+```text
 Enter: https://gist.github.com/user/abc123
 ```
 
@@ -76,14 +76,14 @@ Enter: https://gist.github.com/user/abc123
 
 ## Quick Commands
 
-| Want to... | Do this |
-|-----------|---------|
-| Backup lists | Create a gist |
-| See all backups | My Gists |
-| Restore from backup | Recover (select number) |
-| Import from friend | Recover (enter URL) |
-| Remove old backup | Delete a gist |
-| Open gist in browser | My Gists → type number |
+| Want to...           | Do this                 |
+| -------------------- | ----------------------- |
+| Backup lists         | Create a gist           |
+| See all backups      | My Gists                |
+| Restore from backup  | Recover (select number) |
+| Import from friend   | Recover (enter URL)     |
+| Remove old backup    | Delete a gist           |
+| Open gist in browser | My Gists → type number  |
 
 ---
 
@@ -99,7 +99,7 @@ Enter: https://gist.github.com/user/abc123
 
 ## File Locations
 
-```
+```text
 ~/.config/tera/
 ├── gist_metadata.json     ← Your gist list
 ├── favorite/
@@ -113,12 +113,12 @@ Enter: https://gist.github.com/user/abc123
 ## Common Workflows
 
 ### Backup Your Lists
-```
+```text
 Main Menu → Gist → Create a gist
 ```
 
 ### Share with a Friend
-```
+```text
 1. Main Menu → Gist → My Gists
 2. Type number to open in browser
 3. Copy URL from browser
@@ -127,13 +127,13 @@ Main Menu → Gist → Create a gist
 ```
 
 ### Sync Two Computers
-```
+```text
 Computer A: Create a gist
 Computer B: Recover from that gist URL
 ```
 
 ### Clean Up Old Gists
-```
+```text
 Main Menu → Gist → My Gists
 (note which ones to delete)
 Main Menu → Gist → Delete a gist
@@ -154,9 +154,6 @@ Main Menu → Gist → Delete a gist
 ---
 
 ## Troubleshooting
-
-### "GitHub token not found"
-→ Create `.env` file with your token
 
 ### "Failed to create gist"
 → Check your GitHub token is valid and has 'gist' scope

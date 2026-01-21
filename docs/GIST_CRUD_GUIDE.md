@@ -4,26 +4,11 @@ Managing your favorite radio station lists with GitHub Gists.
 
 ---
 
-## Setup
-
-### GitHub Token Required
-
-Create `.env` in TERA directory:
-
-```bash
-cp .env.example .env
-# Add your token: GITHUB_TOKEN="your_token_here"
-```
-
-**Get token:** https://github.com/settings/tokens (select 'gist' scope)
-
----
-
 ## Gist Menu
 
 Access: Main Menu → `6) Gist`
 
-```
+```text
 TERA GIST MENU
 
 You have 3 saved gist(s)
@@ -49,7 +34,7 @@ Backs up all your lists to a private GitHub Gist.
 - Opens in browser automatically
 
 **Result:**
-```
+```text
 ✓ Successfully created a secret Gist!
 Gist URL: https://gist.github.com/username/abc123
 ```
@@ -61,7 +46,7 @@ Gist URL: https://gist.github.com/username/abc123
 Lists all your saved gists with creation dates.
 
 **Display:**
-```
+```text
  1) Terminal radio favorite lists | 2026-01-19 10:30
  2) Terminal radio favorite lists | 2026-01-18 15:45
  3) Terminal radio favorite lists | 2026-01-17 09:20
@@ -80,7 +65,7 @@ Import lists from any gist.
 **Two Options:**
 
 **A) Select from saved gists:**
-```
+```text
 Your saved gists:
  1) Gist from Jan 19 (2026-01-19 10:30)
  2) Gist from Jan 18 (2026-01-18 15:45)
@@ -89,7 +74,7 @@ Enter gist number or URL: 1
 ```
 
 **B) Enter any URL:**
-```
+```text
 Enter gist number or URL: https://gist.github.com/user/xyz789
 ```
 
@@ -114,23 +99,23 @@ Removes gist from GitHub and local metadata.
 ## Use Cases
 
 ### Backup
-```
+```text
 After adding stations → Create a gist
 ```
 
 ### Share
-```
+```text
 My Gists → Type number → Copy URL → Share
 ```
 
 ### Sync Devices
-```
+```text
 Device A: Create a gist
 Device B: Recover from that gist
 ```
 
 ### Cleanup
-```
+```text
 Delete a gist → Remove old backups
 ```
 
@@ -148,7 +133,7 @@ All screens support:
 
 ## File Locations
 
-```
+```text
 ~/.config/tera/
 ├── gist_metadata.json     # Your gist list
 └── favorite/
@@ -158,9 +143,6 @@ All screens support:
 ---
 
 ## Troubleshooting
-
-### "GitHub token not found"
-→ Create `.env` file with your token
 
 ### "Failed to create gist"
 → Check token is valid and has 'gist' scope

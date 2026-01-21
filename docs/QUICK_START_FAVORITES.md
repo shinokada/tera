@@ -47,7 +47,7 @@ jq '.[1]' lib/sample.json | ./add_favorite.sh -
 
 Restart TERA and you'll see your favorites in the main menu:
 
-```
+```text
 TERA MAIN MENU
 
 1) Play from my list

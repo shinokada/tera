@@ -89,16 +89,6 @@ brew install bats-core jq  # macOS
 sudo apt install bats jq   # Linux
 ```
 
-### Gist Features Fail
-```bash
-# Check token
-cat .env | grep GITHUB_TOKEN
-
-# Test token
-curl -H "Authorization: Bearer $GITHUB_TOKEN" \
-     https://api.github.com/user
-```
-
 ### Metadata Issues
 ```bash
 # Reset metadata

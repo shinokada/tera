@@ -36,7 +36,7 @@
 - Enhanced `recover_gist()` - Quick selection
 
 **Menu structure:**
-```
+```text
 1) Create a gist          [Enhanced]
 2) My Gists               [NEW]
 3) Recover favorites      [Enhanced]

@@ -9,7 +9,7 @@ TERA now provides a complete token management system with a user-friendly menu i
 ### Storage Location
 
 Tokens are stored in a secure directory:
-```
+```text
 ~/.config/tera/tokens/github_token
 ```
 
@@ -22,7 +22,7 @@ Tokens are stored in a secure directory:
 
 ### File Structure
 
-```
+```text
 ~/.config/tera/
 ├── favorite/           # Your favorite lists
 ├── tokens/             # Token storage
@@ -107,7 +107,7 @@ Tokens are stored in a secure directory:
 
 ### First-Time Setup
 
-```
+```text
 TERA MAIN MENU
   6) Gist
     1) Token Management
@@ -121,7 +121,7 @@ TERA MAIN MENU
 
 ### Validating After Update
 
-```
+```text
 Token Management
   3) Validate Token
     → Tests current token
@@ -131,7 +131,7 @@ Token Management
 
 ### Rotating Token (Security Best Practice)
 
-```
+```text
 1. On GitHub Settings:
    - Revoke old token
    - Generate new token
@@ -149,7 +149,7 @@ Token Management
 
 ### Switching GitHub Accounts
 
-```
+```text
 Token Management
   4) Delete Token
     → Confirms deletion
@@ -205,7 +205,7 @@ Token Management
 - When sharing machine access
 
 **How to Rotate:**
-```
+```text
 1. Generate new token on GitHub
 2. TERA → Token Management → Setup/Change Token
 3. Paste new token
@@ -218,7 +218,7 @@ Token Management
 ### "Token validation failed"
 
 **Causes and Solutions:**
-```
+```text
 1. Token too short
    → Copy full token from GitHub (should be ~40+ chars)
 
@@ -244,7 +244,7 @@ Token Management
 ### "Token not found" errors when using Gist features
 
 **Causes and Solutions:**
-```
+```text
 1. Token was deleted
    → Run Token Management → Setup Token
 
@@ -265,7 +265,7 @@ Token Management
 ### Token works, but Gist creation fails
 
 **Troubleshooting:**
-```
+```text
 1. Validate token first:
    → Token Management → Validate Token
    → Should show "✓ Token is VALID!"
@@ -302,25 +302,6 @@ Once token is configured, you can use all Gist features:
 | Recover gist | ✓ Yes          | No                   |
 | Update gist  | ✓ Yes          | No                   |
 | Delete gist  | ✓ Yes          | No                   |
-
-## Advanced: Using .env File Instead
-
-If you prefer the environment variable approach:
-
-```bash
-# In your TERA directory
-cp .env.example .env
-
-# Edit .env
-GITHUB_TOKEN=ghp_YourActualTokenHere123456789
-
-# TERA will load from .env if no token in ~/.config/tera/tokens/
-```
-
-**Priority Order:**
-1. `.env` file (if exists in TERA directory)
-2. `~/.config/tera/tokens/github_token` (secure storage)
-3. No token (features disabled)
 
 ## Environment Variables
 

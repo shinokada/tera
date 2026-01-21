@@ -71,7 +71,7 @@ All designed to pass.
 ## Menu Comparison
 
 ### Before
-```
+```text
 1) Create a gist
 2) Recover favorites
 3) Exit
@@ -82,7 +82,7 @@ All designed to pass.
 ```
 
 ### After
-```
+```text
 You have 3 saved gist(s)
 
 1) Create a gist          [Enhanced]

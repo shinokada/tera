@@ -19,7 +19,7 @@ Added standard navigation inputs that work across all operations:
 
 ### 2. **Clear User Guidance**
 Each operation now displays:
-```
+```text
 Type '0' to go back, '00' for main menu
 ```
 
@@ -154,7 +154,7 @@ esac
 ## User Experience
 
 ### Creating a List - Before:
-```
+```text
 My lists: 
 jazz
 rock
@@ -163,7 +163,7 @@ Type a new list name: [STUCK - must enter something]
 ```
 
 ### Creating a List - After:
-```
+```text
 TERA - Create New List
 
 My lists: 
@@ -176,7 +176,7 @@ Type a new list name: 0
 ```
 
 ### Deleting a List - After:
-```
+```text
 TERA - Delete List
 
 My lists: 
@@ -191,7 +191,7 @@ Cannot delete My-favorites list!
 ```
 
 ### Editing a List - After:
-```
+```text
 TERA - Edit List Name
 
 My lists: 
@@ -221,12 +221,12 @@ Updated the list name.
 
 ## Navigation Summary
 
-| Input | Action |
-|-------|--------|
-| `0` or `back` | Return to List Menu |
-| `00` or `main` | Return to Main Menu |
+| Input              | Action                                  |
+| ------------------ | --------------------------------------- |
+| `0` or `back`      | Return to List Menu                     |
+| `00` or `main`     | Return to Main Menu                     |
 | Empty (just Enter) | Shows error, stays in current operation |
-| ESC in fzf menu | Returns to previous menu |
+| ESC in fzf menu    | Returns to previous menu                |
 
 ## Protected Operations
 

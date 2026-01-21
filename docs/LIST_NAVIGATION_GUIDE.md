@@ -6,12 +6,12 @@ When working with lists in TERA, you now have easy ways to navigate back:
 
 ### Navigation Commands
 
-| What to Type | What Happens |
-|--------------|--------------|
-| `0` | Go back to List Menu |
-| `00` | Go to Main Menu |
-| `back` | Go back to List Menu (alternative) |
-| `main` | Go to Main Menu (alternative) |
+| What to Type             | What Happens                         |
+| ------------------------ | ------------------------------------ |
+| `0`                      | Go back to List Menu                 |
+| `00`                     | Go to Main Menu                      |
+| `back`                   | Go back to List Menu (alternative)   |
+| `main`                   | Go to Main Menu (alternative)        |
 | Just press Enter (empty) | Shows error, stays in current screen |
 
 ### Where These Work
@@ -24,7 +24,7 @@ When working with lists in TERA, you now have easy ways to navigate back:
 
 ### Example 1: Canceling List Creation
 
-```
+```text
 TERA - Create New List
 
 My lists: 
@@ -39,7 +39,7 @@ Type a new list name: 0
 
 ### Example 2: Going to Main Menu from Delete
 
-```
+```text
 TERA - Delete List
 
 My lists: 
@@ -54,7 +54,7 @@ Type a list name to delete: 00
 
 ### Example 3: Canceling Edit Operation
 
-```
+```text
 TERA - Edit List Name
 
 My lists: 
@@ -76,25 +76,25 @@ Type a new name: 0
 Some operations are protected for your safety:
 
 ### ❌ Cannot Delete My-favorites
-```
+```text
 Type a list name to delete: My-favorites
 Cannot delete My-favorites list!
 ```
 
 ### ❌ Cannot Rename My-favorites
-```
+```text
 Type a list name to edit: My-favorites
 Cannot rename My-favorites list!
 ```
 
 ### ❌ Cannot Create Duplicate Lists
-```
+```text
 Type a new list name: jazz
 List 'jazz' already exists!
 ```
 
 ### ❌ Cannot Use Empty Names
-```
+```text
 Type a new list name: 
 List name cannot be empty.
 ```
@@ -109,7 +109,7 @@ List name cannot be empty.
 ## Common Workflows
 
 ### Creating Multiple Lists
-```
+```text
 Main Menu → List Menu → Create → Type name → (created)
                 ↑                                    |
                 └────────────────────────────────────┘
@@ -117,12 +117,12 @@ Automatically returns to List Menu, ready to create another
 ```
 
 ### Quick Cancel
-```
+```text
 Main Menu → List Menu → Create → Type '00' → Back to Main Menu
 ```
 
 ### Edit with Cancel
-```
+```text
 List Menu → Edit → Type list name → Type '0' → Back to List Menu
                                               (no changes made)
 ```

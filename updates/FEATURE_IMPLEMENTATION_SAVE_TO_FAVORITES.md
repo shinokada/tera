@@ -15,7 +15,7 @@ Users can now easily save stations they just listened to into Quick Play Favorit
 ## User Experience
 
 ### Before This Feature
-```
+```text
 1. User plays station from "Play from My List"
 2. Station plays
 3. User presses 'q' to quit
@@ -26,7 +26,7 @@ Users can now easily save stations they just listened to into Quick Play Favorit
 ```
 
 ### After This Feature
-```
+```text
 1. User plays station from "Play from My List"
 2. Station plays
 3. User presses 'q' to quit
@@ -170,7 +170,7 @@ _play "$URL_RESOLVED" "" ""  # Empty strings = no prompt
    - Press `q` to quit when done
 
 3. **Save prompt appears** (if not already in favorites)
-   ```
+   ```text
    Did you enjoy this station?
    
    Station: [Station Name]
@@ -193,7 +193,7 @@ _play "$URL_RESOLVED" "" ""  # Empty strings = no prompt
 
 Stations added to Quick Play Favorites appear in the Main Menu:
 
-```
+```text
 TERA MAIN MENU
 
 1) Play from my list

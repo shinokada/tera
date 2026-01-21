@@ -30,13 +30,11 @@ Enhanced menu structure and added token management functions:
 ### 3. **tera (main script)**
 Updated token loading logic:
 - Load token from secure storage after libs are loaded
-- Fallback to .env file if no token in secure storage
 - Export GITHUB_TOKEN for use throughout app
 
 ### 4. **docs/GIST_SETUP.md**
 Complete rewrite with new approach:
 - Option 1: Interactive setup (recommended)
-- Option 2: .env file approach (for developers)
 - Token Management menu options explained
 - Security best practices
 - Troubleshooting guide
@@ -72,7 +70,6 @@ Updated main documentation:
 
 ### User Experience
 ✓ Interactive menu-driven setup  
-✓ No manual .env file editing required  
 ✓ Immediate validation feedback  
 ✓ Shows GitHub username on success  
 ✓ Works with all installation methods  
@@ -89,7 +86,7 @@ Updated main documentation:
 ## Menu Structure
 
 ### Main Menu (6) Gist
-```
+```text
 New option: 1) Token Management
 Existing options: 2) Create a gist
                  3) My Gists
@@ -99,7 +96,7 @@ Existing options: 2) Create a gist
 ```
 
 ### Token Management Submenu (New)
-```
+```text
 1) Setup/Change Token    - Add/update GitHub token
 2) View Current Token    - Check masked token
 3) Validate Token        - Test token with GitHub
@@ -111,25 +108,24 @@ Existing options: 2) Create a gist
 ## Token Storage
 
 ### Location
-```
+```text
 ~/.config/tera/tokens/github_token
 ```
 
 ### File Permissions
-```
+```text
 -rw------- (600)  # Owner read/write only
 ```
 
 ### Load Priority
-1. Check `.env` file (if exists in script dir)
-2. Check secure storage (`~/.config/tera/tokens/github_token`)
-3. No token if neither exists
+1. Check secure storage (`~/.config/tera/tokens/github_token`)
+2. No token if neither exists
 
 ---
 
 ## Validation Flow
 
-```
+```text
 User enters token
     ↓
 Format validation (length, "ghp_" prefix)
@@ -139,16 +135,6 @@ GitHub API test (curl to /user endpoint)
 Success: Show username, save token
 Failure: Show error details, offer retry
 ```
-
----
-
-## Migration from Old System
-
-For users with `.env` file:
-1. `.env` tokens still work (backward compatible)
-2. TERA checks .env first
-3. Users can migrate anytime via Token Management menu
-4. Old .env file can be deleted after migration
 
 ---
 
@@ -182,7 +168,6 @@ For users with `.env` file:
 - [x] View masked token
 - [x] Validate token against GitHub API
 - [x] Delete token securely
-- [x] Backward compatibility with .env
 - [x] Documentation complete
 
 ---
@@ -205,7 +190,7 @@ For users with `.env` file:
 ## User Experience Flow
 
 ### First-Time User
-```
+```text
 Launch tera
   → Select "6) Gist"
   → Select "1) Token Management"
@@ -217,7 +202,7 @@ Launch tera
 ```
 
 ### Change Token
-```
+```text
 Token Management
   → "1) Setup/Change Token"
   → Prompt: "Replace existing token?"
@@ -226,22 +211,12 @@ Token Management
 ```
 
 ### Validate Token
-```
+```text
 Token Management
   → "3) Validate Token"
   → "Testing token with GitHub API..."
   → "✓ Token is VALID! GitHub user: username"
 ```
-
----
-
-## Backward Compatibility
-
-✓ Existing `.env` files still work  
-✓ Can have both `.env` and secure storage  
-✓ `.env` takes priority if both exist  
-✓ No breaking changes to Gist functionality  
-✓ All existing gists remain accessible  
 
 ---
 
@@ -251,7 +226,6 @@ Token Management
 - Gist metadata system
 - All other features
 - Tests and test infrastructure
-- .env.example (still useful as reference)
 
 ---
 
@@ -263,7 +237,6 @@ This implementation provides a secure, user-friendly token management system tha
 2. **No manual file editing** - Interactive menu-driven setup
 3. **Secure by default** - 600 file permissions, hidden input
 4. **Easy to manage** - Setup, view, validate, delete options
-5. **Backward compatible** - Existing .env files still work
-6. **Well documented** - Comprehensive guides and troubleshooting
+5. **Well documented** - Comprehensive guides and troubleshooting
 
 Users can now manage their GitHub tokens entirely through TERA's UI without touching configuration files.

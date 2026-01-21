@@ -94,23 +94,15 @@ New: [TERA] Production radio stations for work
 
 ## What Gets Updated
 
-| Component | Updated? | Where? |
-|-----------|----------|--------|
-| Gist description on GitHub | ✅ Yes | GitHub.com |
-| Local metadata | ✅ Yes | ~/.config/tera/gist_metadata.json |
-| Gist files (JSON content) | ❌ No | Not yet implemented |
-| Gist URL | ❌ No | URLs are permanent |
-| Created date | ❌ No | Original creation date preserved |
+| Component                  | Updated? | Where?                            |
+| -------------------------- | -------- | --------------------------------- |
+| Gist description on GitHub | ✅ Yes    | GitHub.com                        |
+| Local metadata             | ✅ Yes    | ~/.config/tera/gist_metadata.json |
+| Gist files (JSON content)  | ❌ No     | Not yet implemented               |
+| Gist URL                   | ❌ No     | URLs are permanent                |
+| Created date               | ❌ No     | Original creation date preserved  |
 
 ## Error Messages
-
-### "GitHub token not found"
-**Problem:** No authentication configured
-**Solution:**
-```bash
-cp .env.example .env
-# Edit .env and add your GitHub token
-```
 
 ### "Invalid choice"
 **Problem:** Entered number out of range
@@ -125,9 +117,8 @@ cp .env.example .env
 - Gist was deleted on GitHub
 
 **Solution:**
-1. Check your GitHub token in `.env`
-2. Verify internet connection
-3. Try listing your gists first (`My Gists`)
+1. Verify internet connection
+2. Try listing your gists first (`My Gists`)
 
 ## Technical Details
 
@@ -150,11 +141,11 @@ PATCH https://api.github.com/gists/{gist_id}
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `0` | Back to Gist Menu |
-| `Enter` (empty) | Cancel operation |
-| `1-9` | Select gist by number |
+| Key             | Action                |
+| --------------- | --------------------- |
+| `0`             | Back to Gist Menu     |
+| `Enter` (empty) | Cancel operation      |
+| `1-9`           | Select gist by number |
 
 ## Related Commands
 

@@ -36,7 +36,6 @@ git pull origin main
    - `lib/gist_storage.sh`
    - `tests/test_integration.bats`
    - `tests/test_menu_structure.bats`
-3. Keep your existing `.env` and data files
 
 ---
 
@@ -47,7 +46,6 @@ git pull origin main
 - All existing gists will work
 - No data migration needed
 - Existing metadata format unchanged
-- Your `.env` configuration unchanged
 
 ### System Requirements
 - Same as before (bash, jq, curl, git)

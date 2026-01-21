@@ -69,7 +69,7 @@ bats -t tests/test_token_management.bats
 ```
 
 ## Test Results Summary
-```
+```text
 1..22
 ok 1 init_token_directory creates tokens directory
 ok 2 save_github_token saves token to file
@@ -145,4 +145,3 @@ Potential additional tests:
 - Integration tests with actual GitHub API (network-dependent)
 - Performance tests for token validation
 - Concurrent access tests
-- Migration tests from .env to secure storage

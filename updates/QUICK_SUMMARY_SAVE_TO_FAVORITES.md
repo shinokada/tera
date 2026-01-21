@@ -6,7 +6,7 @@
 
 After playing any station and pressing `q`, you'll see:
 
-```
+```text
 Did you enjoy this station?
 
 Station: Jazz FM 91.1
@@ -22,12 +22,12 @@ Select option 1 to instantly save to Quick Play Favorites!
 
 ## Files Modified
 
-| File | Changes | Purpose |
-|------|---------|---------|
-| `lib/lib.sh` | +76 lines | Core functions for prompting and saving |
-| `lib/play.sh` | 1 line | Pass station data when playing |
+| File            | Changes    | Purpose                                     |
+| --------------- | ---------- | ------------------------------------------- |
+| `lib/lib.sh`    | +76 lines  | Core functions for prompting and saving     |
+| `lib/play.sh`   | 1 line     | Pass station data when playing              |
 | `lib/search.sh` | Simplified | Use new _play signature, removed old prompt |
-| `lib/lucky.sh` | No changes | Already works via _search_play |
+| `lib/lucky.sh`  | No changes | Already works via _search_play              |
 
 **Total:** ~80 lines added
 
@@ -57,7 +57,7 @@ _add_to_quick_favorites()    # Adds to My-favorites.json
 
 ## User Flow
 
-```
+```text
 Play station → Enjoy it → Press q
        ↓
    See prompt

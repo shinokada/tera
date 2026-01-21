@@ -82,7 +82,7 @@ cd ~/Bash/tera
 ## Expected Results
 
 ### Before
-```
+```text
 Play from My List:
 1)   BBC Radio 1
 2) Jazz FM
@@ -91,7 +91,7 @@ Play from My List:
 ```
 
 ### After
-```
+```text
 Play from My List:
 1) BBC Radio 1
 2) Classical Music
@@ -102,7 +102,7 @@ Play from My List:
 ## Test Results Expected
 
 When running `bats test_station_names.bats`:
-```
+```text
  ✓ station names have whitespace trimmed
  ✓ stations are sorted alphabetically (case-insensitive)
  ✓ jq gsub pattern correctly trims whitespace
@@ -167,7 +167,7 @@ sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 
 ## Documentation Structure
 
-```
+```text
 tera/
 ├── tests/
 │   ├── test_station_names.bats (NEW - 15 automated tests)

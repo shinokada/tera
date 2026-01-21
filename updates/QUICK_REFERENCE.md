@@ -18,12 +18,12 @@ cd ~/Bash/tera
 
 ## 📋 What Changed
 
-| Feature | Before | After |
-|---------|--------|-------|
-| **Station Names** | `  SmoothJazz.com  ` | `SmoothJazz.com` |
-| **List Order** | Random (FIFO) | Alphabetical A-Z |
-| **Display** | Inconsistent spacing | Clean & consistent |
-| **Selection** | Index-based (fragile) | Name-based (robust) |
+| Feature           | Before                | After               |
+| ----------------- | --------------------- | ------------------- |
+| **Station Names** | `  SmoothJazz.com  `  | `SmoothJazz.com`    |
+| **List Order**    | Random (FIFO)         | Alphabetical A-Z    |
+| **Display**       | Inconsistent spacing  | Clean & consistent  |
+| **Selection**     | Index-based (fragile) | Name-based (robust) |
 
 ## ✅ Checklist
 
@@ -72,7 +72,7 @@ cd .. && ./tera
 
 ## 📊 Expected Test Output
 
-```
+```text
 ✓ station names have whitespace trimmed
 ✓ stations are sorted alphabetically
 ✓ jq gsub pattern works
@@ -110,12 +110,12 @@ jq --arg name "$NAME" '.[] | select(.name | gsub(...) == $name)'
 
 ## 📖 Documentation
 
-| Document | Purpose |
-|----------|---------|
+| Document                       | Purpose                          |
+| ------------------------------ | -------------------------------- |
 | `STATION_NAME_IMPROVEMENTS.md` | Technical implementation details |
-| `USER_GUIDE_IMPROVEMENTS.md` | User-friendly explanation |
-| `TEST_IMPLEMENTATION.md` | Testing strategy & coverage |
-| `COMPLETE_SUMMARY.md` | Full project summary |
+| `USER_GUIDE_IMPROVEMENTS.md`   | User-friendly explanation        |
+| `TEST_IMPLEMENTATION.md`       | Testing strategy & coverage      |
+| `COMPLETE_SUMMARY.md`          | Full project summary             |
 
 ## ⚡ Quick Verification
 

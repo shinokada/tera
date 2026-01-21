@@ -10,7 +10,7 @@ When you add stations to `lib/favorite.json`, they automatically appear at the b
 
 ### Main Menu Display
 
-```
+```text
 TERA MAIN MENU
 
 1) Play from my list
@@ -54,7 +54,7 @@ jq '.[0]' ~/.config/tera/favorite/jazz.json | ./add_favorite.sh -
 ```
 
 Output:
-```
+```text
 ===================================
   Favorite Radio Stations (2)
 ===================================
@@ -160,7 +160,7 @@ done
 
 ## File Structure
 
-```
+```text
 tera/
 ├── tera                    # Main script (with favorites support)
 ├── lib/

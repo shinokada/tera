@@ -56,14 +56,14 @@ grep -q '6) Exit' ../lib/gistlib.sh  # PASSES
 
 **✅ IMPLEMENTED:** All important suggestions!
 
-| Suggestion | Priority | Status | Benefit |
-|------------|----------|--------|---------|
-| Duplicate gist check | 🔴 Critical | ✅ Done | Data integrity |
-| Cross-platform dates | 🔴 Critical | ✅ Done | macOS compatibility |
-| Guard metadata save | 🟡 Important | ✅ Done | Error prevention |
+| Suggestion              | Priority    | Status | Benefit                 |
+| ----------------------- | ----------- | ------ | ----------------------- |
+| Duplicate gist check    | 🔴 Critical  | ✅ Done | Data integrity          |
+| Cross-platform dates    | 🔴 Critical  | ✅ Done | macOS compatibility     |
+| Guard metadata save     | 🟡 Important | ✅ Done | Error prevention        |
 | Remove duplicate DELETE | 🟡 Important | ✅ Done | Performance (2x faster) |
-| Remove unused variable | 🟢 Minor | ✅ Done | Code cleanliness |
-| Ensure directory exists | 🟢 Minor | ✅ Done | Robustness |
+| Remove unused variable  | 🟢 Minor     | ✅ Done | Code cleanliness        |
+| Ensure directory exists | 🟢 Minor     | ✅ Done | Robustness              |
 
 ---
 
@@ -230,13 +230,13 @@ init_gist_metadata() {
 
 ### Summary Table
 
-| File | Lines Added | Lines Changed | Lines Removed |
-|------|-------------|---------------|---------------|
-| `lib/gistlib.sh` | +124 | +3 | -8 |
-| `lib/gist_storage.sh` | +16 | +4 | -1 |
-| `tests/test_integration.bats` | 0 | +1 | 0 |
-| `tests/test_menu_structure.bats` | 0 | +1 | 0 |
-| **Total** | **+140** | **+9** | **-9** |
+| File                             | Lines Added | Lines Changed | Lines Removed |
+| -------------------------------- | ----------- | ------------- | ------------- |
+| `lib/gistlib.sh`                 | +124        | +3            | -8            |
+| `lib/gist_storage.sh`            | +16         | +4            | -1            |
+| `tests/test_integration.bats`    | 0           | +1            | 0             |
+| `tests/test_menu_structure.bats` | 0           | +1            | 0             |
+| **Total**                        | **+140**    | **+9**        | **-9**        |
 
 ### Detailed Changes
 
@@ -284,7 +284,7 @@ bats test_gist_menu_integration.bats  # ✅ All pass
 ```
 
 **Expected Results:**
-```
+```text
 ✓ All menus follow 0=Main Menu convention
 ✓ All menus have Exit at the bottom
 ✓ Gist menu has Main Menu at position 0
@@ -296,12 +296,12 @@ bats test_gist_menu_integration.bats  # ✅ All pass
 ## 5. Performance Impact
 
 ### API Call Reduction
-| Operation | Before | After | Improvement |
-|-----------|--------|-------|-------------|
-| Delete gist | 2 calls | 1 call | **50% faster** |
-| Create gist | 1 call | 1 call | Same |
-| Update gist | N/A | 1 call | New feature |
-| List gists | 0 calls | 0 calls | Same (local) |
+| Operation   | Before  | After   | Improvement    |
+| ----------- | ------- | ------- | -------------- |
+| Delete gist | 2 calls | 1 call  | **50% faster** |
+| Create gist | 1 call  | 1 call  | Same           |
+| Update gist | N/A     | 1 call  | New feature    |
+| List gists  | 0 calls | 0 calls | Same (local)   |
 
 ### Execution Time
 ```bash
@@ -318,7 +318,6 @@ Improvement: 50% faster
 ### Authentication
 - ✅ Token validation before API calls
 - ✅ Clear error messages
-- ✅ Secure token storage (.env file)
 - ✅ No tokens in error messages
 
 ### Input Validation
@@ -376,12 +375,12 @@ Improvement: 50% faster
 ## 8. Compatibility
 
 ### Operating Systems
-| OS | Status | Notes |
-|----|--------|-------|
-| Linux (GNU) | ✅ Fully supported | Primary development platform |
-| macOS (BSD) | ✅ Fully supported | Date formatting now works |
-| Windows (WSL) | ✅ Should work | Uses Linux behavior |
-| Windows (Git Bash) | ⚠️ Untested | Should work with GNU date |
+| OS                 | Status            | Notes                        |
+| ------------------ | ----------------- | ---------------------------- |
+| Linux (GNU)        | ✅ Fully supported | Primary development platform |
+| macOS (BSD)        | ✅ Fully supported | Date formatting now works    |
+| Windows (WSL)      | ✅ Should work     | Uses Linux behavior          |
+| Windows (Git Bash) | ⚠️ Untested        | Should work with GNU date    |
 
 ### Dependencies
 - `bash` >= 4.0
@@ -399,20 +398,6 @@ No migration needed! All changes are backward compatible:
 - Existing gist metadata works as-is
 - Old gists will work with new update function
 - No data structure changes
-
-### For New Users
-Standard setup process:
-```bash
-# 1. Clone repo
-git clone <repo>
-
-# 2. Setup token
-cp .env.example .env
-# Edit .env with your GitHub token
-
-# 3. Run
-./tera
-```
 
 ---
 

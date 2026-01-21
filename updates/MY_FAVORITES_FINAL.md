@@ -23,7 +23,7 @@ Based on excellent user feedback, we've made the final improvements to make TERA
 - Matches the display name "My Favorites"
 
 **File Location:**
-```
+```text
 ~/.config/tera/favorite/myfavorites.json
 ```
 
@@ -128,11 +128,11 @@ fi
 
 Clear and consistent naming throughout:
 
-| User Sees | Actual Filename | Full Path |
-|-----------|-----------------|-----------|
-| **My Favorites** | `myfavorites.json` | `~/.config/tera/favorite/myfavorites.json` |
-| Jazz Collection | `Jazz Collection.json` | `~/.config/tera/favorite/Jazz Collection.json` |
-| Classical Radio | `Classical Radio.json` | `~/.config/tera/favorite/Classical Radio.json` |
+| User Sees        | Actual Filename        | Full Path                                      |
+| ---------------- | ---------------------- | ---------------------------------------------- |
+| **My Favorites** | `myfavorites.json`     | `~/.config/tera/favorite/myfavorites.json`     |
+| Jazz Collection  | `Jazz Collection.json` | `~/.config/tera/favorite/Jazz Collection.json` |
+| Classical Radio  | `Classical Radio.json` | `~/.config/tera/favorite/Classical Radio.json` |
 
 ---
 
@@ -167,7 +167,7 @@ Creates new myfavorites.json from template
 
 ### How It Works
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │                  Main Menu                       │
 │                                                  │
@@ -207,14 +207,14 @@ Creates new myfavorites.json from template
 ## User Experience Benefits
 
 ### Before (Confusing)
-```
+```text
 File: sample.json         → "What's a sample?"
 Display: "Favorite"       → "Why singular?"
 Quick Play: ???           → "Where does this come from?"
 ```
 
 ### After (Clear)
-```
+```text
 File: myfavorites.json    → "My favorites, plural, makes sense"
 Display: "My Favorites"   → "Personal and clear"
 Quick Play: From "My Favorites" → "Oh! That's where it comes from!"
@@ -222,13 +222,13 @@ Quick Play: From "My Favorites" → "Oh! That's where it comes from!"
 
 ### Key Improvements
 
-| Aspect | Improvement |
-|--------|-------------|
-| File name | Plural matches content |
-| Display name | Space makes it readable |
-| Clarity | Explicit documentation |
-| Understanding | Clear connection explained |
-| User experience | Everything makes sense |
+| Aspect          | Improvement                |
+| --------------- | -------------------------- |
+| File name       | Plural matches content     |
+| Display name    | Space makes it readable    |
+| Clarity         | Explicit documentation     |
+| Understanding   | Clear connection explained |
+| User experience | Everything makes sense     |
 
 ---
 
@@ -333,15 +333,15 @@ FAVORITE_FULL="${FAVORITE_PATH}/myfavorites.json"
 
 ## Impact
 
-| Category | Before | After |
-|----------|--------|-------|
-| File name | `myfavorite.json` | `myfavorites.json` ✓ |
-| Grammar | Singular (incorrect) | Plural (correct) ✓ |
-| Display | "Favorite" | "My Favorites" ✓ |
-| Readability | No space | Natural spacing ✓ |
-| Documentation | Unclear source | Explicit explanation ✓ |
-| User understanding | Confused | Clear ✓ |
-| Professional feel | Good | Excellent ✓ |
+| Category           | Before               | After                  |
+| ------------------ | -------------------- | ---------------------- |
+| File name          | `myfavorite.json`    | `myfavorites.json` ✓   |
+| Grammar            | Singular (incorrect) | Plural (correct) ✓     |
+| Display            | "Favorite"           | "My Favorites" ✓       |
+| Readability        | No space             | Natural spacing ✓      |
+| Documentation      | Unclear source       | Explicit explanation ✓ |
+| User understanding | Confused             | Clear ✓                |
+| Professional feel  | Good                 | Excellent ✓            |
 
 ---
 

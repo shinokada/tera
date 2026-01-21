@@ -24,7 +24,7 @@
 ### Option 1: Post-Play Prompt (RECOMMENDED)
 
 **Flow:**
-```
+```text
 [Station playing in mpv]
 ↓
 User presses 'q' to quit
@@ -61,7 +61,7 @@ If user selects 1:
 ### Option 2: Save During Play
 
 **Flow:**
-```
+```text
 [Station playing in mpv]
 ↓
 Press 'f' (or another key) to favorite while playing
@@ -246,14 +246,14 @@ _play "$URL_RESOLVED" "$STATION_DATA" "$LIST" || menu
 ## User Experience
 
 ### Before
-```
+```text
 User plays station → Likes it → Presses q → Back to menu
 → User thinks "I wish I could save that..."
 → Has to navigate back through menus to find and save it
 ```
 
 ### After
-```
+```text
 User plays station → Likes it → Presses q
 → "Did you enjoy this station?"
 → Press 1 (or arrow down + Enter)

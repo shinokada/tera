@@ -88,24 +88,6 @@ Your GitHub token is stored securely:
 - **Validation:** API test before accepting token
 - **Encryption:** Stored as plain text in secure location
 
-## Legacy Setup (Option 2 - Environment Variable)
-
-If you prefer to use a `.env` file (for development or older installations):
-
-1. **Copy the environment template:**
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Add your token:**
-   ```bash
-   GITHUB_TOKEN=ghp_YourActualTokenHere123456789
-   ```
-
-3. **The token will be loaded automatically when you run TERA**
-
-**Note:** The interactive Token Management menu is the recommended approach. It's more secure and easier to use.
-
 ## Token Management Features
 
 Your GitHub token is used automatically by TERA to:
@@ -140,7 +122,7 @@ Your GitHub token is used automatically by TERA to:
 
 ## Token File Location
 
-```
+```text
 ~/.config/tera/tokens/github_token
 ```
 

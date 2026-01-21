@@ -8,12 +8,12 @@ We've made two key improvements to how TERA displays your favorite radio station
 Station names now have extra spaces automatically removed, giving you a cleaner, more professional look.
 
 **Before:**
-```
+```text
 38   SmoothJazz.com 64k aac+
 ```
 
 **After:**
-```
+```text
 38 SmoothJazz.com 64k aac+
 ```
 
@@ -21,7 +21,7 @@ Station names now have extra spaces automatically removed, giving you a cleaner,
 All station lists are now automatically sorted alphabetically (case-insensitive), making it much easier to find your favorite stations!
 
 **Before (random order):**
-```
+```text
 1) Classic Rock Radio
 2) Jazz FM
 3) BBC Radio 1
@@ -30,7 +30,7 @@ All station lists are now automatically sorted alphabetically (case-insensitive)
 ```
 
 **After (alphabetical):**
-```
+```text
 1) BBC Radio 1
 2) Classic Rock Radio
 3) Classical Music

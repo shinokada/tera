@@ -76,7 +76,7 @@ The script now automatically migrates existing files in this order:
 
 ## File Locations
 
-```
+```text
 ~/.config/tera/favorite/
 ├── My-favorites.json  ← NEW NAME (user's Quick Play favorites)
 ├── jazz.json          ← User's other playlists

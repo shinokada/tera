@@ -2,7 +2,7 @@
 
 ## Main Commit (All Changes)
 
-```
+```text
 feat: add gist update functionality and implement code quality improvements
 
 Complete CRUD operations for GitHub Gist management by adding update
@@ -64,7 +64,7 @@ Closes: #[issue-number] (if applicable)
 If you prefer shorter, more focused commits, here are individual commit messages:
 
 ### Commit 1: Core Feature
-```
+```text
 feat(gist): add update gist description functionality
 
 - Add update_gist() function with GitHub API integration
@@ -79,7 +79,7 @@ Menu structure changed:
 ```
 
 ### Commit 2: Code Quality
-```
+```text
 refactor(gist): improve code quality and cross-platform compatibility
 
 Implement CodeRabbit suggestions:
@@ -98,7 +98,7 @@ Improvements:
 ```
 
 ### Commit 3: Test Fixes
-```
+```text
 test(gist): fix failing tests for new menu structure
 
 - Fix test_integration.bats: Update Exit from 3 to 6
@@ -109,7 +109,7 @@ All tests now pass with updated menu structure.
 ```
 
 ### Commit 4: Documentation
-```
+```text
 docs: add comprehensive gist update documentation
 
 New documentation:
