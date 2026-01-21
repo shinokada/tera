@@ -136,17 +136,17 @@ See [Token Management Guide](TOKEN_MANAGEMENT.md) for complete details.
 
 ## Navigation Quick Reference
 
-| Context     | Action       | Key/Command   |
-| ----------- | ------------ | ------------- |
-| Any menu    | Navigate     | Arrow keys ↑↓ |
-| Any menu    | Select       | Enter         |
-| Any menu    | Go back      | ESC           |
-| Text prompt | Go back      | `0`           |
-| Text prompt | Main menu    | `00`          |
-| Text prompt | Go back      | Empty + Enter |
-| Playing     | Pause/Resume | Space         |
-| Playing     | Quit         | `q`           |
-| Playing     | Volume +/-   | `9` / `0`     |
+| Context                      | Action       | Key/Command                          |
+| ---------------------------- | ------------ | ------------------------------------ |
+| Any menu                     | Navigate     | Arrow keys ↑↓                        |
+| Any menu                     | Select       | Enter                                |
+| Any menu                     | Go back      | ESC                                  |
+| Text prompt (search)         | Go back      | `0` or Empty + Enter                 |
+| Text prompt (list mgmt)      | Go back      | `0` (empty shows error)              |
+| Text prompt                  | Main menu    | `00`                                 |
+| Playing                      | Pause/Resume | Space                                |
+| Playing                      | Quit         | `q`                                  |
+| Playing                      | Volume +/-   | `9` / `0`                            |
 
 **Full details:** [Navigation Guide](NAVIGATION_GUIDE.md)
 

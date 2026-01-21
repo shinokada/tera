@@ -6,13 +6,13 @@ When working with lists in TERA, you now have easy ways to navigate back:
 
 ### Navigation Commands
 
-| What to Type             | What Happens                         |
-| ------------------------ | ------------------------------------ |
-| `0`                      | Go back to List Menu                 |
-| `00`                     | Go to Main Menu                      |
-| `back`                   | Go back to List Menu (alternative)   |
-| `main`                   | Go to Main Menu (alternative)        |
-| Just press Enter (empty) | Shows error, stays in current screen |
+| What to Type             | What Happens                                              |
+| ------------------------ | --------------------------------------------------------- |
+| `0`                      | Go back to List Menu                                      |
+| `00`                     | Go to Main Menu                                           |
+| `back`                   | Go back to List Menu (alternative)                        |
+| `main`                   | Go to Main Menu (alternative)                             |
+| Just press Enter (empty) | Shows error in list operations, goes back in search menus |
 
 ### Where These Work
 

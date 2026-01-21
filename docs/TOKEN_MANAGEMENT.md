@@ -2,7 +2,7 @@
 
 ## Overview
 
-TERA now provides a complete token management system with a user-friendly menu interface. This eliminates the need to manually edit `.env` files and provides secure token storage.
+TERA now provides a complete token management system with a user-friendly menu interface. 
 
 ## Token Storage System
 

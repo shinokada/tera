@@ -44,12 +44,12 @@ When you see a menu with numbered options:
 
 When you see a prompt asking you to type:
 
-| Input          | Action                   |
-| -------------- | ------------------------ |
-| `0` or `back`  | Go back to previous menu |
-| `00` or `main` | Return to Main Menu      |
-| Empty + Enter  | Go back to previous menu |
-| Type content   | Enter your data          |
+| Input          | Action                                                        |
+| -------------- | ------------------------------------------------------------- |
+| `0` or `back`  | Go back to previous menu                                      |
+| `00` or `main` | Return to Main Menu                                           |
+| Empty + Enter  | Context-dependent: goes back in search, shows error in lists  |
+| Type content   | Enter your data                                               |
 
 **Examples:**
 - "Type a name to search:"
@@ -60,14 +60,15 @@ When you see a prompt asking you to type:
 
 ## Navigation Commands Summary
 
-| Context        | Want to... | Do this                            |
-| -------------- | ---------- | ---------------------------------- |
-| fzf Menu       | Go back    | Press ESC or select "0) Main Menu" |
-| fzf Menu       | Main menu  | Select "0) Main Menu"              |
-| Text Prompt    | Go back    | Type `0` or press Enter (empty)    |
-| Text Prompt    | Main menu  | Type `00`                          |
-| View/Info Page | Continue   | Press Enter                        |
-| Anywhere       | Force quit | Ctrl+C (emergency)                 |
+| Context                  | Want to... | Do this                            |
+| ------------------------ | ---------- | ---------------------------------- |
+| fzf Menu                 | Go back    | Press ESC or select "0) Main Menu" |
+| fzf Menu                 | Main menu  | Select "0) Main Menu"              |
+| Text Prompt (Search)     | Go back    | Type `0` or press Enter (empty)    |
+| Text Prompt (List Mgmt)  | Go back    | Type `0` (empty shows error)       |
+| Text Prompt              | Main menu  | Type `00`                          |
+| View/Info Page           | Continue   | Press Enter                        |
+| Anywhere                 | Force quit | Ctrl+C (emergency)                 |
 
 ---
 
