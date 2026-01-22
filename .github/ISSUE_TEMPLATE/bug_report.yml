@@ -1,0 +1,182 @@
+name: Bug Report
+description: Report a bug or issue with TERA
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Launch tera
+        2. Select '...'
+        3. Navigate to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+      placeholder: What actually happened?
+    validations:
+      required: false
+
+  - type: input
+    id: tera-version
+    attributes:
+      label: TERA Version
+      description: Which version of TERA are you using? Run `tera --version` to find out.
+      placeholder: "0.8.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      options:
+        - macOS
+        - Linux (Ubuntu/Debian)
+        - Linux (Fedora/RHEL)
+        - Linux (Arch)
+        - Linux (Other)
+        - BSD
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      description: What version of the operating system? (e.g., macOS 14.5, Ubuntu 22.04)
+      placeholder: "macOS 14.5"
+    validations:
+      required: false
+
+  - type: input
+    id: bash-version
+    attributes:
+      label: Bash Version
+      description: What version of bash are you using? Run `bash --version` to find out.
+      placeholder: "5.2.15"
+    validations:
+      required: true
+
+  - type: input
+    id: mpv-version
+    attributes:
+      label: mpv Version
+      description: What version of mpv are you using? Run `mpv --version` to find out.
+      placeholder: "0.37.0"
+    validations:
+      required: false
+
+  - type: input
+    id: jq-version
+    attributes:
+      label: jq Version
+      description: What version of jq are you using? Run `jq --version` to find out.
+      placeholder: "jq-1.7"
+    validations:
+      required: false
+
+  - type: input
+    id: fzf-version
+    attributes:
+      label: fzf Version
+      description: What version of fzf are you using? Run `fzf --version` to find out.
+      placeholder: "0.46.0"
+    validations:
+      required: false
+
+  - type: input
+    id: wget-version
+    attributes:
+      label: wget Version
+      description: What version of wget are you using? Run `wget --version | head -n1` to find out.
+      placeholder: "1.21.3"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: installation-method
+    attributes:
+      label: Installation Method
+      description: How did you install TERA?
+      options:
+        - Awesome Package Manager
+        - Homebrew
+        - Debian package (.deb)
+        - From source (git clone)
+        - Other
+    validations:
+      required: false
+
+  - type: dropdown
+    id: bug-area
+    attributes:
+      label: Which area is affected?
+      description: Select the area where you encountered the bug
+      multiple: true
+      options:
+        - Main Menu / Navigation
+        - Search functionality
+        - Playing stations
+        - List Management (Create/Delete/Edit)
+        - Favorites / Quick Play
+        - Gist integration
+        - Token Management
+        - I Feel Lucky
+        - Installation / Setup
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-messages
+    attributes:
+      label: Error Messages
+      description: If you received any error messages, please paste them here.
+      placeholder: |
+        Paste error messages here...
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here. Screenshots or recordings are welcome!
+      placeholder: Any other relevant information?
+    validations:
+      required: false
