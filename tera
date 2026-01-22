@@ -110,8 +110,10 @@ menu() {
     # Check if favorite.json exists and has stations
     if [ -f "$FAVORITE_STATIONS_FILE" ]; then
         STATION_COUNT=$(jq 'length' "$FAVORITE_STATIONS_FILE" 2>/dev/null || echo 0)
+        # Ensure STATION_COUNT is a valid integer
+        STATION_COUNT=${STATION_COUNT:-0}
 
-        if [ "$STATION_COUNT" -gt 0 ]; then
+        if [ "$STATION_COUNT" -gt 0 ] 2>/dev/null; then
             # Add separator and favorite stations section
             MENU_OPTIONS="${MENU_OPTIONS}
 
