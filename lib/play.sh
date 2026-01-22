@@ -16,7 +16,7 @@ fn_play() {
     echo
     
     # Add Main Menu option
-    lists_with_menu=$(echo "$lists" | tr ' ' '\n' | sed '1i<< Main Menu >>')
+    lists_with_menu=$(printf "<< Main Menu >>\n%s" "$(echo "$lists" | tr ' ' '\n')")
     
     LIST=$(echo "$lists_with_menu" | fzf --prompt="> " --header="$APP_NAME - Play from My List" --header-first --height=40% --reverse)
     
