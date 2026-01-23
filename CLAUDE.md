@@ -1,7 +1,6 @@
 - When a new feature is added, create a unit test. 
 - Before creating a unit test, remove confilicting unit test(s).
-- When you create final summary, save it in ai-documents
-- Do not use 
-- Be concise. Do not repeat when you write md file documents.
+- When you create a summary, save it in ai-documents
+- Be concise. Do not repeat when you write md file.
 - Use mermaid for flow diagrams.
 - Make docs fully GitHub-ready and more “spec-like”.

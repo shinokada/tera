@@ -1,4 +1,16 @@
-# TERA Screen Flow Charts
+# TERA Screen Flow Charts - Updated
+
+## Summary of Changes
+1. **Application Overview & Main Menu**: Removed save prompt after QuickPlay (stations already in My-favorites.json)
+2. **Play Screen**: 
+   - Context-aware save behavior based on whether station is already in Quick Favorites
+   - Use simple arrow navigation for lists, fzf-style for stations
+   - Only allow 's' key save during playback if not already in Quick Favorites
+3. **UI Display Strategy**: 
+   - Lists (few items): Simple arrow navigation
+   - Stations & Search Results (many items): fzf-style with filtering
+
+---
 
 ## Application Overview
 
@@ -143,7 +155,7 @@ flowchart TD
   - Stations sorted alphabetically (case-insensitive)
 
 **Key Logic:**
-- Check if station is already in Quick Favorites (My-favorites.json)
+- Check if station is already in Quick Favorites (My-favorites.json) by StationUUID
 - If already in Quick Favorites: Don't show save option (no 's' key, no prompt after)
 - If from another list: Allow saving to Quick Favorites during playback (press 's')
 - Check for duplicates by StationUUID before adding
@@ -317,91 +329,7 @@ flowchart TD
 ---
 
 ## 5. List Management Menu Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter List Menu]) --> ShowMenu[Display List Management Options]
-    
-    ShowMenu --> MenuInput{User Input}
-    MenuInput -->|0/Esc| Back([Return to Main Menu])
-    MenuInput -->|1| Create[Create New List]
-    MenuInput -->|2| Delete[Delete List]
-    MenuInput -->|3| Edit[Edit List Name]
-    MenuInput -->|4| ShowAll[Show All Lists]
-    
-    Create --> ShowLists1[Display Current Lists]
-    ShowLists1 --> NameInput1[Prompt: Enter New Name]
-    NameInput1 --> NavCheck1{Input}
-    NavCheck1 -->|0| ShowMenu
-    NavCheck1 -->|00| Back
-    NavCheck1 -->|Empty| Error1[Show Error: Name Required]
-    NavCheck1 -->|Name| CheckExists1{List Exists?}
-    Error1 --> Create
-    CheckExists1 -->|Yes| Error2[Show Error: Already Exists]
-    CheckExists1 -->|No| DoCreate[Create List File]
-    Error2 --> Create
-    DoCreate --> InitFile[Initialize with Empty Array]
-    InitFile --> Success1[Show Success Message]
-    Success1 --> ShowMenu
-    
-    Delete --> ShowLists2[Display Current Lists]
-    ShowLists2 --> NameInput2[Prompt: Enter Name to Delete]
-    NameInput2 --> NavCheck2{Input}
-    NavCheck2 -->|0| ShowMenu
-    NavCheck2 -->|00| Back
-    NavCheck2 -->|Empty| Error3[Show Error: Name Required]
-    NavCheck2 -->|Name| CheckProtected{Protected List?}
-    Error3 --> Delete
-    CheckProtected -->|Yes: My-favorites| Error4[Cannot Delete My-favorites]
-    CheckProtected -->|No| CheckExists2{List Exists?}
-    Error4 --> Delete
-    CheckExists2 -->|No| Error5[List Doesn't Exist]
-    CheckExists2 -->|Yes| DoDelete[Delete File]
-    Error5 --> Delete
-    DoDelete --> Success2[Show Success]
-    Success2 --> ShowMenu
-    
-    Edit --> ShowLists3[Display Current Lists]
-    ShowLists3 --> NameInput3[Prompt: Enter Name to Edit]
-    NameInput3 --> NavCheck3{Input}
-    NavCheck3 -->|0| ShowMenu
-    NavCheck3 -->|00| Back
-    NavCheck3 -->|Empty| Error6[Show Error: Name Required]
-    NavCheck3 -->|Name| CheckExists3{List Exists?}
-    Error6 --> Edit
-    CheckExists3 -->|No| Error7[List Doesn't Exist]
-    CheckExists3 -->|Yes| CheckProtected2{Protected?}
-    Error7 --> Edit
-    CheckProtected2 -->|Yes| Error8[Cannot Rename My-favorites]
-    CheckProtected2 -->|No| NewNameInput[Prompt: Enter New Name]
-    Error8 --> Edit
-    NewNameInput --> NavCheck4{Input}
-    NavCheck4 -->|0| ShowMenu
-    NavCheck4 -->|00| Back
-    NavCheck4 -->|Empty| Error9[Name Required]
-    NavCheck4 -->|Name| CheckExists4{New Name Exists?}
-    Error9 --> NewNameInput
-    CheckExists4 -->|Yes| Error10[Name Already Taken]
-    CheckExists4 -->|No| DoRename[Rename File]
-    Error10 --> NewNameInput
-    DoRename --> Success3[Show Success]
-    Success3 --> ShowMenu
-    
-    ShowAll --> ListAll[Display All List Names]
-    ListAll --> WaitEnter[Wait for Enter]
-    WaitEnter --> ShowMenu
-```
-
-**State:**
-- `lists []string` - Available lists
-- `operation Operation` - Create, Delete, Edit, ShowAll
-- `inputValue string` - User input
-
-**Validation Rules:**
-- List names cannot be empty
-- Names must be unique
-- "My-favorites" is protected (cannot delete/rename)
-- Replace spaces with hyphens in names
+[Same as original - no changes]
 
 ---
 
@@ -444,8 +372,8 @@ flowchart TD
 - `selectedStation *Station` - Station to delete
 
 **UI Design:**
-- Lists: Simple arrow navigation
-- Stations: fzf-style with filtering
+- **Lists**: Simple arrow navigation (few items)
+- **Stations**: fzf-style with filtering (many items)
 
 **Actions:**
 - Find station by StationUUID
@@ -510,310 +438,27 @@ flowchart TD
 
 ---
 
-## 8. Gist Menu Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter Gist Menu]) --> CheckToken{Token Configured?}
-    CheckToken -->|No| ShowWarning[Display Warning: No Token]
-    CheckToken -->|Yes| ShowStatus[Display Token Status]
-    
-    ShowWarning --> ShowMenu[Display Gist Menu]
-    ShowStatus --> ShowMenu
-    
-    ShowMenu --> MenuInput{User Input}
-    MenuInput -->|0/Esc| Back([Return to Main Menu])
-    MenuInput -->|1| Create[Create Gist]
-    MenuInput -->|2| MyGists[My Gists]
-    MenuInput -->|3| Recover[Recover from Gist]
-    MenuInput -->|4| Update[Update Gist]
-    MenuInput -->|5| Delete[Delete Gist]
-    MenuInput -->|6| Token[Token Management]
-    
-    Create --> CreateFlow[Navigate to Create Gist]
-    MyGists --> MyGistsFlow[Navigate to My Gists]
-    Recover --> RecoverFlow[Navigate to Recover]
-    Update --> UpdateFlow[Navigate to Update Gist]
-    Delete --> DeleteFlow[Navigate to Delete Gist]
-    Token --> TokenFlow[Navigate to Token Management]
-    
-    CreateFlow --> ShowMenu
-    MyGistsFlow --> ShowMenu
-    RecoverFlow --> ShowMenu
-    UpdateFlow --> ShowMenu
-    DeleteFlow --> ShowMenu
-    TokenFlow --> ShowMenu
-```
-
-**State:**
-- `hasToken bool` - Token configured status
-- `gistCount int` - Number of saved gists
-- `currentToken string` - Masked token display
+## 8-14. Remaining Screens
+[Gist Menu, Create Gist, My Gists, Token Management, Update Gist, Delete Gist, Recover from Gist - no changes from original]
 
 ---
 
-## 9. Create Gist Screen
+## UI Display Guidelines Summary
 
-```mermaid
-flowchart TD
-    Enter([Enter Create Gist]) --> CheckToken{Token Available?}
-    
-    CheckToken -->|No| TokenError[Show: Token Not Found]
-    TokenError --> Instructions[Display Setup Instructions]
-    Instructions --> Back1([Return to Gist Menu])
-    
-    CheckToken -->|Yes| LoadLists[Load All Favorite Lists]
-    LoadLists --> CheckLists{Lists Available?}
-    
-    CheckLists -->|No| NoListsError[Show: No Lists Found]
-    NoListsError --> HelpMsg[Suggest: Create Lists First]
-    HelpMsg --> Back2([Return to Gist Menu])
-    
-    CheckLists -->|Yes| PrepareFiles[Prepare Files for Upload]
-    PrepareFiles --> BuildJSON[Build JSON Payload]
-    BuildJSON --> ShowProgress[Display: Creating Gist...]
-    ShowProgress --> CallGitHub[POST to GitHub API]
-    
-    CallGitHub --> APIResponse{Success?}
-    APIResponse -->|No| Error[Show Error Details]
-    Error --> Troubleshoot[Display Common Issues]
-    Troubleshoot --> Back3([Return to Gist Menu])
-    
-    APIResponse -->|Yes| SaveMetadata[Save Gist Metadata Locally]
-    SaveMetadata --> ShowSuccess[Display Success with URL]
-    ShowSuccess --> OpenBrowser[Open in Browser]
-    OpenBrowser --> Back4([Return to Gist Menu])
-```
+**When to use Simple Arrow Navigation:**
+- Favorite lists selection (typically 3-10 items)
+- Menu options (fixed, small set)
+- Gist lists (typically 1-10 items)
+- Any list with < 15 items where user knows what they're looking for
 
-**State:**
-- `token string` - GitHub token
-- `files []FavoritesList` - Files to upload
-- `gistID string` - Created gist ID
-- `gistURL string` - Created gist URL
+**When to use fzf-style with Filtering:**
+- Radio station lists from search (100s-1000s of results)
+- Stations within a favorite list (10-100 stations)
+- Any list where quick filtering is beneficial
+- Any list with > 15 items
 
-**Actions:**
-- Read all JSON files from favorite path
-- Build GitHub gist payload
-- Save gist metadata for tracking
-- Handle errors with helpful messages
-
----
-
-## 10. My Gists Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter My Gists]) --> LoadMetadata[Load Local Gist Metadata]
-    LoadMetadata --> CheckCount{Gists Available?}
-    
-    CheckCount -->|No| NoGists[Show: No Gists Created]
-    NoGists --> Suggest[Suggest: Create First Gist]
-    Suggest --> Back1([Return to Gist Menu])
-    
-    CheckCount -->|Yes| ShowList[Display Gist List]
-    ShowList --> ListFormat[Format: Description | Created Date]
-    ListFormat --> UserInput{User Input}
-    
-    UserInput -->|0/Esc| Back2([Return to Gist Menu])
-    UserInput -->|Select Number| GetGist[Get Selected Gist]
-    
-    GetGist --> OpenURL[Open Gist URL in Browser]
-    OpenURL --> Wait[Wait for Enter]
-    Wait --> ShowList
-```
-
-**State:**
-- `gists []GistMetadata` - Local gist records
-- `selectedGist *GistMetadata` - User selection
-
-**Display:**
-- Index | Description | Created Date
-- Up to 10 gists per page
-
----
-
-## 11. Token Management Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter Token Management]) --> CheckStatus{Token Exists?}
-    
-    CheckStatus -->|Yes| ShowCurrent[Display Current Token Masked]
-    CheckStatus -->|No| ShowNone[Display: No Token Configured]
-    
-    ShowCurrent --> ShowMenu[Display Token Menu]
-    ShowNone --> ShowMenu
-    
-    ShowMenu --> MenuInput{User Input}
-    MenuInput -->|0/Esc| Back([Return to Gist Menu])
-    MenuInput -->|1| Setup[Setup/Change Token]
-    MenuInput -->|2| View[View Current Token]
-    MenuInput -->|3| Validate[Validate Token]
-    MenuInput -->|4| DeleteToken[Delete Token]
-    
-    Setup --> Instructions[Show GitHub Token Instructions]
-    Instructions --> TokenInput[Prompt: Paste Token Hidden]
-    TokenInput --> BasicCheck{Valid Format?}
-    BasicCheck -->|No: Too Short| Error1[Show Format Error]
-    BasicCheck -->|Yes| APIValidate[Validate with GitHub API]
-    Error1 --> Setup
-    APIValidate --> ValidResponse{Valid?}
-    ValidResponse -->|No| Error2[Show Invalid Token Error]
-    ValidResponse -->|Yes| GetUsername[Get GitHub Username]
-    Error2 --> Setup
-    GetUsername --> SaveToken[Save to Keyring/File]
-    SaveToken --> Success1[Show Success + Username]
-    Success1 --> ShowMenu
-    
-    View --> LoadToken[Load Current Token]
-    LoadToken --> MaskToken[Mask Token Display]
-    MaskToken --> CheckValid[Validate with API]
-    CheckValid --> ValidStatus{Valid?}
-    ValidStatus -->|Yes| ShowValid[Display: Token Valid]
-    ValidStatus -->|No| ShowInvalid[Display: Token Invalid]
-    ShowValid --> Back
-    ShowInvalid --> Back
-    
-    Validate --> TestAPI[Call GitHub API]
-    TestAPI --> TestResponse{Success?}
-    TestResponse -->|Yes| ValidMsg[Display: Valid + Username]
-    TestResponse -->|No| InvalidMsg[Display: Invalid + Reasons]
-    ValidMsg --> Back
-    InvalidMsg --> Back
-    
-    DeleteToken --> ConfirmDelete[Prompt: Confirm Deletion]
-    ConfirmDelete --> ConfirmInput{Confirm?}
-    ConfirmInput -->|No| ShowMenu
-    ConfirmInput -->|Yes: type yes| DoDelete[Delete from Storage]
-    DoDelete --> ClearEnv[Clear Environment Variable]
-    ClearEnv --> Success2[Show Success]
-    Success2 --> ShowMenu
-```
-
-**State:**
-- `token string` - Current token
-- `maskedToken string` - Display version
-- `username string` - GitHub username
-- `valid bool` - Validation status
-
-**Security:**
-- Hidden input when typing token
-- Mask all displays (show first 11 + last 4)
-- Store in keyring (fallback to encrypted file)
-- Clear from memory after operations
-
----
-
-## 12. Update Gist Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter Update Gist]) --> CheckToken{Token Available?}
-    
-    CheckToken -->|No| TokenError[Show: Token Required]
-    TokenError --> Back1([Return to Gist Menu])
-    
-    CheckToken -->|Yes| LoadMetadata[Load Gist Metadata]
-    LoadMetadata --> CheckGists{Gists Available?}
-    
-    CheckGists -->|No| NoGists[Show: No Gists to Update]
-    NoGists --> Back2([Return to Gist Menu])
-    
-    CheckGists -->|Yes| ShowList[Display Gist List]
-    ShowList --> UserInput{User Input}
-    
-    UserInput -->|0/Esc| Back3([Return to Gist Menu])
-    UserInput -->|Select| GetGist[Get Selected Gist]
-    
-    GetGist --> ShowCurrent[Display Current Description]
-    ShowCurrent --> PromptNew[Prompt: Enter New Description]
-    
-    PromptNew --> DescInput{User Input}
-    DescInput -->|Empty/Esc| Cancel[Show: Update Cancelled]
-    DescInput -->|New Desc| BuildPayload[Build PATCH Payload]
-    Cancel --> ShowList
-    
-    BuildPayload --> ShowProgress[Display: Updating Gist...]
-    ShowProgress --> CallAPI[PATCH to GitHub API]
-    
-    CallAPI --> APIResponse{Success?}
-    APIResponse -->|No| Error[Show Error Message]
-    APIResponse -->|Yes| UpdateLocal[Update Local Metadata]
-    Error --> ShowList
-    UpdateLocal --> Success[Show Success]
-    Success --> ShowList
-```
-
-**State:**
-- `gists []GistMetadata` - Available gists
-- `selectedGist *GistMetadata` - Gist to update
-- `newDescription string` - New description
-
-**Actions:**
-- PATCH request to update description only
-- Update local metadata file
-- Keep other gist data unchanged
-
----
-
-## 13. Delete Gist Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter Delete Gist]) --> CheckToken{Token Available?}
-    
-    CheckToken -->|No| TokenError[Show: Token Required]
-    TokenError --> Back1([Return to Gist Menu])
-    
-    CheckToken -->|Yes| LoadMetadata[Load Gist Metadata]
-    LoadMetadata --> CheckGists{Gists Available?}
-    
-    CheckGists -->|No| NoGists[Show: No Gists to Delete]
-    NoGists --> Back2([Return to Gist Menu])
-    
-    CheckGists -->|Yes| ShowList[Display Gist List]
-    ShowList --> UserInput{User Input}
-    
-    UserInput -->|0/Esc| Back3([Return to Gist Menu])
-    UserInput -->|Select| GetGist[Get Selected Gist]
-    
-    GetGist --> ShowWarning[Display Warning]
-    ShowWarning --> ShowDetails[Show Gist Description]
-    ShowDetails --> ConfirmPrompt[Prompt: Type 'yes' to confirm]
-    
-    ConfirmPrompt --> ConfirmInput{User Input}
-    ConfirmInput -->|Not 'yes'| Cancel[Show: Deletion Cancelled]
-    ConfirmInput -->|yes| ShowProgress[Display: Deleting Gist...]
-    Cancel --> ShowList
-    
-    ShowProgress --> CallAPI[DELETE to GitHub API]
-    CallAPI --> APIResponse{HTTP Status}
-    
-    APIResponse -->|204: Success| DeleteLocal[Delete Local Metadata]
-    APIResponse -->|404: Not Found| DeleteLocal
-    APIResponse -->|Other Error| ShowError[Show Error Details]
-    
-    DeleteLocal --> Success[Show Success]
-    ShowError --> Fallback[Delete Local Anyway]
-    Success --> ShowList
-    Fallback --> ShowList
-```
-
-**State:**
-- `gists []GistMetadata` - Available gists
-- `selectedGist *GistMetadata` - Gist to delete
-- `confirmed bool` - User confirmation
-
-**Safety:**
-- Requires explicit "yes" confirmation
-- Shows gist details before delete
-- Removes local metadata even on API error
-- Handles 404 gracefully (already deleted)
-
----
-
-## 14. Recover from Gist Screen
-
-```mermaid
-flowchart TD
-    Enter([Enter Recover]) --> CheckLocal{Local Gists Exist?}
+**Benefits of this approach:**
+- Simple navigation where it makes sense (don't overcomplicate)
+- Powerful filtering where it's needed
+- Consistent experience for similar types of content
+- Better performance (don't run fzf for 3 items)
