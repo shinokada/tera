@@ -7,11 +7,11 @@
 - git
 - Make (optional)
 
-## Project Setup
+## (Done) Project Setup
 
 ```bash
 # Create project structure
-cd golang
+# in the project root
 go mod init github.com/shinokada/tera
 
 # Install dependencies
@@ -66,7 +66,7 @@ tera/
 └── README.md
 ```
 
-## Phase 1: Data Models (Start Here)
+## (Done) Phase 1: Data Models (Start Here)
 
 ### Step 1: Create internal/api/models.go
 
@@ -154,7 +154,7 @@ func TestStation_Unmarshal(t *testing.T) {
 }
 ```
 
-## Phase 2: Storage Layer
+## (Done) Phase 2: Storage Layer
 
 ### Step 1: Create internal/storage/favorites.go
 
@@ -225,7 +225,7 @@ func TestStorage_LoadList(t *testing.T) {
 }
 ```
 
-## Phase 3: API Client
+## (Done) Phase 3: API Client
 
 ### Step 1: Create internal/api/client.go
 
@@ -290,7 +290,7 @@ func (c *Client) doSearch(ctx context.Context, form url.Values) ([]Station, erro
 }
 ```
 
-## Phase 4: Basic Bubble Tea App
+## (Done) Phase 4: Basic Bubble Tea App
 
 ### Step 1: Create cmd/tera/main.go
 
@@ -393,7 +393,7 @@ go fmt ./...
 golangci-lint run
 ```
 
-## Makefile
+## (Done) Makefile
 
 ```makefile
 .PHONY: build test clean run

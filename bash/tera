@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# shellcheck disable=SC2034
+VERSION="0.8.0"
+SCRIPT_DOT_DIR="$HOME/.config/tera"
+# CACHE_DIR="$HOME/.cache"
+FAVORITE_PATH="$SCRIPT_DOT_DIR/favorite"
+TMP_PATH="$HOME/.cache/tera"
+FAVORITE_FILE="My-favorites.json"
+FAVORITE_FULL="${FAVORITE_PATH}/${FAVORITE_FILE}"
+SCRIPT_NAME=$(basename "$0")
+APP_NAME="TERA"
+RADIO_BROWSER="https://de1.api.radio-browser.info/json/stations/bytag/"
+SEARCH_URL="https://de1.api.radio-browser.info/json/stations/search"
+
+readlinkf() {
+    [ "${1:-}" ] || return 1
+    max_symlinks=40
+    CDPATH='' # to avoid changing to an unexpected directory
+
+    target=$1
+    [ -e "${target%/}" ] || target=${1%"${1##*[!/]}"} # trim trailing slashes
+    [ -d "${target:-/}" ] && target="$target/"
+
+    cd -P . 2>/dev/null || return 1
+    while [ "$max_symlinks" -ge 0 ] && max_symlinks=$((max_symlinks - 1)); do
+        if [ ! "$target" = "${target%/*}" ]; then
+            case $target in
+            /*) cd -P "${target%/*}/" 2>/dev/null || break ;;
+            *) cd -P "./${target%/*}" 2>/dev/null || break ;;
+            esac
+            target=${target##*/}
+        fi
+
+        if [ ! -L "$target" ]; then
+            target="${PWD%/}${target:+/}${target}"
+            printf '%s\n' "${target:-/}"
+            return 0
+        fi
+
+        # `ls -dl` format: "%s %u %s %s %u %s %s -> %s\n",
+        #   <file mode>, <number of links>, <owner name>, <group name>,
+        #   <size>, <date and time>, <pathname of link>, <contents of link>
+        # https://pubs.opengroup.org/onlinepubs/9699919799/utilities/ls.html
+        link=$(ls -dl -- "$target" 2>/dev/null) || break
+        target=${link#*" $target -> "}
+    done
+    return 1
+}
+
+self=$(readlinkf "$0")
+script_dir=${self%/*}
+
+# shellcheck disable=SC1091
+{
+    . "${script_dir}/lib/delete_station.sh"
+    . "${script_dir}/lib/gist_storage.sh"
+    . "${script_dir}/lib/gistlib.sh"
+    . "${script_dir}/lib/lib.sh"
+    . "${script_dir}/lib/list.sh"
+    . "${script_dir}/lib/lucky.sh"
+    . "${script_dir}/lib/play.sh"
+    . "${script_dir}/lib/search.sh"
+}
+
+# Load GITHUB_TOKEN from secure storage
+GITHUB_TOKEN=$(load_github_token)
+export GITHUB_TOKEN
+
+check_cmd mpv
+check_cmd jq
+check_cmd fzf
+check_cmd wget
+
+# check ~/.tera/favorite
+if [ ! -d "$FAVORITE_PATH" ]; then
+    mkdir -p "$FAVORITE_PATH"
+fi
+if [ ! -d "$TMP_PATH" ]; then
+    mkdir -p "$TMP_PATH"
+fi
+
+# Initialize My-favorites.json if it doesn't exist
+if [ ! -f "$FAVORITE_FULL" ]; then
+    # Create new My-favorites.json from template
+    touch "$FAVORITE_FULL"
+fi
+
+menu() {
+    clear
+    cyanprint "$APP_NAME MAIN MENU"
+    echo
+
+    # Quick Play Favorites: Shows stations from "My Favorites" list
+    # Stations are saved to this list when you select "My Favorites" after searching
+    # File location: ~/.config/tera/favorite/My-favorites.json
+    FAVORITE_STATIONS_FILE="${FAVORITE_PATH}/My-favorites.json"
+
+    # Create base menu options
+    MENU_OPTIONS="1) Play from my list
+2) Search radio stations
+3) List (Create/Read/Update/Delete)
+4) Delete a radio station
+5) I feel lucky
+6) Gist
+0) Exit"
+
+    # Check if favorite.json exists and has stations
+    if [ -f "$FAVORITE_STATIONS_FILE" ]; then
+        STATION_COUNT=$(jq 'length' "$FAVORITE_STATIONS_FILE" 2>/dev/null || echo 0)
+        # Ensure STATION_COUNT is a valid integer
+        STATION_COUNT=${STATION_COUNT:-0}
+
+        if [ "$STATION_COUNT" -gt 0 ] 2>/dev/null; then
+            # Add separator and favorite stations section
+            MENU_OPTIONS="${MENU_OPTIONS}
+
+--- Quick Play Favorites ---"
+
+            # Add each favorite station (limit to first 10)
+            LIMIT=$((STATION_COUNT < 10 ? STATION_COUNT : 10))
+            for i in $(seq 0 $((LIMIT - 1))); do
+                STATION_NAME=$(jq -r ".[$i].name" "$FAVORITE_STATIONS_FILE" 2>/dev/null)
+                if [ -n "$STATION_NAME" ] && [ "$STATION_NAME" != "null" ]; then
+                    MENU_NUM=$((i + 10))
+                    MENU_OPTIONS="${MENU_OPTIONS}
+${MENU_NUM}) ▶ ${STATION_NAME}"
+                fi
+            done
+        fi
+    fi
+
+    # Use fzf for selection
+    CHOICE=$(echo "$MENU_OPTIONS" | fzf --prompt="Choose an option (arrow keys to navigate): " --height=40% --reverse --no-info --ansi)
+
+    # Check if user cancelled
+    if [ -z "$CHOICE" ]; then
+        yellowprint "Bye-bye."
+        exit 0
+    fi
+
+    # Extract the number from the choice
+    ans=$(echo "$CHOICE" | grep -oE '^[0-9]+' || echo "")
+
+    # Handle separator line (no number)
+    if [ -z "$ans" ]; then
+        menu
+        return
+    fi
+
+    case $ans in
+    1)
+        fn_play
+        menu
+        ;;
+    2)
+        search_menu
+        menu
+        ;;
+    3)
+        list_menu
+        menu
+        ;;
+    4)
+        fn_delete
+        menu
+        ;;
+    5)
+        fn_lucky
+        menu
+        ;;
+    6)
+        gist_menu
+        menu
+        ;;
+    0)
+        yellowprint "Bye-bye."
+        exit 0
+        ;;
+    *)
+        # Check if it's a favorite station (10+)
+        if [ "$ans" -ge 10 ]; then
+            STATION_INDEX=$((ans - 10))
+            _play_favorite_station "$STATION_INDEX"
+            menu
+        else
+            redprint 'Wrong option.'
+            menu
+        fi
+        ;;
+    esac
+}
+
+usage() {
+    cat <<EOF
+    Name: $APP_NAME
+
+    Usage:
+    $SCRIPT_NAME
+
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case $1 in
+    -V | --version)
+        echo $VERSION
+        exit
+        ;;
+    -h | --help | *)
+        usage
+        exit
+        ;;
+    esac
+done
+
+menu
