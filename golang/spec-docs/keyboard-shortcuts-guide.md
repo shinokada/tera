@@ -30,13 +30,12 @@ These keys work consistently across all screens:
 
 ### Actions
 - **Enter** — Select current item / Confirm action
-- **Esc / q** — Go back / Cancel
+- **Esc** — Go back / Cancel
+- **q** — Exit TERA
 - **Ctrl+C** — Quit application immediately
 
 ### Utility
 - **?** — Show help for current screen
-- **/** — Filter/search current list
-- **i** — Show detailed info (context-dependent)
 
 ---
 
@@ -51,14 +50,14 @@ From the main menu, these number keys provide quick access:
 - **4** — Delete a Station
 - **5** — I Feel Lucky (random station)
 - **6** — Gist Backup/Restore
-- **0 / q** — Exit TERA
+- **q** — Exit TERA
 
 ### Quick Play (Dynamic Section)
 If you have stations saved in "My Favorites":
-- **10-19** — Play favorite station directly (shortcuts 10-19 for first 10 favorites)
+- **10-19** — Play favorite station directly (shortcuts 10-19 for first 10 favorites and use arrow keys or k/j to navigate more stations)
 
 **Example Main Menu:**
-```
+```text
 TERA MAIN MENU
 
 1) Play from my list
@@ -83,9 +82,9 @@ TERA MAIN MENU
 
 ### Navigation
 - **↑↓ / jk** — Move through station list
-- **/** — Filter stations by name
 - **Enter** — Play selected station
-- **Esc / q** — Return to main menu
+- **Esc** — Return to main menu
+- **q** — Exit TERA
 
 ### Actions While Playing
 - **Space** — Pause/Resume (if mpv supports)
@@ -106,20 +105,12 @@ TERA MAIN MENU
 - **4** — Search by Country Code
 - **5** — Search by State
 - **6** — Advanced Search (multiple criteria)
-- **0 / Esc** — Back to main menu
+- **Esc** — Back to main menu
 
 ### Search Results
 - **↑↓ / jk** — Browse results
-- **Enter** — Show station submenu
-- **/** — Filter current results
-- **i** — Quick info preview
+- **Enter** — Play station immediately
 - **Esc** — Back to search menu
-
-### Station Submenu (After selecting a station)
-- **1** — Play station
-- **2** — Save to list
-- **3** — Back to search results
-- **0** — Back to main menu
 
 ---
 
@@ -132,14 +123,12 @@ TERA MAIN MENU
 - **2** — Delete a list
 - **3** — Edit list name
 - **4** — Show all lists
-- **0 / Esc** — Back to main menu
+- **Esc** — Back to main menu
 
 ### Creating/Editing
 - **Type text** — Enter list name
 - **Enter** — Confirm
 - **Esc** — Cancel
-- **0** — Quick return to main menu
-- **00** — Quick return to list menu
 
 ---
 
@@ -154,14 +143,14 @@ TERA MAIN MENU
 - **4** — Update a gist
 - **5** — Delete a gist
 - **6** — Token Management (setup GitHub access)
-- **0 / Esc** — Back to main menu
+- **Esc** — Back to main menu
 
 ### Token Management
 - **1** — Setup/Change Token
 - **2** — View Current Token (masked)
 - **3** — Validate Token
 - **4** — Delete Token
-- **0 / Esc** — Back to gist menu
+- **Esc** — Back to gist menu
 
 ---
 
@@ -181,7 +170,7 @@ Shows:
 - **Enter** — Return to previous screen
 - **p** — Play this station
 - **s** — Save to favorites
-- **Esc / q** — Go back
+- **Esc** — Go back
 
 ---
 
@@ -190,14 +179,14 @@ Shows:
 ### Quick Navigation Shortcuts
 Throughout the app, you can use these patterns for fast navigation:
 
-- **Type "0"** — Return to previous screen
-- **Type "00"** — Return to main menu (works from most screens)
+- **Esc** — Return to previous screen
+- **q** — Quit Tera
 - **Type "back"** — Explicit back command
 - **Type "main"** — Explicit main menu command
 
 These work in text input prompts for convenient navigation.
 
-### Filtering/Search Within Lists
+### Future feature: Filtering/Search Within Lists
 When viewing any list (stations, search results, etc.):
 
 1. Press **/** to activate filter mode
@@ -221,17 +210,18 @@ The behavior depends on screen:
 
 **After Playback Ends:**
 TERA shows a prompt:
-```
+```text
 Did you enjoy this station?
 
 Station: Jazz FM
 From list: My Jazz Collection
 
 1) ⭐ Add to Quick Play Favorites
-2) Return to Main Menu
+2) Add to my list
+3) Return to Main Menu
 ```
 
-Use **1** or **2** to choose.
+Use a number to choose.
 
 ---
 
@@ -248,7 +238,7 @@ Help screens show:
 
 ### Help Screen Navigation
 - **↑↓ / jk** — Scroll help text
-- **Esc / q** — Close help and return
+- **Esc** — Close help and return
 
 ---
 
@@ -256,23 +246,21 @@ Help screens show:
 
 Quick reference table:
 
-| Key | Global Action | Screen-Specific |
-|-----|---------------|-----------------|
-| **↑↓ / jk** | Navigate up/down | Works everywhere |
-| **Enter** | Select/Confirm | Contextual |
-| **Esc / q** | Back/Cancel | Previous screen |
-| **Ctrl+C** | Quit immediately | Force exit |
-| **?** | Help | Context help |
-| **/** | Filter/Search | Within current list |
-| **i** | Info | Station details |
-| **0** | Previous menu | Quick back |
-| **00** | Main menu | From anywhere |
-| **1-6** | Main menu items | Quick access |
-| **10-19** | Quick favorites | Direct play |
-| **g / Home** | First item | Jump to top |
-| **G / End** | Last item | Jump to bottom |
-| **s** | Save | Add to favorites |
-| **p** | Play | Play station |
+| Key          | Global Action    | Screen-Specific     |
+| ------------ | ---------------- | ------------------- |
+| **↑↓ / jk**  | Navigate up/down | Works everywhere    |
+| **Enter**    | Select/Confirm   | Contextual          |
+| **Esc / q**  | Back/Cancel      | Previous screen     |
+| **Ctrl+C**   | Quit immediately | Force exit          |
+| **?**        | Help             | Context help        |
+| **/**        | Filter/Search    | Within current list |
+| **i**        | Info             | Station details     |
+| **1-6**      | Main menu items  | Quick access        |
+| **10-19**    | Quick favorites  | Direct play         |
+| **g / Home** | First item       | Jump to top         |
+| **G / End**  | Last item        | Jump to bottom      |
+| **s**        | Save             | Add to favorites    |
+| **p**        | Play             | Play station        |
 
 ---
 
@@ -367,7 +355,7 @@ When something goes wrong, TERA shows:
 - **How to fix it** (next steps)
 
 Example:
-```
+```text
 ✗ Failed to create gist!
 
 Error: Bad credentials

@@ -22,7 +22,7 @@ This is the final piece of the Play Screen implementation. Users can now save st
 ## Features Implemented
 
 ### 1. Save During Playback
-```
+```text
 Now Playing → Press 's' → Saves to My-favorites.json
 ```
 
@@ -61,7 +61,7 @@ go test ./... -v
 
 ## Complete User Flow
 
-```
+```text
 Main Menu (press 1)
   ↓
 Select List

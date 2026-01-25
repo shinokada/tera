@@ -103,7 +103,7 @@ echo '[]' > ~/.config/tera/favorites/Jazz.json
 
 ### State Machine
 The Play Screen uses a simple state machine:
-```
+```text
 playStateListSelection → playStateStationSelection → playStatePlaying
          ↑                      ↓                          ↓
          └──────────────────────┴──────────────────────────┘

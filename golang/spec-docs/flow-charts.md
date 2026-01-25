@@ -261,41 +261,14 @@ flowchart TD
     
     ShowResults --> ResultInput{User Input}
     ResultInput -->|Esc| Back2([Return to Search Menu])
-    ResultInput -->|/| Filter[Enter Filter Mode]
-    ResultInput -->|i| QuickInfo[Show Info Overlay]
-    ResultInput -->|Select| ShowStationInfo[Display Full Station Info]
+    ResultInput -->|0: Back| ShowResults
+    ResultInput -->|1: Play| PlayStation[Start MPV Player]
     
-    Filter --> FilterText[Type Filter]
-    FilterText --> UpdateResults[Filter Results]
-    UpdateResults --> ResultInput
-    
-    QuickInfo --> ResultInput
-    
-    ShowStationInfo --> Submenu[Show Station Submenu]
-    Submenu --> SubInput{User Input}
-    
-    SubInput -->|0| Back2
-    SubInput -->|1: Play| PlayStation[Start MPV Player]
-    SubInput -->|2: Save| ShowSaveLists[Show Lists to Save To]
-    SubInput -->|3: Back| ShowResults
-    
-    PlayStation --> MPV[Playing Station]
-    MPV --> PlayingState{Status}
-    PlayingState -->|Stopped| SavePrompt[Show Save Prompt]
-    PlayingState -->|q| SavePrompt
-    SavePrompt --> PromptChoice{Add to Favorites?}
-    PromptChoice -->|Yes| AddToQuick[Add to My-favorites.json]
-    PromptChoice -->|No| Back2
-    AddToQuick --> CheckDupe1{Already Exists?}
-    CheckDupe1 -->|Yes| DupeMsg1[Show: Already in Favorites]
-    CheckDupe1 -->|No| DoAdd[Add Station]
-    DupeMsg1 --> Back2
-    DoAdd --> Success1[Show Success]
-    Success1 --> Back2
+    PlayStation --> MPV[Playing Station with Staion status or play list from station]
+    MPV -->|q| ShowSaveLists
     
     ShowSaveLists --> ListChoice{Select List}
-    ListChoice -->|0| Submenu
-    ListChoice -->|00| Back2
+    ListChoice -->|Esc| Back2
     ListChoice -->|Select| CheckDupe2{Duplicate?}
     CheckDupe2 -->|Yes| DupeMsg2[Show: Already in List]
     CheckDupe2 -->|No| SaveIt[Save to List]
@@ -312,8 +285,6 @@ flowchart TD
 
 **UI Design:**
 - **Search results**: fzf-style display (many results, often 100s-1000s)
-- Instant filtering with '/' key
-- Quick info preview with 'i' key
 
 **Key Logic:**
 - Check for duplicates by StationUUID
@@ -326,7 +297,91 @@ flowchart TD
 ---
 
 ## 5. List Management Menu Screen
-[Same as original - no changes]
+
+```mermaid
+flowchart TD
+    Enter([Enter List Menu]) --> ShowMenu[Display List Management Options]
+    
+    ShowMenu --> MenuInput{User Input}
+    MenuInput -->|0/Esc| Back([Return to Main Menu])
+    MenuInput -->|1| Create[Create New List]
+    MenuInput -->|2| Delete[Delete List]
+    MenuInput -->|3| Edit[Edit List Name]
+    MenuInput -->|4| ShowAll[Show All Lists]
+    
+    Create --> ShowLists1[Display Current Lists]
+    ShowLists1 --> NameInput1[Prompt: Enter New Name]
+    NameInput1 --> NavCheck1{Input}
+    NavCheck1 -->|0| ShowMenu
+    NavCheck1 -->|00| Back
+    NavCheck1 -->|Empty| Error1[Show Error: Name Required]
+    NavCheck1 -->|Name| CheckExists1{List Exists?}
+    Error1 --> Create
+    CheckExists1 -->|Yes| Error2[Show Error: Already Exists]
+    CheckExists1 -->|No| DoCreate[Create List File]
+    Error2 --> Create
+    DoCreate --> InitFile[Initialize with Empty Array]
+    InitFile --> Success1[Show Success Message]
+    Success1 --> ShowMenu
+    
+    Delete --> ShowLists2[Display Current Lists]
+    ShowLists2 --> NameInput2[Prompt: Enter Name to Delete]
+    NameInput2 --> NavCheck2{Input}
+    NavCheck2 -->|0| ShowMenu
+    NavCheck2 -->|00| Back
+    NavCheck2 -->|Empty| Error3[Show Error: Name Required]
+    NavCheck2 -->|Name| CheckProtected{Protected List?}
+    Error3 --> Delete
+    CheckProtected -->|Yes: My-favorites| Error4[Cannot Delete My-favorites]
+    CheckProtected -->|No| CheckExists2{List Exists?}
+    Error4 --> Delete
+    CheckExists2 -->|No| Error5[List Doesn't Exist]
+    CheckExists2 -->|Yes| DoDelete[Delete File]
+    Error5 --> Delete
+    DoDelete --> Success2[Show Success]
+    Success2 --> ShowMenu
+    
+    Edit --> ShowLists3[Display Current Lists]
+    ShowLists3 --> NameInput3[Prompt: Enter Name to Edit]
+    NameInput3 --> NavCheck3{Input}
+    NavCheck3 -->|0| ShowMenu
+    NavCheck3 -->|00| Back
+    NavCheck3 -->|Empty| Error6[Show Error: Name Required]
+    NavCheck3 -->|Name| CheckExists3{List Exists?}
+    Error6 --> Edit
+    CheckExists3 -->|No| Error7[List Doesn't Exist]
+    CheckExists3 -->|Yes| CheckProtected2{Protected?}
+    Error7 --> Edit
+    CheckProtected2 -->|Yes| Error8[Cannot Rename My-favorites]
+    CheckProtected2 -->|No| NewNameInput[Prompt: Enter New Name]
+    Error8 --> Edit
+    NewNameInput --> NavCheck4{Input}
+    NavCheck4 -->|0| ShowMenu
+    NavCheck4 -->|00| Back
+    NavCheck4 -->|Empty| Error9[Name Required]
+    NavCheck4 -->|Name| CheckExists4{New Name Exists?}
+    Error9 --> NewNameInput
+    CheckExists4 -->|Yes| Error10[Name Already Taken]
+    CheckExists4 -->|No| DoRename[Rename File]
+    Error10 --> NewNameInput
+    DoRename --> Success3[Show Success]
+    Success3 --> ShowMenu
+    
+    ShowAll --> ListAll[Display All List Names]
+    ListAll --> WaitEnter[Wait for Enter]
+    WaitEnter --> ShowMenu
+```
+
+**State:**
+- `lists []string` - Available lists
+- `operation Operation` - Create, Delete, Edit, ShowAll
+- `inputValue string` - User input
+
+**Validation Rules:**
+- List names cannot be empty
+- Names must be unique
+- "My-favorites" is protected (cannot delete/rename)
+- Replace spaces with hyphens in names
 
 ---
 

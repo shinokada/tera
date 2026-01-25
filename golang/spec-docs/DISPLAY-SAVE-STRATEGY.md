@@ -2,15 +2,15 @@
 
 ## UI Display Strategy
 
-| Screen | Lists | Stations/Results | Rationale |
-|--------|-------|------------------|-----------|
-| **Main Menu** | N/A | Simple (10 quick fav) | Known items, direct access |
-| **Play Screen** | Arrow nav | fzf-style | Few lists, many stations |
-| **Search Results** | N/A | fzf-style | 100s-1000s of results |
-| **Delete Station** | Arrow nav | fzf-style | Few lists, many stations |
-| **List Management** | Simple menu | N/A | Few operations |
-| **Gist Menu** | Simple menu | N/A | 6 fixed options |
-| **My Gists** | Arrow nav | N/A | 1-10 gists typically |
+| Screen              | Lists       | Stations/Results      | Rationale                  |
+| ------------------- | ----------- | --------------------- | -------------------------- |
+| **Main Menu**       | N/A         | Simple (10 quick fav) | Known items, direct access |
+| **Play Screen**     | Arrow nav   | fzf-style             | Few lists, many stations   |
+| **Search Results**  | N/A         | fzf-style             | 100s-1000s of results      |
+| **Delete Station**  | Arrow nav   | fzf-style             | Few lists, many stations   |
+| **List Management** | Simple menu | N/A                   | Few operations             |
+| **Gist Menu**       | Simple menu | N/A                   | 6 fixed options            |
+| **My Gists**        | Arrow nav   | N/A                   | 1-10 gists typically       |
 
 ### Rules of Thumb
 - **< 15 items + user knows names** → Simple arrow navigation
@@ -21,17 +21,17 @@
 
 ## Save to Favorites Strategy
 
-| Screen | Context | When to Save | How to Save | Prompt After? |
-|--------|---------|--------------|-------------|---------------|
-| **QuickPlay (10-19)** | Already in My-favorites | Never | N/A | ❌ No |
-| **Play from My-favorites** | Already in My-favorites | Never | N/A | ❌ No |
-| **Play from other list** | Curation/Promotion | Optional during | Press 's' key | ❌ No |
-| **Search Results** | NEW discovery | After playback | User chooses | ✅ Yes |
-| **Lucky** | NEW discovery | After playback | User chooses | ✅ Yes |
+| Screen                     | Context                 | When to Save    | How to Save   | Prompt After? |
+| -------------------------- | ----------------------- | --------------- | ------------- | ------------- |
+| **QuickPlay (10-19)**      | Already in My-favorites | Never           | N/A           | ❌ No          |
+| **Play from My-favorites** | Already in My-favorites | Never           | N/A           | ❌ No          |
+| **Play from other list**   | Curation/Promotion      | Optional during | Press 's' key | ❌ No          |
+| **Search Results**         | NEW discovery           | After playback  | User chooses  | ✅ Yes         |
+| **Lucky**                  | NEW discovery           | After playback  | User chooses  | ✅ Yes         |
 
 ### Save Logic Decision Tree
 
-```
+```text
 Is station from QuickPlay (10-19)?
   └─> YES: Never save (already in My-favorites)
   
@@ -73,23 +73,23 @@ func shouldShowSaveOption(station Station, listName string) bool {
 ## User-Facing Messages
 
 ### When Save Not Shown
-```
+```text
 [No message - 's' key just not mentioned in help]
 ```
 
 ### When User Presses 's' (Already Saved)
-```
+```text
 ⭐ Already in Quick Favorites!
 ```
 
 ### When User Presses 's' (Success)
-```
+```text
 ✓ Added to Quick Favorites!
 You can access it from the Main Menu.
 ```
 
 ### Save Prompt After Playback (Search/Lucky)
-```
+```text
 Did you enjoy this station?
 
 1) ⭐ Add to Quick Favorites
@@ -127,23 +127,23 @@ func isInQuickFavorites(stationUUID string) bool {
 
 ## Test Matrix
 
-| Test Case | List | Already in Quick? | Show 's'? | Prompt After? |
-|-----------|------|-------------------|-----------|---------------|
-| QuickPlay #10 | My-favorites | Yes | ❌ | ❌ |
-| Play My-favorites → Station A | My-favorites | Yes | ❌ | ❌ |
-| Play Jazz → Station B | Jazz | No | ✅ | ❌ |
-| Play Jazz → Station C | Jazz | Yes | ❌ | ❌ |
-| Search → Play Station D | (none) | No | N/A | ✅ |
-| Search → Play Station E | (none) | Yes | N/A | ✅ (with "already saved") |
-| Lucky → Station F | (none) | No | N/A | ✅ |
-| Lucky → Station G | (none) | Yes | N/A | ✅ (with "already saved") |
+| Test Case                     | List         | Already in Quick? | Show 's'? | Prompt After?            |
+| ----------------------------- | ------------ | ----------------- | --------- | ------------------------ |
+| QuickPlay #10                 | My-favorites | Yes               | ❌         | ❌                        |
+| Play My-favorites → Station A | My-favorites | Yes               | ❌         | ❌                        |
+| Play Jazz → Station B         | Jazz         | No                | ✅         | ❌                        |
+| Play Jazz → Station C         | Jazz         | Yes               | ❌         | ❌                        |
+| Search → Play Station D       | (none)       | No                | N/A       | ✅                        |
+| Search → Play Station E       | (none)       | Yes               | N/A       | ✅ (with "already saved") |
+| Lucky → Station F             | (none)       | No                | N/A       | ✅                        |
+| Lucky → Station G             | (none)       | Yes               | N/A       | ✅ (with "already saved") |
 
 ---
 
 ## Common Scenarios
 
 ### Scenario: User Building Quick Favorites
-```
+```text
 1. Search for "jazz"
 2. Find cool station
 3. Play it
@@ -154,7 +154,7 @@ func isInQuickFavorites(stationUUID string) bool {
 ```
 
 ### Scenario: User Curating from Existing Lists
-```
+```text
 1. Go to Play Screen
 2. Select "Classical" list
 3. Browse stations
@@ -165,7 +165,7 @@ func isInQuickFavorites(stationUUID string) bool {
 ```
 
 ### Scenario: User Playing Quick Favorites
-```
+```text
 1. At Main Menu
 2. Press "10" (first quick favorite)
 3. Station plays
@@ -207,7 +207,7 @@ A: Yes, in Search Results there's a "Save to List" option that lets you choose a
 
 ## Visual Guide
 
-```
+```text
 Main Menu
 ├── QuickPlay (10-19)
 │   └── Plays from My-favorites.json

@@ -41,7 +41,7 @@ Expected tests:
 ## 🎯 How It Works
 
 ### User Flow
-```
+```text
 Main Menu → Play Screen → Select List → View Stations
                                               ↓
                                     Filter with '/' key

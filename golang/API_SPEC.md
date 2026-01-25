@@ -1,80 +1,140 @@
 # TERA Go API Specification
 
+This document defines the public interfaces and external integrations for the TERA terminal radio application, written in Go. It reflects the current Radio Browser API behavior and aligns with idiomatic Go design.
+
+---
+
 ## Radio Browser API Client
+Each external service defines its own base URL and timeout constants to avoid ambiguity and allow independent tuning.
 
 ### Base Configuration
 
 ```go
 const (
-    BaseURL = "https://de1.api.radio-browser.info/json/stations"
-    Timeout = 10 * time.Second
+    RadioBrowserBaseURL = "https://de1.api.radio-browser.info"
+    RadioBrowserTimeout = 10 * time.Second
+
+    // Timeouts
+    RadioBrowserTimeout = 10 * time.Second
+    PlayerTimeout       = 5 * time.Second
 )
 ```
+
+All Radio Browser endpoints are built relative to `RadioBrowserBaseURL`.
+
+---
 
 ### Client Interface
 
 ```go
 type RadioBrowserClient interface {
+    // Search
     SearchByTag(ctx context.Context, tag string) ([]Station, error)
     SearchByName(ctx context.Context, name string) ([]Station, error)
-    SearchByLanguage(ctx context.Context, lang string) ([]Station, error)
-    SearchByCountry(ctx context.Context, code string) ([]Station, error)
+    SearchByLanguage(ctx context.Context, language string) ([]Station, error)
+    SearchByCountry(ctx context.Context, countryCode string) ([]Station, error)
     SearchByState(ctx context.Context, state string) ([]Station, error)
     SearchAdvanced(ctx context.Context, params SearchParams) ([]Station, error)
+
+    // Lookup
+    GetByUUID(ctx context.Context, uuid string) (*Station, error)
+    GetByURL(ctx context.Context, streamURL string) (*Station, error)
+
+    // Listing
+    ListAll(ctx context.Context) ([]Station, error)
 }
 ```
 
-### Search Methods
+---
+
+### Search Endpoints
+
+All search operations use **HTTP GET** and pass parameters via the query string.
+
+**Base Path:** `/json/stations/search`
 
 #### SearchByTag
+
 ```go
 func (c *Client) SearchByTag(ctx context.Context, tag string) ([]Station, error)
 ```
-**POST** `/search`  
-**Body:** `tag=<value>`  
-**Returns:** Array of Station objects
+
+**Request:**
+
+```
+GET /json/stations/search?tag=<value>
+```
+
+---
 
 #### SearchByName
+
 ```go
 func (c *Client) SearchByName(ctx context.Context, name string) ([]Station, error)
 ```
-**POST** `/search`  
-**Body:** `name=<value>`  
-**Returns:** Array of Station objects
+
+**Request:**
+
+```
+GET /json/stations/search?name=<value>
+```
+
+---
 
 #### SearchByLanguage
+
 ```go
-func (c *Client) SearchByLanguage(ctx context.Context, lang string) ([]Station, error)
+func (c *Client) SearchByLanguage(ctx context.Context, language string) ([]Station, error)
 ```
-**POST** `/search`  
-**Body:** `language=<value>`  
-**Returns:** Array of Station objects
+
+**Request:**
+
+```
+GET /json/stations/search?language=<value>
+```
+
+---
 
 #### SearchByCountry
+
 ```go
-func (c *Client) SearchByCountry(ctx context.Context, code string) ([]Station, error)
+func (c *Client) SearchByCountry(ctx context.Context, countryCode string) ([]Station, error)
 ```
-**POST** `/search`  
-**Body:** `countrycode=<value>`  
-**Returns:** Array of Station objects
+
+**Request:**
+
+```
+GET /json/stations/search?countrycode=<value>
+```
+
+---
 
 #### SearchByState
+
 ```go
 func (c *Client) SearchByState(ctx context.Context, state string) ([]Station, error)
 ```
-**POST** `/search`  
-**Body:** `state=<value>`  
-**Returns:** Array of Station objects
+
+**Request:**
+
+```
+GET /json/stations/search?state=<value>
+```
+
+---
 
 #### SearchAdvanced
+
 ```go
 func (c *Client) SearchAdvanced(ctx context.Context, params SearchParams) ([]Station, error)
 ```
-**POST** `/search`  
-**Body:** Multiple form fields  
-**Returns:** Array of Station objects
 
-**SearchParams:**
+**Request:**
+
+```
+GET /json/stations/search?<query parameters>
+```
+
 ```go
 type SearchParams struct {
     Tag         string
@@ -85,12 +145,82 @@ type SearchParams struct {
     Codec       string
     BitrateMin  int
     BitrateMax  int
+    Limit       int
+    Offset      int
+}
+```
+
+Only non-zero / non-empty fields are included in the query string.
+
+---
+
+### Lookup Endpoints
+
+#### GetByUUID
+
+```go
+func (c *Client) GetByUUID(ctx context.Context, uuid string) (*Station, error)
+```
+
+**Request:**
+
+```
+GET /json/stations/byuuid/<uuid>
+```
+
+---
+
+#### GetByURL
+
+```go
+func (c *Client) GetByURL(ctx context.Context, streamURL string) (*Station, error)
+```
+
+**Request:**
+
+```
+GET /json/stations/byurl/<url>
+```
+
+---
+
+### List All Stations
+
+```go
+func (c *Client) ListAll(ctx context.Context) ([]Station, error)
+```
+
+**Request:**
+
+```
+GET /json/stations
+```
+
+---
+
+## Station Model
+
+```go
+type Station struct {
+    StationUUID string `json:"stationuuid"`
+    Name        string `json:"name"`
+    URL         string `json:"url"`
+    URLResolved string `json:"url_resolved"`
+    Tags        string `json:"tags"`
+    Country     string `json:"country"`
+    CountryCode string `json:"countrycode"`
+    Language    string `json:"language"`
+    Codec       string `json:"codec"`
+    Bitrate     int    `json:"bitrate"`
+    Votes       int    `json:"votes"`
 }
 ```
 
 ---
 
 ## Storage Interface
+
+Persistent storage is file-based and uses JSON encoding.
 
 ```go
 type Storage interface {
@@ -100,25 +230,29 @@ type Storage interface {
     SaveList(ctx context.Context, list *FavoritesList) error
     DeleteList(ctx context.Context, name string) error
     RenameList(ctx context.Context, oldName, newName string) error
-    
+
     // Stations
     AddStation(ctx context.Context, listName string, station Station) error
     RemoveStation(ctx context.Context, listName string, stationUUID string) error
     StationExists(ctx context.Context, listName string, stationUUID string) (bool, error)
-    
+
     // Config
     LoadConfig(ctx context.Context) (*Config, error)
     SaveConfig(ctx context.Context, config *Config) error
 }
 ```
 
-### File Operations
+---
 
-**Base Path:** `~/.config/tera/favorite/`  
-**Format:** JSON  
-**Encoding:** UTF-8
+### File Layout
 
-#### List File Structure
+**Base Path:** `~/.config/tera/favorites/`
+
+* One JSON file per favorites list
+* UTF-8 encoding
+
+#### Favorites List File Structure
+
 ```json
 [
   {
@@ -127,9 +261,9 @@ type Storage interface {
     "url_resolved": "https://...",
     "tags": "jazz,smooth",
     "country": "United States",
-    "votes": 1234,
     "codec": "MP3",
-    "bitrate": 128
+    "bitrate": 128,
+    "votes": 1234
   }
 ]
 ```
@@ -148,22 +282,28 @@ type Player interface {
 }
 ```
 
+---
+
 ### MPV Integration
 
-#### Command Format
+#### Command
+
 ```bash
 mpv --no-video --really-quiet <stream_url>
 ```
 
-#### Process Management
-- Start MPV as subprocess
-- Capture stdout/stderr for logging
-- Handle SIGTERM for graceful shutdown
-- Track process state
+#### Behavior
+
+* Start MPV as a subprocess
+* Capture stdout/stderr for logging
+* Handle SIGTERM for graceful shutdown
+* Track process lifecycle and play state
 
 ---
 
-## Gist Client Interface
+## GitHub Gist Client
+
+Used for backup and synchronization of favorites lists.
 
 ```go
 type GistClient interface {
@@ -175,52 +315,71 @@ type GistClient interface {
 }
 ```
 
-### GitHub API Methods
+---
+
+### GitHub API Details
 
 #### Create Gist
-```go
-func (c *GistClient) Create(ctx context.Context, files map[string]string, description string) (*GistInfo, error)
-```
-**POST** `https://api.github.com/gists`  
-**Headers:**
-- `Authorization: Bearer <token>`
-- `Accept: application/vnd.github+json`
-- `X-GitHub-Api-Version: 2022-11-28`
 
-**Body:**
+**POST** `https://api.github.com/gists`
+
+Headers:
+
+* `Authorization: Bearer <token>`
+* `Accept: application/vnd.github+json`
+* `X-GitHub-Api-Version: 2022-11-28`
+
 ```json
 {
   "description": "Terminal radio favorite lists",
   "public": false,
   "files": {
-    "filename.json": {
+    "favorites.json": {
       "content": "..."
     }
   }
 }
 ```
 
+---
+
 #### Update Gist
-**PATCH** `https://api.github.com/gists/<gist_id>`  
-**Body:**
+
+**PATCH** `https://api.github.com/gists/<gist_id>`
+
 ```json
 {
   "description": "New description"
 }
 ```
 
-#### Delete Gist
-**DELETE** `https://api.github.com/gists/<gist_id>`  
-**Returns:** 204 No Content on success
+---
 
-#### Get Gist
-**GET** `https://api.github.com/gists/<gist_id>`  
-**Returns:** Gist object with files
+#### Delete Gist
+
+**DELETE** `https://api.github.com/gists/<gist_id>`
+
+Returns `204 No Content` on success.
 
 ---
 
-## Token Manager Interface
+#### Get Gist
 
+**GET** `https://api.github.com/gists/<gist_id>`
+
+Returns a Gist object including file contents.
+
+---
+
+## Notes
+
+* All network operations must honor context cancellation
+* Clients should implement retry and backoff where appropriate
+* API consumers must not rely on undocumented Radio Browser behavior
+
+
+## Token Manager Interface
+Manages GitHub authentication tokens used by the Gist client.
 ```go
 type TokenManager interface {
     Save(token string) error
@@ -232,7 +391,7 @@ type TokenManager interface {
 ```
 
 ### Token Storage
-
+Token storage follows a secure, layered strategy.
 **Priority:**
 1. System keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager)
 2. Encrypted file fallback
@@ -241,17 +400,28 @@ type TokenManager interface {
 - Service: `tera`
 - Key: `github-token`
 
-**File Fallback:** `~/.config/tera/tokens/github_token`  
-**Permissions:** 600 (owner read/write only)
+### File Fallback
+- Path: `~/.config/tera/tokens/github_token`  
+- Permissions: `0600` (owner read/write only)
+Implementations must prefer the system keyring when available.
 
 ### Token Validation
-```go
-func (tm *TokenManager) Validate(ctx context.Context, token string) (*TokenInfo, error)
-```
-**GET** `https://api.github.com/user`  
-**Headers:** `Authorization: Bearer <token>`
+Validate verifies the token against the GitHub API and returns token metadata.
 
-**TokenInfo:**
+- Returns an error if the token is expired, revoked, or invalid
+- Must respect context cancellation
+- Should extract scopes from response headers when available
+
+#### Request
+```sh
+GET https://api.github.com/user
+```
+#### Headers
+```text
+Authorization: Bearer <token>
+Accept: application/vnd.github+json
+```
+
 ```go
 type TokenInfo struct {
     Username string
@@ -285,22 +455,23 @@ type Station struct {
 ```
 
 ### FavoritesList
+Logical grouping of favorite stations.
 ```go
 type FavoritesList struct {
-    Name     string    `json:"-"`          // From filename
-    Stations []Station `json:"stations"`   // Station array
+    Name     string    `json:"-"` // Derived from filename
+    Stations []Station `json:"stations"`
 }
 ```
 
-**File Format:** `<name>.json` contains array of Station objects directly
+**File Format:** `<name>.json` contains an array of `Station` objects.
 
 ### Config
 ```go
 type Config struct {
-    FavoritePath string    `json:"favorite_path"`
-    CachePath    string    `json:"cache_path"`
-    LastPlayed   *Station  `json:"last_played,omitempty"`
-    GistID       string    `json:"gist_id,omitempty"`
+    FavoritePath string   `json:"favorite_path"`
+    CachePath    string   `json:"cache_path"`
+    LastPlayed   *Station `json:"last_played,omitempty"`
+    GistID       string   `json:"gist_id,omitempty"`
 }
 ```
 
@@ -377,11 +548,9 @@ const (
     MyFavoritesFile  = "My-favorites.json"
     
     // API
-    RadioBrowserURL = "https://de1.api.radio-browser.info/json/stations"
     GitHubAPIURL    = "https://api.github.com"
     
     // Timeouts
-    HTTPTimeout    = 10 * time.Second
     PlayerTimeout  = 5 * time.Second
     
     // Limits

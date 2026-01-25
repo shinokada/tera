@@ -59,7 +59,7 @@ All essential documentation is complete. You have everything needed to begin Pha
 
 ---
 
-## Supporting Documentation (in ai-documents/)
+## Supporting Documentation (in spec-documents/)
 
 ### 4. core-goals.md
 **Purpose:** Why convert to Go  
@@ -131,15 +131,15 @@ All essential documentation is complete. You have everything needed to begin Pha
 
 ## What Each Document Provides
 
-| Document | Answers |
-|----------|---------|
-| API_SPEC.md | What interfaces/methods do I implement? |
-| GETTING_STARTED.md | How do I set up and build the first version? |
-| TESTING.md | How do I test my code? |
-| keyboard-shortcuts-guide.md | What keyboard shortcuts do I implement? |
-| technical-approach.md | What architecture patterns do I use? |
-| implementation-plan.md | What order do I build features? |
-| flow-charts.md | How do screens behave? |
+| Document                    | Answers                                      |
+| --------------------------- | -------------------------------------------- |
+| API_SPEC.md                 | What interfaces/methods do I implement?      |
+| GETTING_STARTED.md          | How do I set up and build the first version? |
+| TESTING.md                  | How do I test my code?                       |
+| keyboard-shortcuts-guide.md | What keyboard shortcuts do I implement?      |
+| technical-approach.md       | What architecture patterns do I use?         |
+| implementation-plan.md      | What order do I build features?              |
+| flow-charts.md              | How do screens behave?                       |
 
 ---
 

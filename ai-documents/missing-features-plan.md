@@ -96,7 +96,7 @@
 - `d` key: Delete selected station (with confirmation)
 
 **Updated Main Menu Options**:
-```
+```text
 1. Play from Favorites
 2. Search Stations  
 3. Manage Lists

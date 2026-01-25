@@ -4,7 +4,7 @@ Please read CLAUDE.md first.
 In the last session, we started coding for the Search Screen.
 However there are quite few problems.
 1. Test fails as the following:
-```
+```text
 ➜  tera git:(golang) ✗ ./run_search_tests.sh
 ================================
 TERA Search Screen Test Suite

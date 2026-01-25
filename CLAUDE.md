@@ -1,9 +1,10 @@
-- This is on the process of converting Bash to Golang.
+- For fenced blocks, annotate with text to satisfy MD040.
+- Currently I'm on the process of converting Bash to Golang.
 - Read before proceed all spec documents in the golang spec-docs directory. Especially flow-charts.md.
 - Previous version with Bash codes are in bash directory
 - When a new feature is added, create a unit test. 
-- Before creating a unit test, remove confilicting unit test(s).
-- When you create a summary, save it in ai-documents
+- Before creating a unit test, remove conflicting unit test(s).
+- When you create a summary, create a short summary and save it in ai-documents
 - Be concise. Do not repeat when you write md file.
 - Use mermaid for flow diagrams.
 - Make docs fully GitHub-ready and more “spec-like”.

@@ -61,7 +61,7 @@ After reviewing `golang/spec-docs/keyboard-shortcuts-guide.md`, here are the mis
 - ✓ Renumbered all subsequent sections
 
 **New Main Menu Options**:
-```
+```text
 1. Play from Favorites
 2. Search Stations
 3. Manage Lists
@@ -85,13 +85,13 @@ After reviewing `golang/spec-docs/keyboard-shortcuts-guide.md`, here are the mis
 - `i` - Show info preview overlay
 
 **Delete Flow**:
-```
+```text
 StationInput → d → ConfirmDelete? → Yes → DeleteStation → SaveJSON → Success
                                   → No → ShowStations
 ```
 
 **Info Preview Flow**:
-```
+```text
 StationInput → i → InfoPreview → Esc/i → ShowStations
 ```
 

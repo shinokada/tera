@@ -39,7 +39,7 @@ The `bubbles` library has these as dependencies, but they weren't pulled into `g
 ## After Fixing
 
 You should see output like:
-```
+```text
 === RUN   TestNewPlayModel
 --- PASS: TestNewPlayModel (0.00s)
 === RUN   TestGetAvailableLists

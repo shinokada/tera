@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -13,6 +14,7 @@ import (
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/internal/ui/components"
 )
 
 // searchState represents the current state in the search screen
@@ -25,12 +27,15 @@ const (
 	searchStateResults
 	searchStateStationInfo
 	searchStatePlaying
+	searchStateSavePrompt
 )
 
 // SearchModel represents the search screen
 type SearchModel struct {
 	state            searchState
 	searchType       api.SearchType
+	menuList         list.Model        // List-based menu navigation
+	stationInfoMenu  list.Model        // Station info submenu navigation
 	apiClient        *api.Client
 	textInput        textinput.Model
 	spinner          spinner.Model
@@ -77,14 +82,41 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
+	// Create search menu items
+	menuItems := []components.MenuItem{
+		components.NewMenuItem("Search by Tag", "(genre, style, etc.)", "1"),
+		components.NewMenuItem("Search by Name", "", "2"),
+		components.NewMenuItem("Search by Language", "", "3"),
+		components.NewMenuItem("Search by Country Code", "", "4"),
+		components.NewMenuItem("Search by State", "", "5"),
+		components.NewMenuItem("Advanced Search", "(multiple criteria)", "6"),
+	}
+
+	// Set enough height for all 6 menu items + title
+	menuList := components.CreateMenu(menuItems, "🔍 Search Radio Stations", 50, 15)
+
+	// Create station info submenu items
+	infoMenuItems := []components.MenuItem{
+		components.NewMenuItem("Play this station", "", "1"),
+		components.NewMenuItem("Save to Quick Favorites", "", "2"),
+		components.NewMenuItem("Back to search results", "", "3"),
+	}
+
+	// Initial height will be updated on first WindowSizeMsg
+	stationInfoMenu := components.CreateMenu(infoMenuItems, "What would you like to do?", 50, 10)
+
 	return SearchModel{
-		state:          searchStateMenu,
-		apiClient:      apiClient,
-		textInput:      ti,
-		spinner:        sp,
-		favoritePath:   favoritePath,
-		player:         player.NewMPVPlayer(),
-		quickFavorites: []api.Station{},
+		state:           searchStateMenu,
+		apiClient:       apiClient,
+		menuList:        menuList,
+		stationInfoMenu: stationInfoMenu,
+		textInput:       ti,
+		spinner:         sp,
+		favoritePath:    favoritePath,
+		player:          player.NewMPVPlayer(),
+		quickFavorites:  []api.Station{},
+		width:           80,  // Default width
+		height:          24,  // Default height
 	}
 }
 
@@ -93,8 +125,18 @@ func (m SearchModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.loadQuickFavorites(),
 		m.spinner.Tick,
+		ticksEverySecond(), // For save message countdown
 	)
 }
+
+// ticksEverySecond returns a command that ticks every 60th of a second
+func ticksEverySecond() tea.Cmd {
+	return tea.Tick(time.Second/60, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
+type tickMsg time.Time
 
 // loadQuickFavorites loads My-favorites.json for duplicate checking
 func (m SearchModel) loadQuickFavorites() tea.Cmd {
@@ -118,8 +160,28 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		if m.state == searchStateResults && m.resultsList.Items() != nil {
-			m.resultsList.SetSize(msg.Width, msg.Height-10)
+		// Calculate usable height (leaving room for footer only - title is inside list)
+		// Footer needs ~3 lines: empty line + help text + our custom footer
+		listHeight := msg.Height - 4
+		if listHeight < 5 {
+			listHeight = 5 // Minimum height
+		}
+
+		// Update list sizes based on current state
+		switch m.state {
+		case searchStateMenu:
+			m.menuList.SetSize(msg.Width-4, listHeight)
+		case searchStateResults:
+			if m.resultsList.Items() != nil && len(m.resultsList.Items()) > 0 {
+				m.resultsList.SetSize(msg.Width-4, listHeight)
+			}
+		case searchStateStationInfo:
+			// Station info menu is smaller
+			infoHeight := 10
+			if infoHeight > listHeight {
+				infoHeight = listHeight
+			}
+			m.stationInfoMenu.SetSize(msg.Width-4, infoHeight)
 		}
 
 	case tea.KeyMsg:
@@ -134,6 +196,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleStationInfoInput(msg)
 		case searchStatePlaying:
 			return m.handlePlayerUpdate(msg)
+		case searchStateSavePrompt:
+			return m.handleSavePrompt(msg)
 		}
 
 	case quickFavoritesLoadedMsg:
@@ -147,11 +211,19 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resultsItems = append(m.resultsItems, stationListItem{station: station})
 		}
 
+		// Calculate proper list height
+		// Footer needs ~3 lines, so leave 4 lines total for safety
+		listHeight := m.height - 4
+		if listHeight < 5 {
+			listHeight = 5
+		}
+
 		// Create results list
 		delegate := list.NewDefaultDelegate()
-		m.resultsList = list.New(m.resultsItems, delegate, m.width, m.height-10)
+		m.resultsList = list.New(m.resultsItems, delegate, m.width, listHeight)
 		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
 		m.resultsList.SetShowHelp(true)
+		m.resultsList.SetShowStatusBar(true)  // Show status bar for filter count
 		m.resultsList.SetFilteringEnabled(true)
 		return m, nil
 
@@ -166,6 +238,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
+
+	case playbackStartedMsg:
+		// Playback started successfully, stay in playing state
+		return m, nil
 
 	case playbackStoppedMsg:
 		// Handle save prompt after playback
@@ -184,6 +260,17 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessageTime = 150
 		return m, nil
+
+	case tickMsg:
+		// Handle save message countdown
+		if m.saveMessageTime > 0 {
+			m.saveMessageTime--
+			if m.saveMessageTime <= 0 {
+				m.saveMessage = ""
+			}
+		}
+		// Continue ticking
+		return m, ticksEverySecond()
 	}
 
 	return m, tea.Batch(cmds...)
@@ -191,47 +278,63 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleMenuInput handles input in the search menu state
 func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "0", "esc":
-		// Return to main menu
-		return m, func() tea.Msg { return backToMainMsg{} }
-	case "1":
-		m.searchType = api.SearchByTag
-		m.state = searchStateInput
-		m.textInput.Placeholder = "Enter tag (e.g., jazz, rock, news)..."
-		m.textInput.Focus()
-		return m, nil
-	case "2":
-		m.searchType = api.SearchByName
-		m.state = searchStateInput
-		m.textInput.Placeholder = "Enter station name..."
-		m.textInput.Focus()
-		return m, nil
-	case "3":
-		m.searchType = api.SearchByLanguage
-		m.state = searchStateInput
-		m.textInput.Placeholder = "Enter language (e.g., english, spanish)..."
-		m.textInput.Focus()
-		return m, nil
-	case "4":
-		m.searchType = api.SearchByCountry
-		m.state = searchStateInput
-		m.textInput.Placeholder = "Enter country code (e.g., US, UK, FR)..."
-		m.textInput.Focus()
-		return m, nil
-	case "5":
-		m.searchType = api.SearchByState
-		m.state = searchStateInput
-		m.textInput.Placeholder = "Enter state (e.g., California, Texas)..."
-		m.textInput.Focus()
-		return m, nil
-	case "6":
-		m.searchType = api.SearchAdvanced
-		m.state = searchStateInput
-		m.textInput.Placeholder = "Enter search query..."
-		m.textInput.Focus()
-		return m, nil
+	// Handle quit
+	if msg.String() == "q" {
+		// Stop any playing station when quitting
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
+		return m, tea.Quit
 	}
+	
+	// Handle back to main menu
+	if msg.String() == "esc" {
+		// Stop any playing station when exiting
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
+		return m, func() tea.Msg { return backToMainMsg{} }
+	}
+
+	// Handle menu navigation and selection
+	newList, selected := components.HandleMenuKey(msg, m.menuList)
+	m.menuList = newList
+
+	if selected >= 0 {
+		// Execute selected search type
+		return m.executeSearchType(selected)
+	}
+
+	return m, nil
+}
+
+// executeSearchType sets up the search based on selected menu index
+func (m SearchModel) executeSearchType(index int) (tea.Model, tea.Cmd) {
+	switch index {
+	case 0: // Search by Tag
+		m.searchType = api.SearchByTag
+		m.textInput.Placeholder = "Enter tag (e.g., jazz, rock, news)..."
+	case 1: // Search by Name
+		m.searchType = api.SearchByName
+		m.textInput.Placeholder = "Enter station name..."
+	case 2: // Search by Language
+		m.searchType = api.SearchByLanguage
+		m.textInput.Placeholder = "Enter language (e.g., english, spanish)..."
+	case 3: // Search by Country
+		m.searchType = api.SearchByCountry
+		m.textInput.Placeholder = "Enter country code (e.g., US, UK, FR)..."
+	case 4: // Search by State
+		m.searchType = api.SearchByState
+		m.textInput.Placeholder = "Enter state (e.g., California, Texas)..."
+	case 5: // Advanced Search
+		m.searchType = api.SearchAdvanced
+		m.textInput.Placeholder = "Enter search query..."
+	}
+
+	m.state = searchStateInput
+	m.textInput.Focus()
 	return m, nil
 }
 
@@ -247,13 +350,13 @@ func (m SearchModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textInput.Blur()
 		m.state = searchStateLoading
 		return m, m.performSearch(query)
-	case "0":
+	case "esc":
 		m.textInput.SetValue("")
 		m.textInput.Blur()
 		m.state = searchStateMenu
 		return m, nil
-	case "00", "esc":
-		return m, func() tea.Msg { return backToMainMsg{} }
+	case "q":
+		return m, tea.Quit
 	default:
 		// Pass all other keys to text input for normal typing
 		var cmd tea.Cmd
@@ -308,15 +411,31 @@ func (m SearchModel) performSearch(query string) tea.Cmd {
 // handleResultsInput handles input in the results list state
 func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "q":
+		// Quit the app
+		// Stop any playing station first
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		return m, tea.Quit
 	case "esc":
+		// Stop any playing station when going back
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
 		m.state = searchStateMenu
 		return m, nil
 	case "enter":
-		// Show station info and submenu
+		// Play station directly
 		if item, ok := m.resultsList.SelectedItem().(stationListItem); ok {
 			m.selectedStation = &item.station
-			m.state = searchStateStationInfo
-			return m, nil
+			// Stop any currently playing station first
+			if m.player != nil && m.player.IsPlaying() {
+				m.player.Stop()
+			}
+			m.state = searchStatePlaying
+			return m, m.playStation(item.station)
 		}
 		return m, nil
 	default:
@@ -329,18 +448,56 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleStationInfoInput handles input in the station info state
 func (m SearchModel) handleStationInfoInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "0":
-		return m, func() tea.Msg { return backToMainMsg{} }
-	case "1":
-		// Play station
+	// Handle quit
+	if msg.String() == "q" {
+		// Stop any playing station
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
+		return m, tea.Quit
+	}
+
+	// Handle menu navigation and selection
+	newList, selected := components.HandleMenuKey(msg, m.stationInfoMenu)
+	m.stationInfoMenu = newList
+
+	if selected >= 0 {
+		return m.executeStationAction(selected)
+	}
+
+	// Handle Esc to go back
+	if msg.String() == "esc" {
+		// Stop player when going back
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
+		m.state = searchStateResults
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// executeStationAction performs the selected action on the station
+func (m SearchModel) executeStationAction(index int) (tea.Model, tea.Cmd) {
+	switch index {
+	case 0: // Play station
+		// Stop any currently playing station first
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
 		m.state = searchStatePlaying
 		return m, m.playStation(*m.selectedStation)
-	case "2":
-		// Save to Quick Favorites
+	case 1: // Save to Quick Favorites
 		return m, m.saveToQuickFavorites(*m.selectedStation)
-	case "3", "esc":
-		// Back to results
+	case 2: // Back to results
+		// Stop player when going back
+		if m.player != nil && m.player.IsPlaying() {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
 		m.state = searchStateResults
 		return m, nil
 	}
@@ -354,24 +511,80 @@ func (m SearchModel) playStation(station api.Station) tea.Cmd {
 		if err != nil {
 			return playerErrorMsg{err: err}
 		}
-		return playbackStoppedMsg{}
+		// Return started message, not stopped
+		// Player will continue running until user stops it
+		return playbackStartedMsg{}
 	}
 }
 
 // handlePlaybackStopped handles return to results after playback
 func (m SearchModel) handlePlaybackStopped() (tea.Model, tea.Cmd) {
+	// Check if station is already in Quick Favorites
+	if m.selectedStation != nil {
+		isDuplicate := false
+		for _, s := range m.quickFavorites {
+			if s.StationUUID == m.selectedStation.StationUUID {
+				isDuplicate = true
+				break
+			}
+		}
+		
+		if isDuplicate {
+			// Don't show save prompt if already saved
+			m.saveMessage = "Already in Quick Favorites"
+			m.saveMessageTime = 150
+			m.state = searchStateResults
+			m.selectedStation = nil
+			return m, nil
+		}
+		
+		// Show save prompt for new stations
+		m.state = searchStateSavePrompt
+		return m, nil
+	}
+	
+	// No station selected, just go back
 	m.state = searchStateResults
+	return m, nil
+}
+
+// handleSavePrompt handles the save prompt after playback
+func (m SearchModel) handleSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "1":
+		// Save to Quick Favorites
+		m.state = searchStateResults
+		station := *m.selectedStation
+		m.selectedStation = nil
+		return m, m.saveToQuickFavorites(station)
+	case "n", "2", "esc":
+		// Don't save, go back to results
+		m.state = searchStateResults
+		m.selectedStation = nil
+		return m, nil
+	case "q":
+		// Quit from save prompt
+		return m, tea.Quit
+	}
 	return m, nil
 }
 
 // handlePlayerUpdate handles player-related updates during playback
 func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc", "0":
-		// Stop playback
+	case "q":
+		// Stop playback first
 		if m.player != nil {
 			m.player.Stop()
 		}
+		// Then trigger the save prompt flow
+		return m.handlePlaybackStopped()
+	case "esc":
+		// Esc during playback goes back without save prompt
+		if m.player != nil {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
 		m.state = searchStateResults
 		return m, nil
 	case "s":
@@ -433,16 +646,9 @@ func (m SearchModel) View() string {
 
 	switch m.state {
 	case searchStateMenu:
-		s.WriteString(titleStyle.Render("🔍 Search Radio Stations"))
-		s.WriteString("\n\n")
-		s.WriteString("1) Search by Tag\n")
-		s.WriteString("2) Search by Name\n")
-		s.WriteString("3) Search by Language\n")
-		s.WriteString("4) Search by Country Code\n")
-		s.WriteString("5) Search by State\n")
-		s.WriteString("6) Advanced Search\n")
+		s.WriteString(m.menuList.View())
 		s.WriteString("\n")
-		s.WriteString(subtleStyle.Render("0/Esc) Back to Main Menu"))
+		s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • q: Quit"))
 
 		if m.err != nil {
 			s.WriteString("\n\n")
@@ -456,7 +662,7 @@ func (m SearchModel) View() string {
 		s.WriteString("\n\n")
 		s.WriteString(m.textInput.View())
 		s.WriteString("\n\n")
-		s.WriteString(subtleStyle.Render("Enter) Search  |  0) Back  |  00/Esc) Main Menu"))
+		s.WriteString(subtleStyle.Render("Enter) Search  |  Esc) Back  |  q) Quit"))
 
 	case searchStateLoading:
 		s.WriteString(titleStyle.Render("🔍 Searching..."))
@@ -471,13 +677,18 @@ func (m SearchModel) View() string {
 			s.WriteString("No stations found matching your search.\n\n")
 			s.WriteString(subtleStyle.Render("Press Esc to return to search menu"))
 		} else {
+			// Add empty line at top for better readability
+			s.WriteString("\n")
 			s.WriteString(m.resultsList.View())
 			s.WriteString("\n")
-			s.WriteString(subtleStyle.Render("Enter) Select  |  /) Filter  |  Esc) Back"))
+			s.WriteString(subtleStyle.Render("Enter) Play  |  Esc) Back  |  q) Quit"))
 		}
 
 	case searchStateStationInfo:
 		s.WriteString(m.renderStationInfo())
+
+	case searchStateSavePrompt:
+		s.WriteString(m.renderSavePrompt())
 
 	case searchStatePlaying:
 		s.WriteString(titleStyle.Render("🎵 Now Playing"))
@@ -486,7 +697,7 @@ func (m SearchModel) View() string {
 			s.WriteString(renderStationDetails(*m.selectedStation))
 		}
 		s.WriteString("\n\n")
-		s.WriteString(subtleStyle.Render("q/Esc/0) Stop  |  s) Save to Quick Favorites"))
+		s.WriteString(subtleStyle.Render("q) Stop & Save Prompt  |  Esc) Stop & Back  |  s) Save to Quick Favorites"))
 
 		if m.saveMessage != "" {
 			s.WriteString("\n\n")
@@ -496,10 +707,6 @@ func (m SearchModel) View() string {
 				s.WriteString(infoStyle.Render(m.saveMessage))
 			} else {
 				s.WriteString(errorStyle.Render(m.saveMessage))
-			}
-			m.saveMessageTime--
-			if m.saveMessageTime <= 0 {
-				m.saveMessage = ""
 			}
 		}
 	}
@@ -539,13 +746,9 @@ func (m SearchModel) renderStationInfo() string {
 	}
 
 	s.WriteString("\n\n")
-	s.WriteString(titleStyle.Render("What would you like to do?"))
-	s.WriteString("\n\n")
-	s.WriteString("1) Play this station\n")
-	s.WriteString("2) Save to Quick Favorites\n")
-	s.WriteString("3) Back to search results\n")
+	s.WriteString(m.stationInfoMenu.View())
 	s.WriteString("\n")
-	s.WriteString(subtleStyle.Render("0) Main Menu  |  Esc) Back"))
+	s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-3: Quick select • Esc: Back • q: Quit"))
 
 	if m.saveMessage != "" {
 		s.WriteString("\n\n")
@@ -556,11 +759,27 @@ func (m SearchModel) renderStationInfo() string {
 		} else {
 			s.WriteString(errorStyle.Render(m.saveMessage))
 		}
-		m.saveMessageTime--
-		if m.saveMessageTime <= 0 {
-			m.saveMessage = ""
-		}
 	}
+
+	return s.String()
+}
+
+// renderSavePrompt renders the save prompt after playback
+func (m SearchModel) renderSavePrompt() string {
+	var s strings.Builder
+
+	s.WriteString(titleStyle.Render("💾 Save Station?"))
+	s.WriteString("\n\n")
+
+	if m.selectedStation != nil {
+		s.WriteString(fmt.Sprintf("Did you enjoy this station?\n\n"))
+		s.WriteString(boldStyle.Render(m.selectedStation.TrimName()))
+		s.WriteString("\n\n")
+	}
+
+	s.WriteString("1) ⭐ Add to Quick Favorites\n")
+	s.WriteString("2) Return to search results\n\n")
+	s.WriteString(subtleStyle.Render("y/1: Yes • n/2/Esc: No • q: Quit"))
 
 	return s.String()
 }

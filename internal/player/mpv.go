@@ -117,14 +117,22 @@ func (p *MPVPlayer) GetCurrentStation() *api.Station {
 
 // monitor watches the mpv process and updates state when it exits
 func (p *MPVPlayer) monitor() {
-	if p.cmd == nil {
+	p.mu.Lock()
+	cmd := p.cmd
+	p.mu.Unlock()
+
+	if cmd == nil || cmd.Process == nil {
 		return
 	}
 
 	// Wait for either the process to end or stop signal
 	done := make(chan error, 1)
 	go func() {
-		done <- p.cmd.Wait()
+		if cmd != nil && cmd.Process != nil {
+			done <- cmd.Wait()
+		} else {
+			done <- nil
+		}
 	}()
 
 	select {

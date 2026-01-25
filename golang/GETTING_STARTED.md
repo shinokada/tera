@@ -26,7 +26,7 @@ go get github.com/gofrs/flock@latest
 
 ## Directory Structure
 
-```
+```text
 tera/
 ├── cmd/tera/
 │   └── main.go              # Entry point
@@ -73,7 +73,10 @@ tera/
 ```go
 package api
 
-import "time"
+import (
+    "strings"
+    "time"
+)
 
 // Station represents a radio station from Radio Browser API
 type Station struct {

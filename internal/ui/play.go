@@ -22,6 +22,7 @@ const (
 	playStateListSelection playState = iota
 	playStateStationSelection
 	playStatePlaying
+	playStateSavePrompt
 )
 
 // PlayModel represents the play screen
@@ -59,10 +60,11 @@ type stationListItem struct {
 }
 
 func (i stationListItem) FilterValue() string { return i.station.Name }
-func (i stationListItem) Title() string       { return i.station.TrimName() }
-func (i stationListItem) Description() string {
-	// Show country and codec/bitrate info
+func (i stationListItem) Title() string {
+	// Combine name and info into single line
 	var parts []string
+	parts = append(parts, i.station.TrimName())
+	
 	if i.station.Country != "" {
 		parts = append(parts, i.station.Country)
 	}
@@ -74,6 +76,10 @@ func (i stationListItem) Description() string {
 		parts = append(parts, codecInfo)
 	}
 	return strings.Join(parts, " • ")
+}
+func (i stationListItem) Description() string {
+	// Return empty to show single line
+	return ""
 }
 
 // NewPlayModel creates a new play screen model
@@ -173,16 +179,25 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateStationSelection(msg)
 		case playStatePlaying:
 			return m.updatePlaying(msg)
+		case playStateSavePrompt:
+			return m.updateSavePrompt(msg)
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		
+		// Calculate usable height
+		listHeight := msg.Height - 10
+		if listHeight < 5 {
+			listHeight = 5
+		}
+		
 		if m.listModel.Items() != nil {
-			m.listModel.SetSize(msg.Width, msg.Height-10)
+			m.listModel.SetSize(msg.Width, listHeight)
 		}
 		if m.stationListModel.Items() != nil {
-			m.stationListModel.SetSize(msg.Width, msg.Height-10)
+			m.stationListModel.SetSize(msg.Width, listHeight)
 		}
 		return m, nil
 
@@ -221,9 +236,15 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.listItems[i] = playListItem{name: name}
 		}
 
+		// Calculate usable height
+		listHeight := m.height - 10
+		if listHeight < 5 {
+			listHeight = 5
+		}
+		
 		// Initialize the list model
 		delegate := list.NewDefaultDelegate()
-		m.listModel = list.New(m.listItems, delegate, m.width, m.height-10)
+		m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
 		m.listModel.Title = "Select a Favorite List"
 		m.listModel.SetShowStatusBar(false)
 		m.listModel.SetFilteringEnabled(false)
@@ -240,9 +261,15 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stationItems[i] = stationListItem{station: station}
 		}
 
+		// Calculate usable height
+		listHeight := m.height - 10
+		if listHeight < 5 {
+			listHeight = 5
+		}
+		
 		// Initialize the station list model with filtering enabled
 		delegate := list.NewDefaultDelegate()
-		m.stationListModel = list.New(m.stationItems, delegate, m.width, m.height-10)
+		m.stationListModel = list.New(m.stationItems, delegate, m.width, listHeight)
 		m.stationListModel.Title = fmt.Sprintf("Stations in %s", m.selectedList)
 		m.stationListModel.SetShowStatusBar(true)
 		m.stationListModel.SetFilteringEnabled(true) // Enable fzf-style filtering
@@ -269,11 +296,14 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateListSelection handles input during list selection
 func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "0":
+	case "esc":
 		// Return to main menu
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
+	case "q":
+		// Quit application
+		return m, tea.Quit
 	case "enter":
 		// Select list and move to station selection
 		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
@@ -291,13 +321,16 @@ func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateStationSelection handles input during station selection
 func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "0":
+	case "esc":
 		// Go back to list selection
 		m.state = playStateListSelection
 		m.stations = nil
 		m.stationItems = nil
 		m.stationListModel = list.Model{}
 		return m, nil
+	case "q":
+		// Quit application
+		return m, tea.Quit
 	case "enter":
 		// Select station and start playback
 		if i, ok := m.stationListModel.SelectedItem().(stationListItem); ok {
@@ -341,17 +374,37 @@ func (m PlayModel) stopPlayback() tea.Cmd {
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "esc", "0":
-		// Stop playback and return to station selection
+	case "esc":
+		// Stop playback and show save prompt
 		m.player.Stop()
-		m.state = playStateStationSelection
-		m.selectedStation = nil
+		m.state = playStateSavePrompt
 		m.saveMessage = ""
 		m.saveMessageTime = 0
 		return m, nil
+	case "q":
+		// Stop playback and quit application
+		m.player.Stop()
+		return m, tea.Quit
 	case "s":
 		// Save to Quick Favorites
 		return m, m.saveToQuickFavorites()
+	}
+	return m, nil
+}
+
+// updateSavePrompt handles input during save prompt
+func (m PlayModel) updateSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "n", "2":
+		// Don't save, return to station selection
+		m.state = playStateStationSelection
+		m.selectedStation = nil
+		return m, nil
+	case "y", "1":
+		// Save to Quick Favorites and return to station selection
+		cmd := m.saveToQuickFavorites()
+		m.state = playStateStationSelection
+		return m, cmd
 	}
 	return m, nil
 }
@@ -390,6 +443,8 @@ func (m PlayModel) View() string {
 		return m.viewStationSelection()
 	case playStatePlaying:
 		return m.viewPlaying()
+	case playStateSavePrompt:
+		return m.viewSavePrompt()
 	}
 
 	return "Unknown state"
@@ -412,7 +467,7 @@ func (m PlayModel) viewListSelection() string {
 	b.WriteString("\n\n")
 
 	// Help
-	help := helpStyle.Render("↑/↓: navigate • enter: select • esc/0: back to menu")
+	help := helpStyle.Render("↑/↓: navigate • enter: select • esc: back • q: quit")
 	b.WriteString(help)
 
 	return b.String()
@@ -459,7 +514,7 @@ func (m PlayModel) viewPlaying() string {
 	}
 
 	// Help
-	help := helpStyle.Render("q/esc/0: stop • s: save to favorites")
+	help := helpStyle.Render("esc: stop • q: exit • s: save to favorites")
 	b.WriteString(help)
 
 	return b.String()
@@ -523,7 +578,7 @@ func (m PlayModel) viewStationSelection() string {
 	b.WriteString("\n\n")
 
 	// Help
-	help := helpStyle.Render("↑/↓: navigate • /: filter • enter: play • esc/0: back")
+	help := helpStyle.Render("↑/↓: navigate • /: filter • enter: play • esc: back • q: quit")
 	b.WriteString(help)
 
 	return b.String()
@@ -540,7 +595,7 @@ func noStationsView(listName string) string {
 	b.WriteString(infoStyle.Render("This list is empty!"))
 	b.WriteString("\n\n")
 	b.WriteString("Add stations to this list using Search or List Management.\n\n")
-	b.WriteString(helpStyle.Render("Press esc or 0 to go back"))
+	b.WriteString(helpStyle.Render("Press esc to go back or q to quit"))
 
 	return b.String()
 }
@@ -554,7 +609,7 @@ func noListsView() string {
 	b.WriteString(errorStyle.Render("No favorite lists found!"))
 	b.WriteString("\n\n")
 	b.WriteString("Create your first list using the List Management menu.\n\n")
-	b.WriteString(helpStyle.Render("Press esc or 0 to return to main menu"))
+	b.WriteString(helpStyle.Render("Press esc to return to main menu or q to quit"))
 
 	return b.String()
 }
@@ -567,7 +622,37 @@ func errorView(err error) string {
 	b.WriteString("\n\n")
 	b.WriteString(errorStyle.Render(err.Error()))
 	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("Press esc or 0 to return to main menu"))
+	b.WriteString(helpStyle.Render("Press esc to return to main menu or q to quit"))
+
+	return b.String()
+}
+
+// viewSavePrompt renders the save prompt after playback
+func (m PlayModel) viewSavePrompt() string {
+	if m.selectedStation == nil {
+		return "No station selected"
+	}
+
+	var b strings.Builder
+
+	// Title
+	b.WriteString(titleStyle.Render("💾 Save Station?"))
+	b.WriteString("\n\n")
+
+	// Message
+	b.WriteString("Did you enjoy this station?\n\n")
+
+	// Station name
+	b.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	b.WriteString("\n\n")
+
+	// Options
+	b.WriteString("1) ⭐ Add to Quick Favorites\n")
+	b.WriteString("2) Return to search results\n\n")
+
+	// Help
+	help := helpStyle.Render("y/1: Yes • n/2/Esc: No")
+	b.WriteString(help)
 
 	return b.String()
 }

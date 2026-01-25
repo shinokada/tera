@@ -37,13 +37,13 @@ Should we use fzf-style display for all lists in Play Screen, even when there ar
 ### Resolution
 **Implemented context-aware display strategy:**
 
-| Content Type | Display Method | Reason |
-|--------------|---------------|--------|
-| Favorite lists | Simple arrow navigation | Few items (3-10), user knows names |
-| Stations within list | fzf-style with filter | Moderate items (10-100), need quick filter |
-| Search results | fzf-style with filter | Many items (100s-1000s), essential |
-| Gist lists | Simple arrow navigation | Few items (1-10) |
-| Menu options | Simple arrow navigation | Fixed small set |
+| Content Type         | Display Method          | Reason                                     |
+| -------------------- | ----------------------- | ------------------------------------------ |
+| Favorite lists       | Simple arrow navigation | Few items (3-10), user knows names         |
+| Stations within list | fzf-style with filter   | Moderate items (10-100), need quick filter |
+| Search results       | fzf-style with filter   | Many items (100s-1000s), essential         |
+| Gist lists           | Simple arrow navigation | Few items (1-10)                           |
+| Menu options         | Simple arrow navigation | Fixed small set                            |
 
 ### Rationale
 - Bash currently uses fzf for both, which works but is overkill for 3-5 lists
@@ -64,7 +64,7 @@ Play Screen had confusing save behavior:
 ### Resolution
 **Implemented context-aware save logic:**
 
-```
+```text
 IF station is already in Quick Favorites (My-favorites.json):
     - Hide 's' key option during playback
     - No save prompt after playback
@@ -79,7 +79,7 @@ ELSE IF station is from another list:
 ### New Flow Chart Logic
 
 **Before (Confusing):**
-```
+```text
 Play Station
   └─> During: Press 's' to save
   └─> After: Show prompt to save
@@ -87,7 +87,7 @@ Play Station
 ```
 
 **After (Clear):**
-```
+```text
 Get Station
   └─> Check: Already in Quick Favorites?
       ├─> YES: Play normally (no save options)
@@ -98,12 +98,12 @@ Get Station
 
 ### Comparison with Other Screens
 
-| Screen | Save Context | Save Method | Rationale |
-|--------|--------------|-------------|-----------|
-| **Search Results** | NEW discovery | Prompt after playback | User just found this |
-| **Lucky** | NEW discovery | Prompt after playback | Random find, might like it |
-| **Play Screen** | Curation | Optional 's' during playback | Promoting existing favorites |
-| **QuickPlay** | Already saved | No save option | Already in My-favorites |
+| Screen             | Save Context  | Save Method                  | Rationale                    |
+| ------------------ | ------------- | ---------------------------- | ---------------------------- |
+| **Search Results** | NEW discovery | Prompt after playback        | User just found this         |
+| **Lucky**          | NEW discovery | Prompt after playback        | Random find, might like it   |
+| **Play Screen**    | Curation      | Optional 's' during playback | Promoting existing favorites |
+| **QuickPlay**      | Already saved | No save option               | Already in My-favorites      |
 
 ---
 

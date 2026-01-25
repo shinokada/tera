@@ -116,7 +116,7 @@ EOF
 
 ## User Flow
 
-```
+```text
 Main Menu 
   → Play Screen (1)
     → Select List
@@ -128,7 +128,7 @@ Main Menu
 
 ## Current Playback View
 
-```
+```text
 ╭───────────────────────────────────╮
 │ Now Playing                        │
 ╰───────────────────────────────────╯
@@ -161,7 +161,7 @@ type MPVPlayer struct {
 ```
 
 ### Playback Flow
-```
+```text
 Select Station 
   → startPlayback()
     → player.Play(station)

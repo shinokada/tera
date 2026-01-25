@@ -13,7 +13,7 @@
    ```
 
 2. **Setup Project Structure**
-   ```
+   ```text
    tera/
    ├── cmd/tera/
    │   └── main.go

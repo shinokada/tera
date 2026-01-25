@@ -24,7 +24,7 @@ chmod +x run_search_tests.sh
 ```
 
 Expected output:
-```
+```text
 ================================
 TERA Search Screen Test Suite
 ================================

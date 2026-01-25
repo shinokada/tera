@@ -113,7 +113,7 @@ After station selection, implement:
 ## Development Notes
 
 ### Current Architecture
-```
+```text
 App (ui/app.go)
   └─ PlayModel (ui/play.go)
       ├─ playStateListSelection (DONE)
@@ -122,7 +122,7 @@ App (ui/app.go)
 ```
 
 ### Message Flow
-```
+```text
 navigateMsg{screenPlay} 
   → App.Update 
   → Initialize PlayModel
@@ -133,7 +133,7 @@ navigateMsg{screenPlay}
 ```
 
 ### Data Flow
-```
+```text
 JSON files → getAvailableLists() → []string
   → playListItem → list.Model → View
 ```

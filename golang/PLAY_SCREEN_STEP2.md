@@ -129,14 +129,14 @@ EOF
 ## Code Architecture
 
 ### State Machine
-```
+```text
 playStateListSelection → playStateStationSelection → playStatePlaying
          ↑                        ↓                         ↓
          └────────────────────────┴─────────────────────────┘
 ```
 
 ### Data Flow
-```
+```text
 Select List → loadStations() → getStationsFromList()
     ↓
 Read JSON file → Parse stations → Sort alphabetically

@@ -57,7 +57,7 @@ go test ./internal/ui -v -run Play
 
 ## Expected Output
 
-```
+```text
 === RUN   TestNewPlayModel
 --- PASS: TestNewPlayModel (0.00s)
 === RUN   TestGetAvailableLists

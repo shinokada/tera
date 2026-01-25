@@ -1,11 +1,15 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/ui/components"
 )
 
 type Screen int
@@ -19,13 +23,16 @@ const (
 )
 
 type App struct {
-	screen       Screen
-	width        int
-	height       int
-	playScreen   PlayModel
-	searchScreen SearchModel
-	apiClient    *api.Client
-	favoritePath string
+	screen               Screen
+	width                int
+	height               int
+	mainMenuList         list.Model
+	playScreen           PlayModel
+	searchScreen         SearchModel
+	listManagementScreen ListManagementModel
+	apiClient            *api.Client
+	favoritePath         string
+	quickFavorites       []api.Station
 }
 
 // navigateMsg is sent when changing screens
@@ -41,11 +48,31 @@ func NewApp() App {
 		favPath = filepath.Join(home, ".config", "tera", "favorites")
 	}
 
-	return App{
+	app := App{
 		screen:       screenMainMenu,
 		favoritePath: favPath,
 		apiClient:    api.NewClient(),
 	}
+
+	// Initialize main menu
+	app.initMainMenu()
+
+	return app
+}
+
+func (a *App) initMainMenu() {
+	items := []components.MenuItem{
+		components.NewMenuItem("Play from Favorites", "", "1"),
+		components.NewMenuItem("Search Stations", "", "2"),
+		components.NewMenuItem("Manage Lists", "", "3"),
+		components.NewMenuItem("I Feel Lucky", "(coming soon)", "4"),
+		components.NewMenuItem("Delete Station", "(coming soon)", "5"),
+		components.NewMenuItem("Gist Management", "(coming soon)", "6"),
+		components.NewMenuItem("Exit", "", "0"),
+	}
+
+	// Height will be auto-adjusted by CreateMenu to fit all items
+	a.mainMenuList = components.CreateMenu(items, "TERA - Terminal Radio", 50, 20)
 }
 
 func (a App) Init() tea.Cmd {
@@ -58,17 +85,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global key bindings
 		switch msg.String() {
 		case "ctrl+c":
-			return a, tea.Quit
-		case "q":
-			// Only quit from main menu
-			if a.screen == screenMainMenu {
-				return a, tea.Quit
+			// Stop any playing stations before quitting
+			if a.screen == screenPlay && a.playScreen.player != nil {
+				a.playScreen.player.Stop()
+			} else if a.screen == screenSearch && a.searchScreen.player != nil {
+				a.searchScreen.player.Stop()
 			}
+			return a, tea.Quit
 		}
 
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
+		
+		// Update main menu size
+		if a.screen == screenMainMenu {
+			h, v := docStyle.GetFrameSize()
+			// Ensure enough height for all menu items (7 items + title + help)
+			minHeight := 12
+			menuHeight := msg.Height - v
+			if menuHeight < minHeight {
+				menuHeight = minHeight
+			}
+			a.mainMenuList.SetSize(msg.Width-h, menuHeight)
+		}
 
 	case navigateMsg:
 		a.screen = msg.screen
@@ -81,6 +121,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenSearch:
 			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath)
 			return a, a.searchScreen.Init()
+		case screenList:
+			a.listManagementScreen = NewListManagementModel(a.favoritePath)
+			return a, a.listManagementScreen.Init()
 		case screenMainMenu:
 			// Return to main menu
 			return a, nil
@@ -102,7 +145,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var m tea.Model
 		m, cmd = a.playScreen.Update(msg)
 		a.playScreen = m.(PlayModel)
-		
+
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
@@ -112,7 +155,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var m tea.Model
 		m, cmd = a.searchScreen.Update(msg)
 		a.searchScreen = m.(SearchModel)
-		
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenList:
+		var m tea.Model
+		m, cmd = a.listManagementScreen.Update(msg)
+		a.listManagementScreen = m.(ListManagementModel)
+
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
@@ -126,18 +179,67 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "1":
-			// Navigate to Play screen
-			return a, func() tea.Msg {
-				return navigateMsg{screen: screenPlay}
+		// Handle quit - 'q' works from anywhere in the menu
+		if msg.String() == "q" {
+			// Stop any playing stations before quitting
+			if a.playScreen.player != nil {
+				a.playScreen.player.Stop()
 			}
-		case "2":
-			// Navigate to Search screen
-			return a, func() tea.Msg {
-				return navigateMsg{screen: screenSearch}
+			if a.searchScreen.player != nil {
+				a.searchScreen.player.Stop()
 			}
+			return a, tea.Quit
 		}
+		if msg.String() == "0" {
+			// Stop any playing stations before quitting
+			if a.playScreen.player != nil {
+				a.playScreen.player.Stop()
+			}
+			if a.searchScreen.player != nil {
+				a.searchScreen.player.Stop()
+			}
+			// Select exit option
+			a.mainMenuList.Select(len(a.mainMenuList.Items()) - 1)
+			return a, tea.Quit
+		}
+
+		// Handle menu navigation
+		newList, selected := components.HandleMenuKey(msg, a.mainMenuList)
+		a.mainMenuList = newList
+
+		if selected >= 0 {
+			// Execute selected action
+			return a.executeMenuAction(selected)
+		}
+	}
+	return a, nil
+}
+
+func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
+	switch index {
+	case 0: // Play from Favorites
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenPlay}
+		}
+	case 1: // Search Stations
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenSearch}
+		}
+	case 2: // Manage Lists
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenList}
+		}
+	case 3: // I Feel Lucky
+		// Coming soon
+		return a, nil
+	case 4: // Delete Station
+		// Coming soon
+		return a, nil
+	case 5: // Gist Management
+		// Coming soon
+		return a, nil
+	case 6: // Exit
+		return a, tea.Quit
 	}
 	return a, nil
 }
@@ -150,15 +252,35 @@ func (a App) View() string {
 		return a.playScreen.View()
 	case screenSearch:
 		return a.searchScreen.View()
+	case screenList:
+		return a.listManagementScreen.View()
 	}
 	return "Unknown screen"
 }
 
 func (a App) viewMainMenu() string {
-	return titleStyle.Render("TERA - Terminal Radio") + "\n\n" +
-		"1. Play from Favorites\n" +
-		"2. Search Stations\n" +
-		"3. Manage Lists (coming soon)\n" +
-		"6. Gist Management (coming soon)\n\n" +
-		helpStyle.Render("q: quit • 1: play • 2: search")
+	content := a.mainMenuList.View()
+
+	// Add quick play favorites if available
+	if len(a.quickFavorites) > 0 {
+		content += "\n\n" + quickFavoritesStyle.Render("Quick Play Favorites")
+		for i, station := range a.quickFavorites {
+			if i >= 10 {
+				break // Only show first 10
+			}
+			shortcut := fmt.Sprintf("%d", 10+i)
+			content += fmt.Sprintf("\n  %s. ▶ %s", shortcut, station.TrimName())
+		}
+	}
+
+	content += "\n\n" + helpStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • q: Quit")
+
+	return docStyle.Render(content)
 }
+
+var (
+	docStyle = helpStyle.Copy().Padding(1, 2)
+
+	quickFavoritesStyle = titleStyle.Copy().
+				Foreground(lipgloss.Color("99"))
+)

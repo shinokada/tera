@@ -126,7 +126,7 @@ TestRenderStationDetails
 ## Architecture
 
 ### State Machine
-```
+```text
 ┌──────────┐
 │   Menu   │ ◄─┐
 └────┬─────┘   │
@@ -158,7 +158,7 @@ TestRenderStationDetails
 ```
 
 ### Message Flow
-```
+```text
 User Input
     ↓
 KeyMsg → Update()
@@ -237,7 +237,7 @@ go test -cover ./internal/ui
 
 ## Documentation Structure
 
-```
+```text
 golang/
 ├── SEARCH_INDEX.md          ← You are here
 ├── SEARCH_COMPLETE.md       ← Technical docs

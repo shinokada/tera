@@ -126,7 +126,7 @@ go test ./internal/ui -cover
 
 ### State Machine Design
 The Search Screen uses a clean state machine with 6 states:
-```
+```text
 Menu → Input → Loading → Results → StationInfo → Playing
   ↑                          ↓
   └──────────────────────────┘

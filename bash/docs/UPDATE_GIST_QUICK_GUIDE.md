@@ -75,19 +75,19 @@ Currently, you can update:
 ### Common Update Scenarios
 
 **Scenario 1: Add Date Version**
-```
+```text
 Old: Terminal radio favorites
 New: Terminal radio favorites - Jan 2026
 ```
 
 **Scenario 2: Add Content Description**
-```
+```text
 Old: My lists
 New: Jazz & Classical stations - curated 2026
 ```
 
 **Scenario 3: Project/Context Update**
-```
+```text
 Old: Radio stations
 New: [TERA] Production radio stations for work
 ```
@@ -123,7 +123,7 @@ New: [TERA] Production radio stations for work
 ## Technical Details
 
 ### API Endpoint Used
-```
+```text
 PATCH https://api.github.com/gists/{gist_id}
 ```
 

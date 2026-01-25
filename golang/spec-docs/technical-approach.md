@@ -4,7 +4,7 @@
 
 TERA Go will follow a clean architecture pattern with clear separation of concerns:
 
-```
+```text
 tera/
 ├── cmd/tera/           # Application entry point
 │   └── main.go

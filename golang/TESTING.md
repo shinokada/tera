@@ -8,7 +8,7 @@
 
 ## Test Organization
 
-```
+```text
 tera/
 ├── internal/
 │   ├── api/
@@ -39,6 +39,7 @@ import (
     "net/http"
     "net/http/httptest"
     "testing"
+    "time"
 )
 
 func TestClient_SearchByTag(t *testing.T) {
