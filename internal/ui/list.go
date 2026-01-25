@@ -58,15 +58,15 @@ func NewListManagementModel(favoritePath string) ListManagementModel {
 	ti.CharLimit = 50
 
 	items := []list.Item{
-		listManagementMenuItem{title: "1) Create New List", description: "Create a new favorites list"},
-		listManagementMenuItem{title: "2) Delete List", description: "Delete an existing list"},
-		listManagementMenuItem{title: "3) Edit List Name", description: "Rename an existing list"},
-		listManagementMenuItem{title: "4) Show All Lists", description: "Display all favorite lists"},
+		listManagementMenuItem{title: "Create New List", description: "Create a new favorites list"},
+		listManagementMenuItem{title: "Delete List", description: "Delete an existing list"},
+		listManagementMenuItem{title: "Edit List Name", description: "Rename an existing list"},
+		listManagementMenuItem{title: "Show All Lists", description: "Display all favorite lists"},
 	}
 
 	delegate := list.NewDefaultDelegate()
 	l := list.New(items, delegate, 0, 0)
-	l.Title = "List Management"
+	l.Title = "📋 List Management"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.Styles.Title = titleStyle
@@ -127,11 +127,12 @@ func (m ListManagementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		h := msg.Height - 10
-		if h < 5 {
-			h = 5
+		// Ensure enough height for menu items (4 items + title + pagination + help)
+		h := msg.Height - 8
+		if h < 10 {
+			h = 10
 		}
-		m.listModel.SetSize(msg.Width, h)
+		m.listModel.SetSize(msg.Width-4, h)
 		return m, nil
 
 	case listManagementListsLoadedMsg:
@@ -189,21 +190,45 @@ func (m ListManagementModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 // handleMenuInput handles input on the main menu
 func (m ListManagementModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "0":
+	case "esc":
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
 	case "q":
 		return m, tea.Quit
-	case "1", "enter":
+	case "enter":
+		// Get selected item index
+		idx := m.listModel.Index()
+		return m.executeMenuAction(idx)
+	case "1":
 		// Create new list
+		return m.executeMenuAction(0)
+	case "2":
+		// Delete list
+		return m.executeMenuAction(1)
+	case "3":
+		// Edit list name
+		return m.executeMenuAction(2)
+	case "4":
+		// Show all lists
+		return m.executeMenuAction(3)
+	}
+
+	var cmd tea.Cmd
+	m.listModel, cmd = m.listModel.Update(msg)
+	return m, cmd
+}
+
+// executeMenuAction executes the selected menu action
+func (m ListManagementModel) executeMenuAction(index int) (tea.Model, tea.Cmd) {
+	switch index {
+	case 0: // Create new list
 		m.state = listManagementCreate
 		m.textInput.Reset()
 		m.textInput.Placeholder = "Enter new list name"
 		m.textInput.Focus()
-		return m, textinput.Blink
-	case "2":
-		// Delete list
+		return m, tea.Batch(m.loadLists(), textinput.Blink)
+	case 1: // Delete list
 		if len(m.lists) == 0 {
 			m.message = "No lists available to delete"
 			m.messageTime = 150
@@ -213,9 +238,8 @@ func (m ListManagementModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd
 		m.textInput.Reset()
 		m.textInput.Placeholder = "Enter list name to delete"
 		m.textInput.Focus()
-		return m, textinput.Blink
-	case "3":
-		// Edit list name
+		return m, tea.Batch(m.loadLists(), textinput.Blink)
+	case 2: // Edit list name
 		if len(m.lists) == 0 {
 			m.message = "No lists available to edit"
 			m.messageTime = 150
@@ -225,16 +249,12 @@ func (m ListManagementModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd
 		m.textInput.Reset()
 		m.textInput.Placeholder = "Enter list name to rename"
 		m.textInput.Focus()
-		return m, textinput.Blink
-	case "4":
-		// Show all lists
+		return m, tea.Batch(m.loadLists(), textinput.Blink)
+	case 3: // Show all lists
 		m.state = listManagementShowAll
-		return m, nil
+		return m, m.loadLists()
 	}
-
-	var cmd tea.Cmd
-	m.listModel, cmd = m.listModel.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 // handleCreateInput handles input during list creation
@@ -505,9 +525,6 @@ func (m ListManagementModel) View() string {
 func (m ListManagementModel) viewMenu() string {
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("List Management"))
-	b.WriteString("\n\n")
-
 	if m.message != "" {
 		style := successStyle
 		if strings.Contains(m.message, "✗") || m.err != nil {
@@ -520,7 +537,7 @@ func (m ListManagementModel) viewMenu() string {
 	b.WriteString(m.listModel.View())
 	b.WriteString("\n\n")
 
-	help := helpStyle.Render("1-4: select • esc/0: back • q: quit")
+	help := helpStyle.Render("↑↓/jk: navigate • enter: select • 1-4: quick select • esc: back • q: quit")
 	b.WriteString(help)
 
 	return b.String()

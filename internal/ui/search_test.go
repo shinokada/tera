@@ -71,13 +71,11 @@ func TestSearchBackNavigation(t *testing.T) {
 		name         string
 		initialState searchState
 		key          string
+		keyType      tea.KeyType
 		shouldGoBack bool
 	}{
-		{"Menu - 0 key", searchStateMenu, "0", true},
-		{"Menu - Esc key", searchStateMenu, "esc", true},
-		{"Input - 0 key", searchStateInput, "0", false},
-		{"Input - 00 key", searchStateInput, "00", true},
-		{"Input - Esc key", searchStateInput, "esc", true},
+		{"Menu - Esc key", searchStateMenu, "esc", tea.KeyEsc, true},
+		{"Input - Esc key", searchStateInput, "esc", tea.KeyEsc, true},
 	}
 
 	for _, tt := range tests {
@@ -87,20 +85,31 @@ func TestSearchBackNavigation(t *testing.T) {
 				model.textInput.Focus()
 			}
 
-			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
+			var msg tea.KeyMsg
+			if tt.keyType == tea.KeyEsc {
+				msg = tea.KeyMsg{Type: tea.KeyEsc}
+			} else {
+				msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
+			}
+
 			updatedModel, cmd := model.Update(msg)
+			searchModel := updatedModel.(SearchModel)
 
 			if tt.shouldGoBack {
-				if cmd == nil {
-					t.Error("Expected back command, got nil")
-				}
-				// Check if it's a backToMainMsg
-				result := cmd()
-				if _, ok := result.(backToMainMsg); !ok {
-					searchModel := updatedModel.(SearchModel)
-					// If not backToMainMsg, state should have changed to menu
+				if tt.initialState == searchStateMenu {
+					// From menu, should send backToMainMsg
+					if cmd == nil {
+						t.Error("Expected back command, got nil")
+					} else {
+						result := cmd()
+						if _, ok := result.(backToMainMsg); !ok {
+							t.Errorf("Expected backToMainMsg, got %T", result)
+						}
+					}
+				} else if tt.initialState == searchStateInput {
+					// From input, should go back to menu
 					if searchModel.state != searchStateMenu {
-						t.Errorf("Expected state change to menu or backToMainMsg, got state %v", searchModel.state)
+						t.Errorf("Expected state change to menu, got state %v", searchModel.state)
 					}
 				}
 			}
@@ -258,8 +267,8 @@ func TestSearchStationSelection(t *testing.T) {
 	updatedModel, _ = model.Update(keyMsg)
 	model = updatedModel.(SearchModel)
 
-	if model.state != searchStateStationInfo {
-		t.Errorf("Expected state to be searchStateStationInfo after selection, got %v", model.state)
+	if model.state != searchStatePlaying {
+		t.Errorf("Expected state to be searchStatePlaying after selection, got %v", model.state)
 	}
 
 	if model.selectedStation == nil {
@@ -317,7 +326,6 @@ func TestStationInfoMenu(t *testing.T) {
 		key           string
 		expectedState searchState
 	}{
-		{"Back to Main", "0", searchStateMenu}, // backToMainMsg will be sent
 		{"Play Station", "1", searchStatePlaying},
 		{"Back to Results", "3", searchStateResults},
 		{"Esc to Results", "esc", searchStateResults},
@@ -327,17 +335,17 @@ func TestStationInfoMenu(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			model.state = searchStateStationInfo
 
-			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
-			updatedModel, cmd := model.Update(msg)
+			var msg tea.KeyMsg
+			if tt.key == "esc" {
+				msg = tea.KeyMsg{Type: tea.KeyEsc}
+			} else {
+				msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
+			}
+
+			updatedModel, _ := model.Update(msg)
 			model = updatedModel.(SearchModel)
 
-			// For "0" key, check for backToMainMsg
-			if tt.key == "0" && cmd != nil {
-				result := cmd()
-				if _, ok := result.(backToMainMsg); !ok {
-					t.Error("Expected backToMainMsg for key '0'")
-				}
-			} else if model.state != tt.expectedState {
+			if model.state != tt.expectedState {
 				t.Errorf("Expected state %v, got %v", tt.expectedState, model.state)
 			}
 		})

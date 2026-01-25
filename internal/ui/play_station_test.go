@@ -25,15 +25,16 @@ func TestStationListItem(t *testing.T) {
 		t.Errorf("Expected FilterValue '  Jazz FM  ', got '%s'", item.FilterValue())
 	}
 
-	// Test Title (should trim)
-	if item.Title() != "Jazz FM" {
-		t.Errorf("Expected Title 'Jazz FM', got '%s'", item.Title())
+	// Test Title (now returns combined info in single line)
+	expectedTitle := "Jazz FM • USA • MP3 128kbps"
+	if item.Title() != expectedTitle {
+		t.Errorf("Expected Title '%s', got '%s'", expectedTitle, item.Title())
 	}
 
-	// Test Description
+	// Test Description (now returns empty string)
 	desc := item.Description()
-	if desc != "USA • MP3 128kbps" {
-		t.Errorf("Expected 'USA • MP3 128kbps', got '%s'", desc)
+	if desc != "" {
+		t.Errorf("Expected empty description, got '%s'", desc)
 	}
 }
 
@@ -43,8 +44,13 @@ func TestStationListItem_EmptyFields(t *testing.T) {
 	}
 
 	item := stationListItem{station: station}
+	
+	// Title should just be the name when no other fields present
+	if item.Title() != "Test Station" {
+		t.Errorf("Expected Title 'Test Station', got '%s'", item.Title())
+	}
+	
 	desc := item.Description()
-
 	if desc != "" {
 		t.Errorf("Expected empty description, got '%s'", desc)
 	}
@@ -158,11 +164,11 @@ func TestPlayModel_Update_StationSelectionNavigation(t *testing.T) {
 	tests := []struct {
 		name     string
 		key      string
+		keyType  tea.KeyType
 		expected playState
 	}{
-		{"Escape key", "esc", playStateListSelection},
-		{"Zero key", "0", playStateListSelection},
-		{"Other key", "a", playStateStationSelection},
+		{"Escape key", "esc", tea.KeyEsc, playStateListSelection},
+		{"Other key", "a", tea.KeyRunes, playStateStationSelection},
 	}
 
 	for _, tt := range tests {
@@ -181,10 +187,12 @@ func TestPlayModel_Update_StationSelectionNavigation(t *testing.T) {
 			})
 			model = updatedModel.(PlayModel)
 
-			// Send key message - need to route through Update which calls updateStationSelection
-			keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
-			if tt.key == "esc" {
+			// Send key message
+			var keyMsg tea.KeyMsg
+			if tt.keyType == tea.KeyEsc {
 				keyMsg = tea.KeyMsg{Type: tea.KeyEsc}
+			} else {
+				keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
 			}
 
 			// Call Update which will route to updateStationSelection

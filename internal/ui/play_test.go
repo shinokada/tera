@@ -97,11 +97,11 @@ func TestPlayModel_Update_NavigationKeys(t *testing.T) {
 	tests := []struct {
 		name     string
 		key      string
+		keyType  tea.KeyType
 		expected bool // true if should navigate away
 	}{
-		{"Escape key", "esc", true},
-		{"Zero key", "0", true},
-		{"Other key", "a", false},
+		{"Escape key", "esc", tea.KeyEsc, true},
+		{"Other key", "a", tea.KeyRunes, false},
 	}
 
 	for _, tt := range tests {
@@ -118,9 +118,11 @@ func TestPlayModel_Update_NavigationKeys(t *testing.T) {
 			model = updatedModel.(PlayModel)
 
 			// Send key message
-			keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
-			if tt.key == "esc" {
+			var keyMsg tea.KeyMsg
+			if tt.keyType == tea.KeyEsc {
 				keyMsg = tea.KeyMsg{Type: tea.KeyEsc}
+			} else {
+				keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
 			}
 
 			updatedModel, cmd := model.Update(keyMsg)
@@ -130,6 +132,12 @@ func TestPlayModel_Update_NavigationKeys(t *testing.T) {
 				// Should return navigation command
 				if cmd == nil {
 					t.Error("Expected navigation command, got nil")
+				} else {
+					// Verify it's a navigateMsg
+					result := cmd()
+					if _, ok := result.(navigateMsg); !ok {
+						t.Errorf("Expected navigateMsg, got %T", result)
+					}
 				}
 			} else {
 				// Should stay in same state
