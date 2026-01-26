@@ -316,6 +316,7 @@ func (m *PlayModel) initializeListModel() {
 	m.listModel.Title = "Select a Favorite List"
 	m.listModel.SetShowStatusBar(false)
 	m.listModel.SetFilteringEnabled(false)
+	m.listModel.SetShowHelp(false) // Disable built-in help to use custom help text
 	m.listModel.Styles.Title = titleStyle
 	m.listModel.Styles.PaginationStyle = paginationStyle
 	m.listModel.Styles.HelpStyle = helpStyle
@@ -348,9 +349,12 @@ func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
-	case "q":
+	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
+	case "q":
+		// Block 'q' from quitting - do nothing
+		return m, nil
 	case "enter":
 		// Select list and move to station selection
 		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
@@ -375,9 +379,12 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stationItems = nil
 		m.stationListModel = list.Model{}
 		return m, nil
-	case "q":
+	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
+	case "q":
+		// Block 'q' from quitting - do nothing
+		return m, nil
 	case "d":
 		// Delete selected station
 		if i, ok := m.stationListModel.SelectedItem().(stationListItem); ok {
@@ -550,7 +557,7 @@ func (m PlayModel) viewListSelection() string {
 	b.WriteString("\n")
 
 	// Help
-	help := helpStyle.Render("↑/↓: navigate • enter: select • esc: back • q: quit")
+	help := helpStyle.Render("↑↓/jk: Navigate • Enter: Select • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
 	return wrapPageWithHeader(b.String())
@@ -669,7 +676,7 @@ func (m PlayModel) viewStationSelection() string {
 	b.WriteString("\n\n")
 
 	// Help
-	help := helpStyle.Render("↑/↓: navigate • /: filter • enter: play • d: delete • esc: back • q: quit")
+	help := helpStyle.Render("↑↓/jk: Navigate • Enter: Select • d: Delete • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
 	return wrapPageWithHeader(b.String())
