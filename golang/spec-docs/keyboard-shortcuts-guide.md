@@ -87,10 +87,12 @@ TERA MAIN MENU
 - **q** — Exit TERA
 
 ### Actions While Playing
-- **Space** — Pause/Resume (if mpv supports)
-- **s** — Save current station to Quick Favorites
-- **i** — Show detailed station information
-- **q** — Stop playback and return
+- **1** — Stop & show save prompt
+- **Esc** — Stop playback and go back
+- **f** — Save current station to Quick Favorites
+- **s** — Save to a list (coming soon)
+- **q** — Quit application
+- **Left/Right arrows** — Decrease/Increase volume (TODO: not yet implemented)
 
 ---
 
@@ -179,12 +181,16 @@ Shows:
 ### Quick Navigation Shortcuts
 Throughout the app, you can use these patterns for fast navigation:
 
-- **Esc** — Return to previous screen
+- **Esc** — Return to previous screen (one level up)
+- **m** — Return to main menu (from any depth, when depth > 1)
 - **q** — Quit Tera
-- **Type "back"** — Explicit back command
-- **Type "main"** — Explicit main menu command
 
-These work in text input prompts for convenient navigation.
+The **m** key for main menu is especially useful when you're deep in navigation:
+- Example: Main Menu → Search Stations → Search by Tag → Results
+- From Results, pressing **m** takes you directly back to Main Menu
+- Pressing **Esc** would only go back one level (to Search by Tag)
+
+The **m** key only appears in the footer when you're at depth > 1 (not directly on main menu).
 
 ### Future feature: Filtering/Search Within Lists
 When viewing any list (stations, search results, etc.):
@@ -204,9 +210,12 @@ When viewing any list (stations, search results, etc.):
 The behavior depends on screen:
 
 **Play Screen:**
-- **q** — Stop playback and return to list
-- **s** — Add to Quick Favorites (if not already added)
-- **↑↓** — Browse other stations (playback continues)
+- **1** — Stop playback and show save prompt
+- **Esc** — Stop playback and go back
+- **f** — Add to Quick Favorites (if not already added)
+- **s** — Save to a list (coming soon)
+- **q** — Quit application
+- **←/→** — Decrease/increase volume (TODO: not yet implemented)
 
 **After Playback Ends:**
 TERA shows a prompt:
@@ -250,7 +259,9 @@ Quick reference table:
 | ------------ | ---------------- | ------------------- |
 | **↑↓ / jk**  | Navigate up/down | Works everywhere    |
 | **Enter**    | Select/Confirm   | Contextual          |
-| **Esc / q**  | Back/Cancel      | Previous screen     |
+| **Esc**      | Back/Cancel      | Previous screen     |
+| **m**        | Main menu        | When depth > 1      |
+| **q**        | Quit             | Exit application    |
 | **Ctrl+C**   | Quit immediately | Force exit          |
 | **?**        | Help             | Context help        |
 | **/**        | Filter/Search    | Within current list |
@@ -259,8 +270,11 @@ Quick reference table:
 | **10-19**    | Quick favorites  | Direct play         |
 | **g / Home** | First item       | Jump to top         |
 | **G / End**  | Last item        | Jump to bottom      |
-| **s**        | Save             | Add to favorites    |
+| **f**        | Save to Quick    | Add to Quick Favs   |
+| **s**        | Save to list     | Save to a list      |
 | **p**        | Play             | Play station        |
+| **1**        | Stop & Prompt    | After playing       |
+| **←/→**      | Volume (TODO)    | Adjust volume       |
 
 ---
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
@@ -66,7 +66,7 @@ func (i stationListItem) Title() string {
 	// Combine name and info into single line
 	var parts []string
 	parts = append(parts, i.station.TrimName())
-	
+
 	if i.station.Country != "" {
 		parts = append(parts, i.station.Country)
 	}
@@ -200,20 +200,20 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		
+
 		// Calculate usable height
 		listHeight := msg.Height - 10
 		if listHeight < 5 {
 			listHeight = 5
 		}
-		
+
 		// Initialize models if we have data but they're not initialized yet
 		if len(m.listItems) > 0 && m.listModel.Items() == nil {
 			m.initializeListModel()
 		} else if m.listModel.Items() != nil && len(m.listModel.Items()) > 0 {
 			m.listModel.SetSize(msg.Width, listHeight)
 		}
-		
+
 		if len(m.stationItems) > 0 && m.stationListModel.Items() == nil {
 			m.initializeStationListModel()
 		} else if m.stationListModel.Items() != nil && len(m.stationListModel.Items()) > 0 {
@@ -301,9 +301,15 @@ func (m *PlayModel) initializeListModel() {
 	if listHeight < 5 {
 		listHeight = 5
 	}
-	
+
 	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0) // Remove spacing between items
+	delegate.SetHeight(1)            // Single line per item
+	delegate.SetSpacing(0)           // Remove spacing between items
+	delegate.ShowDescription = false // Hide cursor indicator
+	// Remove vertical padding from delegate styles
+	delegate.Styles.NormalTitle = lipgloss.NewStyle()
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+
 	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
 	m.listModel.Title = "Select a Favorite List"
 	m.listModel.SetShowStatusBar(false)
@@ -319,9 +325,15 @@ func (m *PlayModel) initializeStationListModel() {
 	if listHeight < 5 {
 		listHeight = 5
 	}
-	
+
 	delegate := list.NewDefaultDelegate()
-	delegate.SetSpacing(0) // Remove spacing between items
+	delegate.SetHeight(1)            // Single line per item
+	delegate.SetSpacing(0)           // Remove spacing between items
+	delegate.ShowDescription = false // Hide cursor indicator
+	// Remove vertical padding from delegate styles
+	delegate.Styles.NormalTitle = lipgloss.NewStyle()
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+
 	m.stationListModel = list.New(m.stationItems, delegate, m.width, listHeight)
 	m.stationListModel.Title = fmt.Sprintf("Stations in %s", m.selectedList)
 	m.stationListModel.SetShowStatusBar(true)
@@ -413,19 +425,31 @@ func (m PlayModel) stopPlayback() tea.Cmd {
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
+		// Stop playback and go back
+		m.player.Stop()
+		m.state = playStateStationSelection
+		m.selectedStation = nil
+		return m, nil
+	case "q":
+		// Stop playback and quit application
+		m.player.Stop()
+		return m, tea.Quit
+	case "1":
 		// Stop playback and show save prompt
 		m.player.Stop()
 		m.state = playStateSavePrompt
 		m.saveMessage = ""
 		m.saveMessageTime = 0
 		return m, nil
-	case "q":
-		// Stop playback and quit application
-		m.player.Stop()
-		return m, tea.Quit
-	case "s":
+	case "f":
 		// Save to Quick Favorites
 		return m, m.saveToQuickFavorites()
+	case "s":
+		// Save to a list (not implemented yet)
+		// TODO: Implement save to custom list
+		m.saveMessage = "Save to list feature coming soon"
+		m.saveMessageTime = 150
+		return m, nil
 	}
 	return m, nil
 }
@@ -494,7 +518,7 @@ func (m PlayModel) viewListSelection() string {
 	if len(m.lists) > 0 && m.listModel.Items() == nil {
 		return "Loading..."
 	}
-	
+
 	if len(m.lists) == 0 {
 		return noListsView()
 	}
@@ -524,8 +548,11 @@ func (m PlayModel) viewPlaying() string {
 
 	var b strings.Builder
 
+	// Add empty line at top for better spacing
+	b.WriteString("\n")
+
 	// Title
-	b.WriteString(titleStyle.Render("Now Playing"))
+	b.WriteString(titleStyle.Render("🎵 Now Playing"))
 	b.WriteString("\n\n")
 
 	// Station info box
@@ -557,7 +584,7 @@ func (m PlayModel) viewPlaying() string {
 	}
 
 	// Help
-	help := helpStyle.Render("esc: stop • q: exit • s: save to favorites")
+	help := helpStyle.Render("Esc) Back • f) Save to Quick Favorites • s) Save to list • q) Quit")
 	b.WriteString(help)
 
 	return b.String()
@@ -608,7 +635,7 @@ func (m PlayModel) viewStationSelection() string {
 	if len(m.stations) > 0 && m.stationListModel.Items() == nil {
 		return "Loading..."
 	}
-	
+
 	if len(m.stations) == 0 {
 		return noStationsView(m.selectedList)
 	}

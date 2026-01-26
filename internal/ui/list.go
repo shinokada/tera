@@ -190,7 +190,7 @@ func (m ListManagementModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 // handleMenuInput handles input on the main menu
 func (m ListManagementModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc":
+	case "esc", "m":
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
@@ -264,6 +264,12 @@ func (m ListManagementModel) handleCreateInput(msg tea.KeyMsg) (tea.Model, tea.C
 		m.state = listManagementMenu
 		m.textInput.Blur()
 		return m, nil
+	case "m":
+		// Return to main menu
+		m.textInput.Blur()
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenMainMenu}
+		}
 	case "enter":
 		name := strings.TrimSpace(m.textInput.Value())
 		if name == "" {
