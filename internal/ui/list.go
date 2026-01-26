@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/internal/ui/components"
 )
 
 // listManagementState represents the current state in the list management menu
@@ -18,7 +19,9 @@ const (
 	listManagementMenu listManagementState = iota
 	listManagementCreate
 	listManagementDelete
+	listManagementSelectListToDelete
 	listManagementEdit
+	listManagementSelectListToEdit
 	listManagementShowAll
 	listManagementConfirmDelete
 	listManagementEnterNewName
@@ -41,16 +44,6 @@ type ListManagementModel struct {
 	height       int
 }
 
-// listManagementMenuItem wraps a menu item
-type listManagementMenuItem struct {
-	title       string
-	description string
-}
-
-func (i listManagementMenuItem) FilterValue() string { return i.title }
-func (i listManagementMenuItem) Title() string       { return i.title }
-func (i listManagementMenuItem) Description() string { return i.description }
-
 // NewListManagementModel creates a new list management model
 func NewListManagementModel(favoritePath string) ListManagementModel {
 	ti := textinput.New()
@@ -58,17 +51,19 @@ func NewListManagementModel(favoritePath string) ListManagementModel {
 	ti.CharLimit = 50
 
 	items := []list.Item{
-		listManagementMenuItem{title: "Create New List", description: "Create a new favorites list"},
-		listManagementMenuItem{title: "Delete List", description: "Delete an existing list"},
-		listManagementMenuItem{title: "Edit List Name", description: "Rename an existing list"},
-		listManagementMenuItem{title: "Show All Lists", description: "Display all favorite lists"},
+		components.NewMenuItem("Create New List", "Create a new favorites list", "1"),
+		components.NewMenuItem("Delete List", "Delete an existing list", "2"),
+		components.NewMenuItem("Edit List Name", "Rename an existing list", "3"),
+		components.NewMenuItem("Show All Lists", "Display all favorite lists", "4"),
 	}
 
-	delegate := list.NewDefaultDelegate()
-	l := list.New(items, delegate, 0, 0)
+	delegate := components.NewMenuDelegate()
+	l := list.New(items, delegate, 80, 10)
 	l.Title = "📋 List Management"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
+	l.SetShowHelp(false)
+	l.SetShowPagination(false)
 	l.Styles.Title = titleStyle
 	l.Styles.PaginationStyle = paginationStyle
 	l.Styles.HelpStyle = helpStyle
@@ -127,16 +122,42 @@ func (m ListManagementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Ensure enough height for menu items (4 items + title + pagination + help)
-		h := msg.Height - 8
-		if h < 10 {
-			h = 10
+		// Ensure enough height for menu items (4 items + title + help)
+		h := msg.Height - 4
+		if h < 8 {
+			h = 8
 		}
 		m.listModel.SetSize(msg.Width-4, h)
 		return m, nil
 
 	case listManagementListsLoadedMsg:
 		m.lists = msg.lists
+		// If we're in the select to delete state, populate the list model with actual lists
+		if m.state == listManagementSelectListToDelete {
+			items := make([]list.Item, len(m.lists))
+			for i, listName := range m.lists {
+				items[i] = components.NewMenuItem(listName, "", fmt.Sprintf("%d", i+1))
+			}
+			m.listModel.SetItems(items)
+			m.listModel.Select(0)
+		} else if m.state == listManagementSelectListToEdit {
+			items := make([]list.Item, len(m.lists))
+			for i, listName := range m.lists {
+				items[i] = components.NewMenuItem(listName, "", fmt.Sprintf("%d", i+1))
+			}
+			m.listModel.SetItems(items)
+			m.listModel.Select(0)
+		} else if m.state == listManagementMenu {
+			// Reset to main menu items
+			items := []list.Item{
+				components.NewMenuItem("Create New List", "Create a new favorites list", "1"),
+				components.NewMenuItem("Delete List", "Delete an existing list", "2"),
+				components.NewMenuItem("Edit List Name", "Rename an existing list", "3"),
+				components.NewMenuItem("Show All Lists", "Display all favorite lists", "4"),
+			}
+			m.listModel.SetItems(items)
+			m.listModel.Select(0)
+		}
 		return m, nil
 
 	case listManagementOperationSuccessMsg:
@@ -160,6 +181,10 @@ func (m ListManagementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case listManagementMenu:
 		m.listModel, cmd = m.listModel.Update(msg)
+	case listManagementSelectListToDelete:
+		m.listModel, cmd = m.listModel.Update(msg)
+	case listManagementSelectListToEdit:
+		m.listModel, cmd = m.listModel.Update(msg)
 	case listManagementCreate, listManagementDelete, listManagementEdit, listManagementEnterNewName:
 		m.textInput, cmd = m.textInput.Update(msg)
 	}
@@ -175,8 +200,12 @@ func (m ListManagementModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 		return m.handleCreateInput(msg)
 	case listManagementDelete:
 		return m.handleDeleteInput(msg)
+	case listManagementSelectListToDelete:
+		return m.handleSelectListToDeleteInput(msg)
 	case listManagementEdit:
 		return m.handleEditInput(msg)
+	case listManagementSelectListToEdit:
+		return m.handleSelectListToEditInput(msg)
 	case listManagementShowAll:
 		return m.handleShowAllInput(msg)
 	case listManagementConfirmDelete:
@@ -234,22 +263,17 @@ func (m ListManagementModel) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 			m.messageTime = 150
 			return m, nil
 		}
-		m.state = listManagementDelete
-		m.textInput.Reset()
-		m.textInput.Placeholder = "Enter list name to delete"
-		m.textInput.Focus()
-		return m, tea.Batch(m.loadLists(), textinput.Blink)
+		m.state = listManagementSelectListToDelete
+		return m, m.loadLists()
 	case 2: // Edit list name
 		if len(m.lists) == 0 {
 			m.message = "No lists available to edit"
 			m.messageTime = 150
 			return m, nil
 		}
-		m.state = listManagementEdit
+		m.state = listManagementSelectListToEdit
 		m.textInput.Reset()
-		m.textInput.Placeholder = "Enter list name to rename"
-		m.textInput.Focus()
-		return m, tea.Batch(m.loadLists(), textinput.Blink)
+		return m, m.loadLists()
 	case 3: // Show all lists
 		m.state = listManagementShowAll
 		return m, m.loadLists()
@@ -348,6 +372,68 @@ func (m ListManagementModel) handleDeleteInput(msg tea.KeyMsg) (tea.Model, tea.C
 	return m, cmd
 }
 
+// handleSelectListToDeleteInput handles selection of list to delete
+func (m ListManagementModel) handleSelectListToDeleteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "m":
+		m.state = listManagementMenu
+		return m, nil
+	case "q":
+		return m, tea.Quit
+	case "enter":
+		// Get selected item
+		item := m.listModel.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		menuItem, ok := item.(components.MenuItem)
+		if !ok {
+			return m, nil
+		}
+		selectedList := menuItem.Title()
+
+		// Check if it's My-favorites (protected)
+		if selectedList == "My-favorites" {
+			m.message = "Cannot delete My-favorites (protected list)"
+			m.messageTime = 150
+			return m, nil
+		}
+
+		// Move to confirmation
+		m.selectedList = selectedList
+		m.state = listManagementConfirmDelete
+		return m, nil
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		// Quick select by number
+		idx := -1
+		if num := msg.String(); len(num) == 1 && num[0] >= '1' && num[0] <= '9' {
+			idx = int(num[0] - '1')
+		}
+		if idx >= 0 && idx < len(m.listModel.Items()) {
+			m.listModel.Select(idx)
+			// Simulate enter press
+			item := m.listModel.SelectedItem()
+			if item != nil {
+				if menuItem, ok := item.(components.MenuItem); ok {
+					selectedList := menuItem.Title()
+					if selectedList != "My-favorites" {
+						m.selectedList = selectedList
+						m.state = listManagementConfirmDelete
+						return m, nil
+					} else {
+						m.message = "Cannot delete My-favorites (protected list)"
+						m.messageTime = 150
+					}
+				}
+			}
+		}
+	}
+
+	var cmd tea.Cmd
+	m.listModel, cmd = m.listModel.Update(msg)
+	return m, cmd
+}
+
 // handleConfirmDeleteInput handles delete confirmation
 func (m ListManagementModel) handleConfirmDeleteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -361,7 +447,75 @@ func (m ListManagementModel) handleConfirmDeleteInput(msg tea.KeyMsg) (tea.Model
 	return m, nil
 }
 
-// handleEditInput handles input during list editing
+// handleSelectListToEditInput handles selection of list to edit
+func (m ListManagementModel) handleSelectListToEditInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "m":
+		m.state = listManagementMenu
+		return m, nil
+	case "q":
+		return m, tea.Quit
+	case "enter":
+		// Get selected item
+		item := m.listModel.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		menuItem, ok := item.(components.MenuItem)
+		if !ok {
+			return m, nil
+		}
+		selectedList := menuItem.Title()
+
+		// Check if it's My-favorites (protected)
+		if selectedList == "My-favorites" {
+			m.message = "Cannot rename My-favorites (protected list)"
+			m.messageTime = 150
+			return m, nil
+		}
+
+		// Move to new name input
+		m.selectedList = selectedList
+		m.state = listManagementEnterNewName
+		m.textInput.Reset()
+		m.textInput.Placeholder = "Enter new name"
+		m.textInput.Focus()
+		return m, textinput.Blink
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		// Quick select by number
+		idx := -1
+		if num := msg.String(); len(num) == 1 && num[0] >= '1' && num[0] <= '9' {
+			idx = int(num[0] - '1')
+		}
+		if idx >= 0 && idx < len(m.listModel.Items()) {
+			m.listModel.Select(idx)
+			// Simulate enter press
+			item := m.listModel.SelectedItem()
+			if item != nil {
+				if menuItem, ok := item.(components.MenuItem); ok {
+					selectedList := menuItem.Title()
+					if selectedList != "My-favorites" {
+						m.selectedList = selectedList
+						m.state = listManagementEnterNewName
+						m.textInput.Reset()
+						m.textInput.Placeholder = "Enter new name"
+						m.textInput.Focus()
+						return m, textinput.Blink
+					} else {
+						m.message = "Cannot rename My-favorites (protected list)"
+						m.messageTime = 150
+					}
+				}
+			}
+		}
+	}
+
+	var cmd tea.Cmd
+	m.listModel, cmd = m.listModel.Update(msg)
+	return m, cmd
+}
+
+// handleEditInput handles input during list editing (deprecated - kept for compatibility)
 func (m ListManagementModel) handleEditInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -515,8 +669,12 @@ func (m ListManagementModel) View() string {
 		return m.viewCreate()
 	case listManagementDelete:
 		return m.viewDelete()
+	case listManagementSelectListToDelete:
+		return m.viewSelectListToDelete()
 	case listManagementEdit:
 		return m.viewEdit()
+	case listManagementSelectListToEdit:
+		return m.viewSelectListToEdit()
 	case listManagementShowAll:
 		return m.viewShowAll()
 	case listManagementConfirmDelete:
@@ -543,10 +701,10 @@ func (m ListManagementModel) viewMenu() string {
 	b.WriteString(m.listModel.View())
 	b.WriteString("\n\n")
 
-	help := helpStyle.Render("↑↓/jk: navigate • enter: select • 1-4: quick select • esc: back • q: quit")
+	help := helpStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // viewCreate renders the create list view
@@ -573,10 +731,10 @@ func (m ListManagementModel) viewCreate() string {
 		b.WriteString("\n\n")
 	}
 
-	help := helpStyle.Render("enter: create • esc: cancel")
+	help := helpStyle.Render("Enter: Create • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // viewDelete renders the delete list view
@@ -605,10 +763,38 @@ func (m ListManagementModel) viewDelete() string {
 		b.WriteString("\n\n")
 	}
 
-	help := helpStyle.Render("enter: continue • esc: cancel")
+	help := helpStyle.Render("Enter: Continue • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
+}
+
+// viewSelectListToDelete renders the list selection view for deletion
+func (m ListManagementModel) viewSelectListToDelete() string {
+	var b strings.Builder
+
+	if m.message != "" {
+		style := successStyle
+		if strings.Contains(m.message, "✗") || m.message == "Cannot delete My-favorites (protected list)" {
+			style = errorStyle
+		}
+		b.WriteString(style.Render(m.message))
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString(m.listModel.View())
+	b.WriteString("\n\n")
+
+	numLists := len(m.lists)
+	maxNum := numLists
+	if maxNum > 9 {
+		maxNum = 9
+	}
+
+	help := helpStyle.Render(fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum))
+	b.WriteString(help)
+
+	return wrapPageWithHeader(b.String())
 }
 
 // viewConfirmDelete renders the delete confirmation view
@@ -624,10 +810,10 @@ func (m ListManagementModel) viewConfirmDelete() string {
 
 	b.WriteString("This action cannot be undone.\n\n")
 
-	help := helpStyle.Render("y: yes, delete • n/esc: cancel")
+	help := helpStyle.Render("y: Yes, Delete • n/Esc: Cancel")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // viewEdit renders the edit list view
@@ -656,10 +842,38 @@ func (m ListManagementModel) viewEdit() string {
 		b.WriteString("\n\n")
 	}
 
-	help := helpStyle.Render("enter: continue • esc: cancel")
+	help := helpStyle.Render("Enter: Continue • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
+}
+
+// viewSelectListToEdit renders the list selection view for editing
+func (m ListManagementModel) viewSelectListToEdit() string {
+	var b strings.Builder
+
+	if m.message != "" {
+		style := successStyle
+		if strings.Contains(m.message, "✗") || m.message == "Cannot rename My-favorites (protected list)" {
+			style = errorStyle
+		}
+		b.WriteString(style.Render(m.message))
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString(m.listModel.View())
+	b.WriteString("\n\n")
+
+	numLists := len(m.lists)
+	maxNum := numLists
+	if maxNum > 9 {
+		maxNum = 9
+	}
+
+	help := helpStyle.Render(fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum))
+	b.WriteString(help)
+
+	return wrapPageWithHeader(b.String())
 }
 
 // viewEnterNewName renders the new name input view
@@ -680,10 +894,10 @@ func (m ListManagementModel) viewEnterNewName() string {
 		b.WriteString("\n\n")
 	}
 
-	help := helpStyle.Render("enter: rename • esc: cancel")
+	help := helpStyle.Render("Enter: Rename • Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // viewShowAll renders all lists
@@ -708,10 +922,10 @@ func (m ListManagementModel) viewShowAll() string {
 		b.WriteString("\n")
 	}
 
-	help := helpStyle.Render("enter/esc: back")
+	help := helpStyle.Render("Esc: Back • Ctrl+C: Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // Messages

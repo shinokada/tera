@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
@@ -76,13 +76,12 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Search Stations", "", "2"),
 		components.NewMenuItem("Manage Lists", "", "3"),
 		components.NewMenuItem("I Feel Lucky", "(coming soon)", "4"),
-		components.NewMenuItem("Delete Station", "(coming soon)", "5"),
-		components.NewMenuItem("Gist Management", "(coming soon)", "6"),
-		components.NewMenuItem("Exit", "", "0"),
+		components.NewMenuItem("Gist Management", "(coming soon)", "5"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
-	a.mainMenuList = components.CreateMenu(items, "TERA - Terminal Radio", 50, 20)
+	// Title is empty as TERA header is added by wrapPageWithHeader
+	a.mainMenuList = components.CreateMenu(items, "", 50, 20)
 }
 
 // ensureMyFavorites ensures My-favorites.json exists at startup
@@ -127,13 +126,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		
+
 		// Update main menu size
 		if a.screen == screenMainMenu {
 			h, v := docStyle.GetFrameSize()
-			// Ensure enough height for all menu items (7 items + title + help)
+			// Ensure enough height for all menu items (5 items)
+			// Reserve 6 lines for TERA header (3 lines) + spacing + help line
 			minHeight := 12
-			menuHeight := msg.Height - v
+			menuHeight := msg.Height - v - 6
 			if menuHeight < minHeight {
 				menuHeight = minHeight
 			}
@@ -225,17 +225,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle quit - 'q' works from anywhere in the menu
-		if msg.String() == "q" {
-			// Stop any playing stations before quitting
-			if a.playScreen.player != nil {
-				a.playScreen.player.Stop()
-			}
-			if a.searchScreen.player != nil {
-				a.searchScreen.player.Stop()
-			}
-			return a, tea.Quit
-		}
 		if msg.String() == "0" {
 			// Stop any playing stations before quitting
 			if a.playScreen.player != nil {
@@ -278,14 +267,9 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	case 3: // I Feel Lucky
 		// Coming soon
 		return a, nil
-	case 4: // Delete Station
+	case 4: // Gist Management
 		// Coming soon
 		return a, nil
-	case 5: // Gist Management
-		// Coming soon
-		return a, nil
-	case 6: // Exit
-		return a, tea.Quit
 	}
 	return a, nil
 }
@@ -305,28 +289,27 @@ func (a App) View() string {
 }
 
 func (a App) viewMainMenu() string {
-	content := a.mainMenuList.View()
+	var b strings.Builder
+
+	// Menu items
+	b.WriteString(a.mainMenuList.View())
 
 	// Add quick play favorites if available
 	if len(a.quickFavorites) > 0 {
-		content += "\n\n" + quickFavoritesStyle.Render("Quick Play Favorites")
+		b.WriteString("\n\n")
+		b.WriteString(quickFavoritesStyle.Render("Quick Play Favorites"))
 		for i, station := range a.quickFavorites {
 			if i >= 10 {
 				break // Only show first 10
 			}
 			shortcut := fmt.Sprintf("%d", 10+i)
-			content += fmt.Sprintf("\n  %s. ▶ %s", shortcut, station.TrimName())
+			b.WriteString(fmt.Sprintf("\n  %s. ▶ %s", shortcut, station.TrimName()))
 		}
 	}
 
-	content += "\n\n" + helpStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • q: Quit")
+	b.WriteString("\n\n")
+	b.WriteString(helpStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-5: Quick select • Ctrl+C: Quit"))
 
-	return docStyle.Render(content)
+	// Use wrapPageWithHeader like other screens, with extra newline at top
+	return "\n" + wrapPageWithHeader(b.String())
 }
-
-var (
-	docStyle = helpStyle.Copy().Padding(1, 2)
-
-	quickFavoritesStyle = titleStyle.Copy().
-				Foreground(lipgloss.Color("99"))
-)

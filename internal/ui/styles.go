@@ -1,14 +1,19 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Color palette matching bash version
 var (
-	colorCyan   = lipgloss.Color("6")  // Cyan for titles
-	colorYellow = lipgloss.Color("3")  // Yellow for highlights
-	colorRed    = lipgloss.Color("9")  // Red for errors
-	colorGreen  = lipgloss.Color("2")  // Green for success
-	colorGray   = lipgloss.Color("8")  // Gray for secondary text
+	colorCyan   = lipgloss.Color("6") // Cyan for titles
+	colorYellow = lipgloss.Color("3") // Yellow for highlights
+	colorRed    = lipgloss.Color("9") // Red for errors
+	colorGreen  = lipgloss.Color("2") // Green for success
+	colorGray   = lipgloss.Color("8") // Gray for secondary text
 )
 
 // Common styles
@@ -75,4 +80,42 @@ var (
 
 	stationValueStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("7"))
+
+	teraHeaderStyle = lipgloss.NewStyle().
+			Foreground(colorCyan).
+			Bold(true).
+			Align(lipgloss.Center)
+
+	quickFavoritesStyle = titleStyle.Copy().
+				Foreground(lipgloss.Color("99"))
+
+	docStyle = helpStyle.Copy().Padding(1, 2)
 )
+
+// createStyledDelegate creates a list delegate with single-line items and consistent styling
+func createStyledDelegate() list.DefaultDelegate {
+	delegate := list.NewDefaultDelegate()
+	delegate.SetHeight(1)            // Single line per item
+	delegate.SetSpacing(0)           // Remove spacing between items
+	delegate.ShowDescription = false // Hide cursor indicator
+	// Remove vertical padding from delegate styles
+	delegate.Styles.NormalTitle = lipgloss.NewStyle()
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+	return delegate
+}
+
+// wrapPageWithHeader wraps content with TERA header at the top and applies consistent padding
+func wrapPageWithHeader(content string) string {
+	var b strings.Builder
+	// Center TERA header with proper width
+	header := lipgloss.NewStyle().
+		Width(50).
+		Align(lipgloss.Center).
+		Foreground(colorCyan).
+		Bold(true).
+		Render("TERA")
+	b.WriteString(header)
+	b.WriteString("\n\n")
+	b.WriteString(content)
+	return docStyle.Render(b.String())
+}

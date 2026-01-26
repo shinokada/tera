@@ -96,3 +96,33 @@ func (s *Storage) StationExists(ctx context.Context, listName string, stationUUI
 
 	return false, nil
 }
+
+// RemoveStation removes a station from a list by UUID
+func (s *Storage) RemoveStation(ctx context.Context, listName string, stationUUID string) error {
+	// Load existing list
+	list, err := s.LoadList(ctx, listName)
+	if err != nil {
+		return err
+	}
+
+	// Find and remove the station
+	found := false
+	newStations := make([]api.Station, 0, len(list.Stations))
+	for _, station := range list.Stations {
+		if station.StationUUID != stationUUID {
+			newStations = append(newStations, station)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return ErrStationNotFound
+	}
+
+	// Update list
+	list.Stations = newStations
+
+	// Save
+	return s.SaveList(ctx, list)
+}

@@ -249,6 +249,14 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 150
 		return m, nil
 
+	case deleteSuccessMsg:
+		// Reload stations after successful delete
+		return m, m.loadStations()
+
+	case deleteFailedMsg:
+		m.err = msg.err
+		return m, nil
+
 	case listsLoadedMsg:
 		m.lists = msg.lists
 		m.listItems = make([]list.Item, len(msg.lists))
@@ -302,13 +310,7 @@ func (m *PlayModel) initializeListModel() {
 		listHeight = 5
 	}
 
-	delegate := list.NewDefaultDelegate()
-	delegate.SetHeight(1)            // Single line per item
-	delegate.SetSpacing(0)           // Remove spacing between items
-	delegate.ShowDescription = false // Hide cursor indicator
-	// Remove vertical padding from delegate styles
-	delegate.Styles.NormalTitle = lipgloss.NewStyle()
-	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+	delegate := createStyledDelegate()
 
 	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
 	m.listModel.Title = "Select a Favorite List"
@@ -326,18 +328,13 @@ func (m *PlayModel) initializeStationListModel() {
 		listHeight = 5
 	}
 
-	delegate := list.NewDefaultDelegate()
-	delegate.SetHeight(1)            // Single line per item
-	delegate.SetSpacing(0)           // Remove spacing between items
-	delegate.ShowDescription = false // Hide cursor indicator
-	// Remove vertical padding from delegate styles
-	delegate.Styles.NormalTitle = lipgloss.NewStyle()
-	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+	delegate := createStyledDelegate()
 
 	m.stationListModel = list.New(m.stationItems, delegate, m.width, listHeight)
 	m.stationListModel.Title = fmt.Sprintf("Stations in %s", m.selectedList)
 	m.stationListModel.SetShowStatusBar(true)
 	m.stationListModel.SetFilteringEnabled(true) // Enable fzf-style filtering
+	m.stationListModel.SetShowHelp(false)        // Disable built-in help to use custom help text
 	m.stationListModel.Styles.Title = titleStyle
 	m.stationListModel.Styles.PaginationStyle = paginationStyle
 	m.stationListModel.Styles.HelpStyle = helpStyle
@@ -381,6 +378,11 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		// Quit application
 		return m, tea.Quit
+	case "d":
+		// Delete selected station
+		if i, ok := m.stationListModel.SelectedItem().(stationListItem); ok {
+			return m, m.deleteStationFromList(&i.station)
+		}
 	case "enter":
 		// Select station and start playback
 		if i, ok := m.stationListModel.SelectedItem().(stationListItem); ok {
@@ -492,6 +494,20 @@ func (m PlayModel) saveToQuickFavorites() tea.Cmd {
 	}
 }
 
+// deleteStationFromList removes a station from the current list
+func (m PlayModel) deleteStationFromList(station *api.Station) tea.Cmd {
+	return func() tea.Msg {
+		store := storage.NewStorage(m.favoritePath)
+		err := store.RemoveStation(context.Background(), m.selectedList, station.StationUUID)
+
+		if err != nil {
+			return deleteFailedMsg{err: err}
+		}
+
+		return deleteSuccessMsg{stationName: station.TrimName()}
+	}
+}
+
 // View renders the play screen
 func (m PlayModel) View() string {
 	if m.err != nil {
@@ -537,7 +553,7 @@ func (m PlayModel) viewListSelection() string {
 	help := helpStyle.Render("↑/↓: navigate • enter: select • esc: back • q: quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // viewPlaying renders the playback view
@@ -587,7 +603,7 @@ func (m PlayModel) viewPlaying() string {
 	help := helpStyle.Render("Esc) Back • f) Save to Quick Favorites • s) Save to list • q) Quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // formatStationInfo formats station information for display
@@ -653,10 +669,10 @@ func (m PlayModel) viewStationSelection() string {
 	b.WriteString("\n\n")
 
 	// Help
-	help := helpStyle.Render("↑/↓: navigate • /: filter • enter: play • esc: back • q: quit")
+	help := helpStyle.Render("↑/↓: navigate • /: filter • enter: play • d: delete • esc: back • q: quit")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // noStationsView renders the view when a list is empty
@@ -672,7 +688,7 @@ func noStationsView(listName string) string {
 	b.WriteString("Add stations to this list using Search or List Management.\n\n")
 	b.WriteString(helpStyle.Render("Press esc to go back or q to quit"))
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // noListsView renders the view when no lists are available
@@ -686,7 +702,7 @@ func noListsView() string {
 	b.WriteString("Create your first list using the List Management menu.\n\n")
 	b.WriteString(helpStyle.Render("Press esc to return to main menu or q to quit"))
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // errorView renders an error message
@@ -699,7 +715,7 @@ func errorView(err error) string {
 	b.WriteString("\n\n")
 	b.WriteString(helpStyle.Render("Press esc to return to main menu or q to quit"))
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // viewSavePrompt renders the save prompt after playback
@@ -729,7 +745,7 @@ func (m PlayModel) viewSavePrompt() string {
 	help := helpStyle.Render("y/1: Yes • n/2/Esc: No")
 	b.WriteString(help)
 
-	return b.String()
+	return wrapPageWithHeader(b.String())
 }
 
 // Messages
@@ -757,6 +773,14 @@ type saveSuccessMsg struct {
 type saveFailedMsg struct {
 	err         error
 	isDuplicate bool
+}
+
+type deleteSuccessMsg struct {
+	stationName string
+}
+
+type deleteFailedMsg struct {
+	err error
 }
 
 type errMsg struct {

@@ -9,6 +9,7 @@ import (
 // Errors
 var (
 	ErrDuplicateStation = errors.New("station already exists in list")
+	ErrStationNotFound  = errors.New("station not found in list")
 )
 
 // FavoritesList represents a collection of favorite stations

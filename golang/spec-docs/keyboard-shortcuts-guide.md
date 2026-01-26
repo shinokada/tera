@@ -31,8 +31,7 @@ These keys work consistently across all screens:
 ### Actions
 - **Enter** — Select current item / Confirm action
 - **Esc** — Go back / Cancel
-- **q** — Exit TERA
-- **Ctrl+C** — Quit application immediately
+- **Ctrl+C** — Quit application
 
 ### Utility
 - **?** — Show help for current screen
@@ -50,7 +49,7 @@ From the main menu, these number keys provide quick access:
 - **4** — Delete a Station
 - **5** — I Feel Lucky (random station)
 - **6** — Gist Backup/Restore
-- **q** — Exit TERA
+- **0** — Exit TERA
 
 ### Quick Play (Dynamic Section)
 If you have stations saved in "My Favorites":
@@ -84,14 +83,13 @@ TERA MAIN MENU
 - **↑↓ / jk** — Move through station list
 - **Enter** — Play selected station
 - **Esc** — Return to main menu
-- **q** — Exit TERA
 
 ### Actions While Playing
 - **1** — Stop & show save prompt
 - **Esc** — Stop playback and go back
 - **f** — Save current station to Quick Favorites
 - **s** — Save to a list (coming soon)
-- **q** — Quit application
+- **Ctrl+C** — Quit application
 - **Left/Right arrows** — Decrease/Increase volume (TODO: not yet implemented)
 
 ---
@@ -113,6 +111,7 @@ TERA MAIN MENU
 - **↑↓ / jk** — Browse results
 - **Enter** — Play station immediately
 - **Esc** — Back to search menu
+- **0** — Back to Main Menu
 
 ---
 
@@ -182,15 +181,14 @@ Shows:
 Throughout the app, you can use these patterns for fast navigation:
 
 - **Esc** — Return to previous screen (one level up)
-- **m** — Return to main menu (from any depth, when depth > 1)
-- **q** — Quit Tera
+- **0** — Return to main menu (from any depth, when depth > 1)
 
-The **m** key for main menu is especially useful when you're deep in navigation:
+The **0** key for main menu is especially useful when you're deep in navigation:
 - Example: Main Menu → Search Stations → Search by Tag → Results
-- From Results, pressing **m** takes you directly back to Main Menu
+- From Results, pressing **0** takes you directly back to Main Menu
 - Pressing **Esc** would only go back one level (to Search by Tag)
 
-The **m** key only appears in the footer when you're at depth > 1 (not directly on main menu).
+The **0** key only appears in the footer when you're at depth > 1 (not directly on main menu).
 
 ### Future feature: Filtering/Search Within Lists
 When viewing any list (stations, search results, etc.):
@@ -214,7 +212,6 @@ The behavior depends on screen:
 - **Esc** — Stop playback and go back
 - **f** — Add to Quick Favorites (if not already added)
 - **s** — Save to a list (coming soon)
-- **q** — Quit application
 - **←/→** — Decrease/increase volume (TODO: not yet implemented)
 
 **After Playback Ends:**
@@ -260,9 +257,8 @@ Quick reference table:
 | **↑↓ / jk**  | Navigate up/down | Works everywhere    |
 | **Enter**    | Select/Confirm   | Contextual          |
 | **Esc**      | Back/Cancel      | Previous screen     |
-| **m**        | Main menu        | When depth > 1      |
-| **q**        | Quit             | Exit application    |
-| **Ctrl+C**   | Quit immediately | Force exit          |
+| **0**        | Main menu        | When depth > 1      |
+| **Ctrl+C**   | Quit             | Exit application    |
 | **?**        | Help             | Context help        |
 | **/**        | Filter/Search    | Within current list |
 | **i**        | Info             | Station details     |
@@ -323,7 +319,7 @@ graph TD
 ## Tips for Efficient Use
 
 ### 1. Master Quick Navigation
-- Learn the **0** (back) and **00** (main) patterns
+- Learn the **Esc** (back) and **0** (main menu) patterns
 - Use **/** to quickly filter large lists
 - Use **10-19** for instant playback of favorites
 
@@ -426,9 +422,9 @@ TERA's keyboard shortcuts are designed to be:
 **Most important shortcuts to learn:**
 1. **↑↓ / jk** — Navigation
 2. **Enter** — Select/Confirm  
-3. **Esc / q** — Back/Cancel
+3. **Esc / Ctrl+C** — Back/Quit
 4. **?** — Help
 5. **/** — Filter
-6. **0/00** — Quick navigation
+6. **0** — Main menu
 
 Master these, and you'll be navigating TERA like a pro! 🎵

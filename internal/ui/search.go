@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
@@ -220,19 +220,15 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Create results list
-		delegate := list.NewDefaultDelegate()
-		delegate.SetHeight(1)            // Single line per item
-		delegate.SetSpacing(0)           // Remove empty lines between items
-		delegate.ShowDescription = false // Hide cursor indicator
-		// Remove vertical padding from delegate styles
-		delegate.Styles.NormalTitle = lipgloss.NewStyle()
-		delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+		delegate := createStyledDelegate()
 
 		m.resultsList = list.New(m.resultsItems, delegate, m.width, listHeight)
 		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
-		m.resultsList.SetShowHelp(true)
+		m.resultsList.SetShowHelp(false)     // We use custom footer instead
 		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
 		m.resultsList.SetFilteringEnabled(true)
+		// Disable 'q' quit keybinding in the list
+		m.resultsList.KeyMap.Quit = key.NewBinding(key.WithDisabled())
 		return m, nil
 
 	case searchErrorMsg:
@@ -256,6 +252,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handlePlaybackStopped()
 
 	case saveSuccessMsg:
+		// Update local cache
+		m.quickFavorites = append(m.quickFavorites, *msg.station)
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
 		m.saveMessageTime = 150
 		return m, nil
@@ -286,16 +284,6 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleMenuInput handles input in the search menu state
 func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Handle quit
-	if msg.String() == "q" {
-		// Stop any playing station when quitting
-		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
-		}
-		m.selectedStation = nil
-		return m, tea.Quit
-	}
-
 	// Handle back to main menu
 	if msg.String() == "esc" || msg.String() == "m" {
 		// Stop any playing station when exiting
@@ -363,13 +351,11 @@ func (m SearchModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textInput.Blur()
 		m.state = searchStateMenu
 		return m, nil
-	case "m":
+	case "0":
 		// Return to main menu
 		m.textInput.SetValue("")
 		m.textInput.Blur()
 		return m, func() tea.Msg { return backToMainMsg{} }
-	case "q":
-		return m, tea.Quit
 	default:
 		// Pass all other keys to text input for normal typing
 		var cmd tea.Cmd
@@ -424,13 +410,6 @@ func (m SearchModel) performSearch(query string) tea.Cmd {
 // handleResultsInput handles input in the results list state
 func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q":
-		// Quit the app
-		// Stop any playing station first
-		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
-		}
-		return m, tea.Quit
 	case "esc":
 		// Stop any playing station when going back
 		if m.player != nil && m.player.IsPlaying() {
@@ -439,7 +418,7 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedStation = nil
 		m.state = searchStateMenu
 		return m, nil
-	case "m":
+	case "0":
 		// Return to main menu
 		if m.player != nil && m.player.IsPlaying() {
 			m.player.Stop()
@@ -468,16 +447,6 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleStationInfoInput handles input in the station info state
 func (m SearchModel) handleStationInfoInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Handle quit
-	if msg.String() == "q" {
-		// Stop any playing station
-		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
-		}
-		m.selectedStation = nil
-		return m, tea.Quit
-	}
-
 	// Handle menu navigation and selection
 	newList, selected := components.HandleMenuKey(msg, m.stationInfoMenu)
 	m.stationInfoMenu = newList
@@ -662,9 +631,6 @@ func (m SearchModel) saveToQuickFavorites(station api.Station) tea.Cmd {
 			}
 		}
 
-		// Update local cache
-		m.quickFavorites = append(m.quickFavorites, station)
-
 		return saveSuccessMsg{
 			station: &station,
 		}
@@ -679,12 +645,13 @@ func (m SearchModel) View() string {
 	case searchStateMenu:
 		s.WriteString(m.menuList.View())
 		s.WriteString("\n")
-		s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • q: Quit"))
+		s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • Ctrl+C: Quit"))
 
 		if m.err != nil {
 			s.WriteString("\n\n")
 			s.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 		}
+		return wrapPageWithHeader(s.String())
 
 	case searchStateInput:
 		s.WriteString(titleStyle.Render("🔍 Search Radio Stations"))
@@ -693,13 +660,15 @@ func (m SearchModel) View() string {
 		s.WriteString("\n\n")
 		s.WriteString(m.textInput.View())
 		s.WriteString("\n\n")
-		s.WriteString(subtleStyle.Render("Enter) Search  |  Esc) Back  |  m) Main Menu  |  q) Quit"))
+		s.WriteString(subtleStyle.Render("Enter) Search  |  Esc) Back  |  0) Main Menu  |  Ctrl+C) Quit"))
+		return wrapPageWithHeader(s.String())
 
 	case searchStateLoading:
 		s.WriteString(titleStyle.Render("🔍 Searching..."))
 		s.WriteString("\n\n")
 		s.WriteString(m.spinner.View())
 		s.WriteString(" Searching for stations...")
+		return wrapPageWithHeader(s.String())
 
 	case searchStateResults:
 		if len(m.results) == 0 {
@@ -708,29 +677,26 @@ func (m SearchModel) View() string {
 			s.WriteString("No stations found matching your search.\n\n")
 			s.WriteString(subtleStyle.Render("Press Esc to return to search menu"))
 		} else {
-			// Add empty line at top for better readability
-			s.WriteString("\n")
 			s.WriteString(m.resultsList.View())
 			s.WriteString("\n")
-			s.WriteString(subtleStyle.Render("Enter) Play  |  Esc) Back  |  m) Main Menu  |  q) Quit"))
+			s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select  |  Esc) Back  |  0) Main Menu  |  Ctrl+C) Quit"))
 		}
+		return wrapPageWithHeader(s.String())
 
 	case searchStateStationInfo:
-		s.WriteString(m.renderStationInfo())
+		return wrapPageWithHeader(m.renderStationInfo())
 
 	case searchStateSavePrompt:
-		s.WriteString(m.renderSavePrompt())
+		return wrapPageWithHeader(m.renderSavePrompt())
 
 	case searchStatePlaying:
-		// Add empty line at top for better spacing
-		s.WriteString("\n")
 		s.WriteString(titleStyle.Render("🎵 Now Playing"))
 		s.WriteString("\n\n")
 		if m.selectedStation != nil {
 			s.WriteString(renderStationDetails(*m.selectedStation))
 		}
 		s.WriteString("\n\n")
-		s.WriteString(subtleStyle.Render("Esc) Back  |  f) Save to Quick Favorites  |  s) Save to list  |  q) Quit"))
+		s.WriteString(subtleStyle.Render("Esc) Back  |  f) Save to Quick Favorites  |  s) Save to list  |  Ctrl+C) Quit"))
 
 		if m.saveMessage != "" {
 			s.WriteString("\n\n")
@@ -742,9 +708,10 @@ func (m SearchModel) View() string {
 				s.WriteString(errorStyle.Render(m.saveMessage))
 			}
 		}
+		return wrapPageWithHeader(s.String())
 	}
 
-	return s.String()
+	return wrapPageWithHeader(s.String())
 }
 
 // getSearchTypeLabel returns a label for the current search type
@@ -805,7 +772,7 @@ func (m SearchModel) renderSavePrompt() string {
 	s.WriteString("\n\n")
 
 	if m.selectedStation != nil {
-		s.WriteString(fmt.Sprintf("Did you enjoy this station?\n\n"))
+		s.WriteString("Did you enjoy this station?\n\n")
 		s.WriteString(boldStyle.Render(m.selectedStation.TrimName()))
 		s.WriteString("\n\n")
 	}

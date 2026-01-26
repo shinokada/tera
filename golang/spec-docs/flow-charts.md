@@ -12,7 +12,7 @@ stateDiagram-v2
     MainMenu --> Lucky: 4
     MainMenu --> GistMenu: 5
     MainMenu --> QuickPlay: 10-19
-    MainMenu --> [*]: 0/q
+    MainMenu --> [*]: 0/Ctrl+C
     
     PlayScreen --> MainMenu: Esc
     SearchMenu --> MainMenu: Esc
@@ -41,7 +41,7 @@ flowchart TD
     Input -->|3| List[Navigate to List Menu]
     Input -->|4| Lucky[Play Random Station]
     Input -->|5| Gist[Navigate to Gist Menu]
-    Input -->|0/q| Exit([Exit App])
+    Input -->|0/Ctrl+C| Exit([Exit App])
     Input -->|10-19| QuickPlay[Play Quick Favorite]
     
     QuickPlay --> MPV[Start MPV Player]
