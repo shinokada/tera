@@ -89,6 +89,11 @@ func (a *App) initMainMenu() {
 func (a *App) ensureMyFavorites() {
 	store := storage.NewStorage(a.favoritePath)
 	if _, err := store.LoadList(context.Background(), "My-favorites"); err != nil {
+		// Only create if file doesn't exist, not on other errors
+		if !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load My-favorites: %v\n", err)
+			return
+		}
 		// Create empty My-favorites list
 		emptyList := &storage.FavoritesList{
 			Name:     "My-favorites",

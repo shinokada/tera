@@ -86,25 +86,8 @@ func (i stationListItem) Description() string {
 
 // NewPlayModel creates a new play screen model
 func NewPlayModel(favoritePath string) PlayModel {
-	// Ensure favorites directory exists
-	if err := os.MkdirAll(favoritePath, 0755); err != nil {
-		// Log error but continue - will be caught later
-		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
-	}
-	
-	// Ensure My-favorites.json exists
-	store := storage.NewStorage(favoritePath)
-	if _, err := store.LoadList(context.Background(), "My-favorites"); err != nil {
-		// Create empty My-favorites list
-		emptyList := &storage.FavoritesList{
-			Name:     "My-favorites",
-			Stations: []api.Station{},
-		}
-		if err := store.SaveList(context.Background(), emptyList); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to create My-favorites: %v\n", err)
-		}
-	}
-	
+	// Note: favorites directory and My-favorites.json are created at app startup
+	// in app.go's NewApp() function, so no need to check here
 	return PlayModel{
 		state:        playStateListSelection,
 		favoritePath: favoritePath,
