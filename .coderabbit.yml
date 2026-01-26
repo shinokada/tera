@@ -1,0 +1,4 @@
+auto_review:
+  enabled: true
+  base_branch_patterns:
+    - "golang"
