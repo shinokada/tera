@@ -43,6 +43,8 @@ type PlayModel struct {
 	width            int
 	height           int
 	err              error
+	listsNeedInit    bool // Flag to trigger list model initialization
+	stationsNeedInit bool // Flag to trigger station model initialization
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -84,6 +86,25 @@ func (i stationListItem) Description() string {
 
 // NewPlayModel creates a new play screen model
 func NewPlayModel(favoritePath string) PlayModel {
+	// Ensure favorites directory exists
+	if err := os.MkdirAll(favoritePath, 0755); err != nil {
+		// Log error but continue - will be caught later
+		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
+	}
+	
+	// Ensure My-favorites.json exists
+	store := storage.NewStorage(favoritePath)
+	if _, err := store.LoadList(context.Background(), "My-favorites"); err != nil {
+		// Create empty My-favorites list
+		emptyList := &storage.FavoritesList{
+			Name:     "My-favorites",
+			Stations: []api.Station{},
+		}
+		if err := store.SaveList(context.Background(), emptyList); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to create My-favorites: %v\n", err)
+		}
+	}
+	
 	return PlayModel{
 		state:        playStateListSelection,
 		favoritePath: favoritePath,
@@ -170,6 +191,16 @@ func (m PlayModel) getStationsFromList(listName string) ([]api.Station, error) {
 
 // Update handles messages for the play screen
 func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Check if we need to initialize models with dimensions we now have
+	if m.listsNeedInit && m.width > 0 && m.height > 0 {
+		m.initializeListModel()
+		m.listsNeedInit = false
+	}
+	if m.stationsNeedInit && m.width > 0 && m.height > 0 {
+		m.initializeStationListModel()
+		m.stationsNeedInit = false
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.state {
@@ -193,10 +224,16 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			listHeight = 5
 		}
 		
-		if m.listModel.Items() != nil {
+		// Initialize models if we have data but they're not initialized yet
+		if len(m.listItems) > 0 && m.listModel.Items() == nil {
+			m.initializeListModel()
+		} else if m.listModel.Items() != nil && len(m.listModel.Items()) > 0 {
 			m.listModel.SetSize(msg.Width, listHeight)
 		}
-		if m.stationListModel.Items() != nil {
+		
+		if len(m.stationItems) > 0 && m.stationListModel.Items() == nil {
+			m.initializeStationListModel()
+		} else if m.stationListModel.Items() != nil && len(m.stationListModel.Items()) > 0 {
 			m.stationListModel.SetSize(msg.Width, listHeight)
 		}
 		return m, nil
@@ -236,21 +273,12 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.listItems[i] = playListItem{name: name}
 		}
 
-		// Calculate usable height
-		listHeight := m.height - 10
-		if listHeight < 5 {
-			listHeight = 5
+		// Initialize now if we have dimensions, otherwise flag for later
+		if m.width > 0 && m.height > 0 {
+			m.initializeListModel()
+		} else {
+			m.listsNeedInit = true
 		}
-		
-		// Initialize the list model
-		delegate := list.NewDefaultDelegate()
-		m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
-		m.listModel.Title = "Select a Favorite List"
-		m.listModel.SetShowStatusBar(false)
-		m.listModel.SetFilteringEnabled(false)
-		m.listModel.Styles.Title = titleStyle
-		m.listModel.Styles.PaginationStyle = paginationStyle
-		m.listModel.Styles.HelpStyle = helpStyle
 
 		return m, nil
 
@@ -261,21 +289,12 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stationItems[i] = stationListItem{station: station}
 		}
 
-		// Calculate usable height
-		listHeight := m.height - 10
-		if listHeight < 5 {
-			listHeight = 5
+		// Initialize now if we have dimensions, otherwise flag for later
+		if m.width > 0 && m.height > 0 {
+			m.initializeStationListModel()
+		} else {
+			m.stationsNeedInit = true
 		}
-		
-		// Initialize the station list model with filtering enabled
-		delegate := list.NewDefaultDelegate()
-		m.stationListModel = list.New(m.stationItems, delegate, m.width, listHeight)
-		m.stationListModel.Title = fmt.Sprintf("Stations in %s", m.selectedList)
-		m.stationListModel.SetShowStatusBar(true)
-		m.stationListModel.SetFilteringEnabled(true) // Enable fzf-style filtering
-		m.stationListModel.Styles.Title = titleStyle
-		m.stationListModel.Styles.PaginationStyle = paginationStyle
-		m.stationListModel.Styles.HelpStyle = helpStyle
 
 		return m, nil
 
@@ -291,6 +310,40 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stationListModel, cmd = m.stationListModel.Update(msg)
 	}
 	return m, cmd
+}
+
+// initializeListModel creates the list model with current dimensions
+func (m *PlayModel) initializeListModel() {
+	listHeight := m.height - 10
+	if listHeight < 5 {
+		listHeight = 5
+	}
+	
+	delegate := list.NewDefaultDelegate()
+	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
+	m.listModel.Title = "Select a Favorite List"
+	m.listModel.SetShowStatusBar(false)
+	m.listModel.SetFilteringEnabled(false)
+	m.listModel.Styles.Title = titleStyle
+	m.listModel.Styles.PaginationStyle = paginationStyle
+	m.listModel.Styles.HelpStyle = helpStyle
+}
+
+// initializeStationListModel creates the station list model with current dimensions
+func (m *PlayModel) initializeStationListModel() {
+	listHeight := m.height - 10
+	if listHeight < 5 {
+		listHeight = 5
+	}
+	
+	delegate := list.NewDefaultDelegate()
+	m.stationListModel = list.New(m.stationItems, delegate, m.width, listHeight)
+	m.stationListModel.Title = fmt.Sprintf("Stations in %s", m.selectedList)
+	m.stationListModel.SetShowStatusBar(true)
+	m.stationListModel.SetFilteringEnabled(true) // Enable fzf-style filtering
+	m.stationListModel.Styles.Title = titleStyle
+	m.stationListModel.Styles.PaginationStyle = paginationStyle
+	m.stationListModel.Styles.HelpStyle = helpStyle
 }
 
 // updateListSelection handles input during list selection
@@ -452,6 +505,11 @@ func (m PlayModel) View() string {
 
 // viewListSelection renders the list selection view
 func (m PlayModel) viewListSelection() string {
+	// Check if we have lists but no model yet (waiting for dimensions)
+	if len(m.lists) > 0 && m.listModel.Items() == nil {
+		return "Loading..."
+	}
+	
 	if len(m.lists) == 0 {
 		return noListsView()
 	}
@@ -561,6 +619,11 @@ func (m PlayModel) formatStationInfo(station *api.Station) string {
 
 // viewStationSelection renders the station selection view
 func (m PlayModel) viewStationSelection() string {
+	// Check if we have stations but no model yet (waiting for dimensions)
+	if len(m.stations) > 0 && m.stationListModel.Items() == nil {
+		return "Loading..."
+	}
+	
 	if len(m.stations) == 0 {
 		return noStationsView(m.selectedList)
 	}

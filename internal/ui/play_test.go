@@ -25,11 +25,18 @@ func TestGetAvailableLists(t *testing.T) {
 	// Create a temporary directory
 	tmpDir := t.TempDir()
 
-	// Test with no files
+	// Test with no files - but NewPlayModel creates My-favorites.json automatically
 	model := NewPlayModel(tmpDir)
 	lists, err := model.getAvailableLists()
-	if err == nil {
-		t.Error("Expected error when no lists available, got nil")
+	// Should find My-favorites.json that was auto-created
+	if err != nil {
+		t.Errorf("Expected no error with auto-created My-favorites, got: %v", err)
+	}
+	if len(lists) != 1 {
+		t.Errorf("Expected 1 list (My-favorites), got %d", len(lists))
+	}
+	if lists[0] != "My-favorites" {
+		t.Errorf("Expected 'My-favorites', got '%s'", lists[0])
 	}
 
 	// Create some test JSON files
@@ -52,10 +59,11 @@ func TestGetAvailableLists(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Should only find JSON files (without extension)
-	expectedCount := 3
+	// Should find JSON files (without extension)
+	// My-favorites.json was auto-created, plus 3 test files = 4 total
+	expectedCount := 4
 	if len(lists) != expectedCount {
-		t.Errorf("Expected %d lists, got %d", expectedCount, len(lists))
+		t.Errorf("Expected %d lists (including auto-created My-favorites), got %d", expectedCount, len(lists))
 	}
 
 	// Verify .json extension is removed

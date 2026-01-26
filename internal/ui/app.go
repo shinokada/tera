@@ -109,20 +109,36 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.mainMenuList.SetSize(msg.Width-h, menuHeight)
 		}
+		// Don't return here - let it fall through to forward to current screen
 
 	case navigateMsg:
 		a.screen = msg.screen
 
-		// Initialize screen-specific models
+		// Initialize screen-specific models with current dimensions
 		switch msg.screen {
 		case screenPlay:
 			a.playScreen = NewPlayModel(a.favoritePath)
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.playScreen.width = a.width
+				a.playScreen.height = a.height
+			}
 			return a, a.playScreen.Init()
 		case screenSearch:
 			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath)
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.searchScreen.width = a.width
+				a.searchScreen.height = a.height
+			}
 			return a, a.searchScreen.Init()
 		case screenList:
 			a.listManagementScreen = NewListManagementModel(a.favoritePath)
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.listManagementScreen.width = a.width
+				a.listManagementScreen.height = a.height
+			}
 			return a, a.listManagementScreen.Init()
 		case screenMainMenu:
 			// Return to main menu
