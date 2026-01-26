@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
@@ -48,6 +50,11 @@ func NewApp() App {
 		favPath = filepath.Join(home, ".config", "tera", "favorites")
 	}
 
+	// Ensure favorites directory exists
+	if err := os.MkdirAll(favPath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
+	}
+
 	app := App{
 		screen:       screenMainMenu,
 		favoritePath: favPath,
@@ -56,6 +63,9 @@ func NewApp() App {
 
 	// Initialize main menu
 	app.initMainMenu()
+
+	// Ensure My-favorites.json exists at startup
+	app.ensureMyFavorites()
 
 	return app
 }
@@ -73,6 +83,21 @@ func (a *App) initMainMenu() {
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
 	a.mainMenuList = components.CreateMenu(items, "TERA - Terminal Radio", 50, 20)
+}
+
+// ensureMyFavorites ensures My-favorites.json exists at startup
+func (a *App) ensureMyFavorites() {
+	store := storage.NewStorage(a.favoritePath)
+	if _, err := store.LoadList(context.Background(), "My-favorites"); err != nil {
+		// Create empty My-favorites list
+		emptyList := &storage.FavoritesList{
+			Name:     "My-favorites",
+			Stations: []api.Station{},
+		}
+		if err := store.SaveList(context.Background(), emptyList); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to create My-favorites: %v\n", err)
+		}
+	}
 }
 
 func (a App) Init() tea.Cmd {

@@ -320,6 +320,7 @@ func (m *PlayModel) initializeListModel() {
 	}
 	
 	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0) // Remove spacing between items
 	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
 	m.listModel.Title = "Select a Favorite List"
 	m.listModel.SetShowStatusBar(false)
@@ -337,6 +338,7 @@ func (m *PlayModel) initializeStationListModel() {
 	}
 	
 	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0) // Remove spacing between items
 	m.stationListModel = list.New(m.stationItems, delegate, m.width, listHeight)
 	m.stationListModel.Title = fmt.Sprintf("Stations in %s", m.selectedList)
 	m.stationListModel.SetShowStatusBar(true)
@@ -518,11 +520,11 @@ func (m PlayModel) viewListSelection() string {
 
 	// Title
 	b.WriteString(titleStyle.Render("Play from Favorites"))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// List
 	b.WriteString(m.listModel.View())
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
 	// Help
 	help := helpStyle.Render("↑/↓: navigate • enter: select • esc: back • q: quit")
