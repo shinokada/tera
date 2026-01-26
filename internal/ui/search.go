@@ -351,11 +351,6 @@ func (m SearchModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textInput.Blur()
 		m.state = searchStateMenu
 		return m, nil
-	case "0":
-		// Return to main menu
-		m.textInput.SetValue("")
-		m.textInput.Blur()
-		return m, func() tea.Msg { return backToMainMsg{} }
 	default:
 		// Pass all other keys to text input for normal typing
 		var cmd tea.Cmd

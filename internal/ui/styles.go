@@ -86,10 +86,9 @@ var (
 			Bold(true).
 			Align(lipgloss.Center)
 
-	quickFavoritesStyle = titleStyle.Copy().
-				Foreground(lipgloss.Color("99"))
+	quickFavoritesStyle = titleStyle.Foreground(lipgloss.Color("99"))
 
-	docStyle = helpStyle.Copy().Padding(1, 2)
+	docStyle = helpStyle.Padding(1, 2)
 )
 
 // createStyledDelegate creates a list delegate with single-line items and consistent styling
@@ -97,7 +96,7 @@ func createStyledDelegate() list.DefaultDelegate {
 	delegate := list.NewDefaultDelegate()
 	delegate.SetHeight(1)            // Single line per item
 	delegate.SetSpacing(0)           // Remove spacing between items
-	delegate.ShowDescription = false // Hide cursor indicator
+	delegate.ShowDescription = false // Hide description text below items
 	// Remove vertical padding from delegate styles
 	delegate.Styles.NormalTitle = lipgloss.NewStyle()
 	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
