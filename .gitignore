@@ -5,3 +5,4 @@
 
 # Environment variables (contains secrets)
 .env
+golang/questions/*
