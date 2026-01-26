@@ -1,4 +1,13 @@
-auto_review:
-  enabled: true
-  base_branch_patterns:
-    - "golang"
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - ".*"  # Match any branch (main, golang, feature branches, etc.)
+  tools:
+    github-checks:
+      timeout_ms: 300000  # 5 minutes timeout for checks
+
+# Language settings
+language: en-US
