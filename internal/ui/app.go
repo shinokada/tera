@@ -289,27 +289,27 @@ func (a App) View() string {
 }
 
 func (a App) viewMainMenu() string {
-	var b strings.Builder
+	var content strings.Builder
 
 	// Menu items
-	b.WriteString(a.mainMenuList.View())
+	content.WriteString(a.mainMenuList.View())
 
 	// Add quick play favorites if available
 	if len(a.quickFavorites) > 0 {
-		b.WriteString("\n\n")
-		b.WriteString(quickFavoritesStyle.Render("Quick Play Favorites"))
+		content.WriteString("\n\n")
+		content.WriteString(quickFavoritesStyle.Render("Quick Play Favorites"))
 		for i, station := range a.quickFavorites {
 			if i >= 10 {
 				break // Only show first 10
 			}
 			shortcut := fmt.Sprintf("%d", 10+i)
-			b.WriteString(fmt.Sprintf("\n  %s. ▶ %s", shortcut, station.TrimName()))
+			content.WriteString(fmt.Sprintf("\n  %s. ▶ %s", shortcut, station.TrimName()))
 		}
 	}
 
-	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-5: Quick select • Ctrl+C: Quit"))
-
-	// Use wrapPageWithHeader like other screens, with extra newline at top
-	return "\n" + wrapPageWithHeader(b.String())
+	// Use the consistent page template (no title/subtitle for main menu)
+	return RenderPage(PageLayout{
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Quick select • Ctrl+C: Quit",
+	})
 }

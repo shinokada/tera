@@ -1,5 +1,5 @@
 - For fenced blocks, annotate with text to satisfy MD040.
-- Currently I'm on the process of converting Bash to Golang and working in golang directory.
+- Currently I'm in the process of converting Bash to Golang and working in the golang directory.
 - Read before proceed all spec documents in the golang spec-docs directory. Especially flow-charts.md.
 - Previous version with Bash codes are in bash directory
 - When a new feature is added, create a unit test. 

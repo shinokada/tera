@@ -634,79 +634,85 @@ func (m SearchModel) saveToQuickFavorites(station api.Station) tea.Cmd {
 
 // View renders the search screen
 func (m SearchModel) View() string {
-	var s strings.Builder
-
 	switch m.state {
 	case searchStateMenu:
-		s.WriteString(m.menuList.View())
-		s.WriteString("\n")
-		s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • Ctrl+C: Quit"))
-
+		var content strings.Builder
+		content.WriteString(m.menuList.View())
 		if m.err != nil {
-			s.WriteString("\n\n")
-			s.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
+			content.WriteString("\n\n")
+			content.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 		}
-		return wrapPageWithHeader(s.String())
+		return RenderPage(PageLayout{
+			Content: content.String(),
+			Help:    "↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • Ctrl+C: Quit",
+		})
 
 	case searchStateInput:
-		s.WriteString(titleStyle.Render("🔍 Search Radio Stations"))
-		s.WriteString("\n\n")
-		s.WriteString(m.getSearchTypeLabel())
-		s.WriteString("\n\n")
-		s.WriteString(m.textInput.View())
-		s.WriteString("\n\n")
-		s.WriteString(subtleStyle.Render("Enter) Search  |  Esc) Back  |  0) Main Menu  |  Ctrl+C) Quit"))
-		return wrapPageWithHeader(s.String())
+		var content strings.Builder
+		content.WriteString(m.getSearchTypeLabel())
+		content.WriteString("\n\n")
+		content.WriteString(m.textInput.View())
+		return RenderPage(PageLayout{
+			Title:   "🔍 Search Radio Stations",
+			Content: content.String(),
+			Help:    "Enter) Search • Esc) Back • Ctrl+C) Quit",
+		})
 
 	case searchStateLoading:
-		s.WriteString(titleStyle.Render("🔍 Searching..."))
-		s.WriteString("\n\n")
-		s.WriteString(m.spinner.View())
-		s.WriteString(" Searching for stations...")
-		return wrapPageWithHeader(s.String())
+		var content strings.Builder
+		content.WriteString(m.spinner.View())
+		content.WriteString(" Searching for stations...")
+		return RenderPage(PageLayout{
+			Title:   "🔍 Searching...",
+			Content: content.String(),
+			Help:    "",
+		})
 
 	case searchStateResults:
 		if len(m.results) == 0 {
-			s.WriteString(titleStyle.Render("🔍 No Results"))
-			s.WriteString("\n\n")
-			s.WriteString("No stations found matching your search.\n\n")
-			s.WriteString(subtleStyle.Render("Press Esc to return to search menu"))
-		} else {
-			s.WriteString(m.resultsList.View())
-			s.WriteString("\n")
-			s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select  |  Esc) Back  |  0) Main Menu  |  Ctrl+C) Quit"))
+			return RenderPage(PageLayout{
+				Title:   "🔍 No Results",
+				Content: "No stations found matching your search.",
+				Help:    "Esc: Back to search menu",
+			})
 		}
-		return wrapPageWithHeader(s.String())
+		return RenderPage(PageLayout{
+			Content: m.resultsList.View(),
+			Help:    "↑↓/jk: Navigate • Enter: Play • Esc) Back • 0) Main Menu • Ctrl+C) Quit",
+		})
 
 	case searchStateStationInfo:
-		return wrapPageWithHeader(m.renderStationInfo())
+		return m.renderStationInfo()
 
 	case searchStateSavePrompt:
-		return wrapPageWithHeader(m.renderSavePrompt())
+		return m.renderSavePrompt()
 
 	case searchStatePlaying:
-		s.WriteString(titleStyle.Render("🎵 Now Playing"))
-		s.WriteString("\n\n")
+		var content strings.Builder
 		if m.selectedStation != nil {
-			s.WriteString(renderStationDetails(*m.selectedStation))
+			content.WriteString(renderStationDetails(*m.selectedStation))
 		}
-		s.WriteString("\n\n")
-		s.WriteString(subtleStyle.Render("Esc) Back  |  f) Save to Quick Favorites  |  s) Save to list  |  Ctrl+C) Quit"))
-
 		if m.saveMessage != "" {
-			s.WriteString("\n\n")
+			content.WriteString("\n\n")
 			if strings.Contains(m.saveMessage, "✓") {
-				s.WriteString(successStyle.Render(m.saveMessage))
+				content.WriteString(successStyle.Render(m.saveMessage))
 			} else if strings.Contains(m.saveMessage, "Already") {
-				s.WriteString(infoStyle.Render(m.saveMessage))
+				content.WriteString(infoStyle.Render(m.saveMessage))
 			} else {
-				s.WriteString(errorStyle.Render(m.saveMessage))
+				content.WriteString(errorStyle.Render(m.saveMessage))
 			}
 		}
-		return wrapPageWithHeader(s.String())
+		return RenderPage(PageLayout{
+			Title:   "🎵 Now Playing",
+			Content: content.String(),
+			Help:    "Esc) Back • f) Save to Quick Favorites • s) Save to list • Ctrl+C) Quit",
+		})
 	}
 
-	return wrapPageWithHeader(s.String())
+	return RenderPage(PageLayout{
+		Content: "Unknown state",
+		Help:    "",
+	})
 }
 
 // getSearchTypeLabel returns a label for the current search type
@@ -731,52 +737,51 @@ func (m SearchModel) getSearchTypeLabel() string {
 
 // renderStationInfo renders the station information and submenu
 func (m SearchModel) renderStationInfo() string {
-	var s strings.Builder
-
-	s.WriteString(titleStyle.Render("📻 Station Information"))
-	s.WriteString("\n\n")
+	var content strings.Builder
 
 	if m.selectedStation != nil {
-		s.WriteString(renderStationDetails(*m.selectedStation))
+		content.WriteString(renderStationDetails(*m.selectedStation))
+		content.WriteString("\n\n")
 	}
 
-	s.WriteString("\n\n")
-	s.WriteString(m.stationInfoMenu.View())
-	s.WriteString("\n")
-	s.WriteString(subtleStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-3: Quick select • Esc: Back • q: Quit"))
+	content.WriteString(m.stationInfoMenu.View())
 
 	if m.saveMessage != "" {
-		s.WriteString("\n\n")
+		content.WriteString("\n\n")
 		if strings.Contains(m.saveMessage, "✓") {
-			s.WriteString(successStyle.Render(m.saveMessage))
+			content.WriteString(successStyle.Render(m.saveMessage))
 		} else if strings.Contains(m.saveMessage, "Already") {
-			s.WriteString(infoStyle.Render(m.saveMessage))
+			content.WriteString(infoStyle.Render(m.saveMessage))
 		} else {
-			s.WriteString(errorStyle.Render(m.saveMessage))
+			content.WriteString(errorStyle.Render(m.saveMessage))
 		}
 	}
 
-	return s.String()
+	return RenderPage(PageLayout{
+		Title:   "📻 Station Information",
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Quick select • Esc: Back • q: Quit",
+	})
 }
 
 // renderSavePrompt renders the save prompt after playback
 func (m SearchModel) renderSavePrompt() string {
-	var s strings.Builder
-
-	s.WriteString(titleStyle.Render("💾 Save Station?"))
-	s.WriteString("\n\n")
+	var content strings.Builder
 
 	if m.selectedStation != nil {
-		s.WriteString("Did you enjoy this station?\n\n")
-		s.WriteString(boldStyle.Render(m.selectedStation.TrimName()))
-		s.WriteString("\n\n")
+		content.WriteString("Did you enjoy this station?\n\n")
+		content.WriteString(boldStyle.Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
 	}
 
-	s.WriteString("1) ⭐ Add to Quick Favorites\n")
-	s.WriteString("2) Return to search results\n\n")
-	s.WriteString(subtleStyle.Render("y/1: Yes • n/2/Esc: No • q: Quit"))
+	content.WriteString("1) ⭐ Add to Quick Favorites\n")
+	content.WriteString("2) Return to search results")
 
-	return s.String()
+	return RenderPage(PageLayout{
+		Title:   "💾 Save Station?",
+		Content: content.String(),
+		Help:    "y/1: Yes • n/2/Esc: No • q: Quit",
+	})
 }
 
 // renderStationDetails renders station details in a formatted way

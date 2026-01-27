@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +20,60 @@ func TestNewPlayModel(t *testing.T) {
 	if model.state != playStateListSelection {
 		t.Errorf("Expected initial state playStateListSelection, got %v", model.state)
 	}
+}
+
+func TestPlayFromFavoritesLayout(t *testing.T) {
+	// Create a temporary directory with test data
+	tmpDir := t.TempDir()
+
+	// Create test lists
+	testFiles := []string{"Classical.json", "Jazz.json", "My-favorites.json"}
+	for _, name := range testFiles {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(`{"name":"test","stations":[]}`), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+	}
+
+	// Create model
+	model := NewPlayModel(tmpDir)
+	model.width = 80
+	model.height = 24
+
+	// Load lists
+	model, _ = model.Update(listsLoadedMsg{
+		lists: []string{"Classical", "Jazz", "My-favorites"},
+	}).(PlayModel)
+
+	// Force initialization of the list model
+	model, _ = model.Update(tea.WindowSizeMsg{Width: 80, Height: 24}).(PlayModel)
+
+	// Get the view
+	view := model.View()
+
+	// Check for required elements
+	t.Run("Has empty line at top", func(t *testing.T) {
+		// After TERA header, there should be content starting with newline
+		if !containsPattern(view, "TERA\n\n") {
+			t.Error("Expected empty line at top after TERA header")
+		}
+	})
+
+	t.Run("Has Play from Favorites title left-aligned", func(t *testing.T) {
+		if !containsPattern(view, "Play from Favorites") {
+			t.Error("Expected 'Play from Favorites' title")
+		}
+	})
+
+	t.Run("Has Select a Favorite List subtitle left-aligned", func(t *testing.T) {
+		if !containsPattern(view, "Select a Favorite List") {
+			t.Error("Expected 'Select a Favorite List' subtitle")
+		}
+	})
+}
+
+func containsPattern(s, pattern string) bool {
+	return strings.Contains(s, pattern)
 }
 
 func TestGetAvailableLists(t *testing.T) {

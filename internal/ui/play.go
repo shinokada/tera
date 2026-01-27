@@ -313,7 +313,7 @@ func (m *PlayModel) initializeListModel() {
 	delegate := createStyledDelegate()
 
 	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
-	m.listModel.Title = "Select a Favorite List"
+	m.listModel.Title = "" // No title - we'll add it in the view
 	m.listModel.SetShowStatusBar(false)
 	m.listModel.SetFilteringEnabled(false)
 	m.listModel.SetShowHelp(false) // Disable built-in help to use custom help text
@@ -336,7 +336,7 @@ func (m *PlayModel) initializeStationListModel() {
 	m.stationListModel.SetShowStatusBar(true)
 	m.stationListModel.SetFilteringEnabled(true) // Enable fzf-style filtering
 	m.stationListModel.SetShowHelp(false)        // Disable built-in help to use custom help text
-	m.stationListModel.Styles.Title = titleStyle
+	m.stationListModel.Styles.Title = listTitleStyle
 	m.stationListModel.Styles.PaginationStyle = paginationStyle
 	m.stationListModel.Styles.HelpStyle = helpStyle
 }
@@ -352,9 +352,6 @@ func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
-	case "q":
-		// Block 'q' from quitting - do nothing
-		return m, nil
 	case "enter":
 		// Select list and move to station selection
 		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
@@ -382,9 +379,6 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
-	case "q":
-		// Block 'q' from quitting - do nothing
-		return m, nil
 	case "d":
 		// Delete selected station
 		if i, ok := m.stationListModel.SelectedItem().(stationListItem); ok {
@@ -438,17 +432,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.player.Stop()
 		m.state = playStateStationSelection
 		m.selectedStation = nil
-		return m, nil
-	case "q":
-		// Stop playback and quit application
-		m.player.Stop()
-		return m, tea.Quit
-	case "1":
-		// Stop playback and show save prompt
-		m.player.Stop()
-		m.state = playStateSavePrompt
-		m.saveMessage = ""
-		m.saveMessageTime = 0
 		return m, nil
 	case "f":
 		// Save to Quick Favorites
@@ -546,21 +529,13 @@ func (m PlayModel) viewListSelection() string {
 		return noListsView()
 	}
 
-	var b strings.Builder
-
-	// Title
-	b.WriteString(titleStyle.Render("Play from Favorites"))
-	b.WriteString("\n")
-
-	// List
-	b.WriteString(m.listModel.View())
-	b.WriteString("\n")
-
-	// Help
-	help := helpStyle.Render("↑↓/jk: Navigate • Enter: Select • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	// Use the consistent page template
+	return RenderPage(PageLayout{
+		Title:    "Play from Favorites",
+		Subtitle: "Select a Favorite List",
+		Content:  m.listModel.View(),
+		Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // viewPlaying renders the playback view
@@ -569,30 +544,23 @@ func (m PlayModel) viewPlaying() string {
 		return "No station selected"
 	}
 
-	var b strings.Builder
-
-	// Add empty line at top for better spacing
-	b.WriteString("\n")
-
-	// Title
-	b.WriteString(titleStyle.Render("🎵 Now Playing"))
-	b.WriteString("\n\n")
+	var content strings.Builder
 
 	// Station info box
 	info := m.formatStationInfo(m.selectedStation)
-	b.WriteString(boxStyle.Render(info))
-	b.WriteString("\n\n")
+	content.WriteString(boxStyle.Render(info))
+	content.WriteString("\n\n")
 
 	// Playback status
 	if m.player.IsPlaying() {
-		b.WriteString(successStyle.Render("▶ Playing..."))
+		content.WriteString(successStyle.Render("▶ Playing..."))
 	} else {
-		b.WriteString(infoStyle.Render("⏸ Stopped"))
+		content.WriteString(infoStyle.Render("⏸ Stopped"))
 	}
-	b.WriteString("\n\n")
 
 	// Save message (if any)
 	if m.saveMessage != "" {
+		content.WriteString("\n\n")
 		// Determine style based on message content
 		var style lipgloss.Style
 		if strings.Contains(m.saveMessage, "✓") {
@@ -602,15 +570,15 @@ func (m PlayModel) viewPlaying() string {
 		} else {
 			style = errorStyle
 		}
-		b.WriteString(style.Render(m.saveMessage))
-		b.WriteString("\n\n")
+		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Help
-	help := helpStyle.Render("Esc) Back • f) Save to Quick Favorites • s) Save to list • q) Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	// Use the consistent page template
+	return RenderPage(PageLayout{
+		Title:   "🎵 Now Playing",
+		Content: content.String(),
+		Help:    "Esc) Back • f) Save to Quick Favorites • s) Save to list • q) Quit",
+	})
 }
 
 // formatStationInfo formats station information for display
@@ -663,66 +631,52 @@ func (m PlayModel) viewStationSelection() string {
 		return noStationsView(m.selectedList)
 	}
 
-	var b strings.Builder
-
-	// Title
-	b.WriteString(titleStyle.Render("Play from Favorites"))
-	b.WriteString("\n")
-	b.WriteString(subtitleStyle.Render(fmt.Sprintf("List: %s", m.selectedList)))
-	b.WriteString("\n\n")
-
-	// Station list
-	b.WriteString(m.stationListModel.View())
-	b.WriteString("\n\n")
-
-	// Help
-	help := helpStyle.Render("↑↓/jk: Navigate • Enter: Select • d: Delete • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	// Use the consistent page template
+	return RenderPage(PageLayout{
+		Title:   "Play from Favorites",
+		Content: m.stationListModel.View(),
+		Help:    "↑↓/jk: Navigate • Enter: Play • d: Delete • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // noStationsView renders the view when a list is empty
 func noStationsView(listName string) string {
-	var b strings.Builder
+	var content strings.Builder
 
-	b.WriteString(titleStyle.Render("Play from Favorites"))
-	b.WriteString("\n")
-	b.WriteString(subtitleStyle.Render(fmt.Sprintf("List: %s", listName)))
-	b.WriteString("\n\n")
-	b.WriteString(infoStyle.Render("This list is empty!"))
-	b.WriteString("\n\n")
-	b.WriteString("Add stations to this list using Search or List Management.\n\n")
-	b.WriteString(helpStyle.Render("Press esc to go back or q to quit"))
+	content.WriteString(infoStyle.Render("This list is empty!"))
+	content.WriteString("\n\n")
+	content.WriteString("Add stations to this list using Search or List Management.")
 
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:    "Play from Favorites",
+		Subtitle: fmt.Sprintf("List: %s", listName),
+		Content:  content.String(),
+		Help:     "Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // noListsView renders the view when no lists are available
 func noListsView() string {
-	var b strings.Builder
+	var content strings.Builder
 
-	b.WriteString(titleStyle.Render("Play from Favorites"))
-	b.WriteString("\n\n")
-	b.WriteString(errorStyle.Render("No favorite lists found!"))
-	b.WriteString("\n\n")
-	b.WriteString("Create your first list using the List Management menu.\n\n")
-	b.WriteString(helpStyle.Render("Press esc to return to main menu or q to quit"))
+	content.WriteString(errorStyle.Render("No favorite lists found!"))
+	content.WriteString("\n\n")
+	content.WriteString("Create your first list using the List Management menu.")
 
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "Play from Favorites",
+		Content: content.String(),
+		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
+	})
 }
 
 // errorView renders an error message
 func errorView(err error) string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("Error"))
-	b.WriteString("\n\n")
-	b.WriteString(errorStyle.Render(err.Error()))
-	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("Press esc to return to main menu or q to quit"))
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "Error",
+		Content: errorStyle.Render(err.Error()),
+		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
+	})
 }
 
 // viewSavePrompt renders the save prompt after playback
@@ -731,28 +685,25 @@ func (m PlayModel) viewSavePrompt() string {
 		return "No station selected"
 	}
 
-	var b strings.Builder
-
-	// Title
-	b.WriteString(titleStyle.Render("💾 Save Station?"))
-	b.WriteString("\n\n")
+	var content strings.Builder
 
 	// Message
-	b.WriteString("Did you enjoy this station?\n\n")
+	content.WriteString("Did you enjoy this station?\n\n")
 
 	// Station name
-	b.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
-	b.WriteString("\n\n")
+	content.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	content.WriteString("\n\n")
 
 	// Options
-	b.WriteString("1) ⭐ Add to Quick Favorites\n")
-	b.WriteString("2) Return to search results\n\n")
+	content.WriteString("1) ⭐ Add to Quick Favorites\n")
+	content.WriteString("2) Return to station list")
 
-	// Help
-	help := helpStyle.Render("y/1: Yes • n/2/Esc: No")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	// Use the consistent page template
+	return RenderPage(PageLayout{
+		Title:   "💾 Save Station?",
+		Content: content.String(),
+		Help:    "y/1: Yes • n/2/Esc: No",
+	})
 }
 
 // Messages

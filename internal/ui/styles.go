@@ -9,19 +9,25 @@ import (
 
 // Color palette matching bash version
 var (
-	colorCyan   = lipgloss.Color("6") // Cyan for titles
-	colorYellow = lipgloss.Color("3") // Yellow for highlights
-	colorRed    = lipgloss.Color("9") // Red for errors
-	colorGreen  = lipgloss.Color("2") // Green for success
-	colorGray   = lipgloss.Color("8") // Gray for secondary text
+	colorCyan   = lipgloss.Color("6")  // Cyan for titles
+	colorBlue   = lipgloss.Color("12") // Bright blue for TERA header
+	colorYellow = lipgloss.Color("3")  // Yellow for highlights
+	colorRed    = lipgloss.Color("9")  // Red for errors
+	colorGreen  = lipgloss.Color("2")  // Green for success
+	colorGray   = lipgloss.Color("8")  // Gray for secondary text
 )
 
 // Common styles
 var (
 	titleStyle = lipgloss.NewStyle().
 			Foreground(colorCyan).
+			Bold(true)
+
+	// Title style without padding for list titles
+	listTitleStyle = lipgloss.NewStyle().
+			Foreground(colorCyan).
 			Bold(true).
-			Padding(0, 1)
+			MarginLeft(-2) // Compensate for the page left padding
 
 	subtitleStyle = lipgloss.NewStyle().
 			Foreground(colorYellow).
@@ -56,7 +62,7 @@ var (
 	selectedItemStyle = lipgloss.NewStyle().
 				Foreground(colorYellow).
 				Bold(true).
-				PaddingLeft(2)
+				PaddingLeft(0)
 
 	normalItemStyle = lipgloss.NewStyle().
 			PaddingLeft(2)
@@ -89,6 +95,9 @@ var (
 	quickFavoritesStyle = titleStyle.Foreground(lipgloss.Color("99"))
 
 	docStyle = helpStyle.Padding(1, 2)
+
+	// Style for content without top padding (used after header)
+	docStyleNoTopPadding = helpStyle.PaddingTop(0).PaddingBottom(1).PaddingLeft(2).PaddingRight(2)
 )
 
 // createStyledDelegate creates a list delegate with single-line items and consistent styling
@@ -106,15 +115,61 @@ func createStyledDelegate() list.DefaultDelegate {
 // wrapPageWithHeader wraps content with TERA header at the top and applies consistent padding
 func wrapPageWithHeader(content string) string {
 	var b strings.Builder
-	// Center TERA header with proper width
+	// Center TERA header with proper width - add top padding here
 	header := lipgloss.NewStyle().
 		Width(50).
 		Align(lipgloss.Center).
-		Foreground(colorCyan).
+		Foreground(colorBlue). // Use blue color for TERA
 		Bold(true).
+		PaddingTop(1).
 		Render("TERA")
 	b.WriteString(header)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 	b.WriteString(content)
-	return docStyle.Render(b.String())
+	// Use style without top padding since header already has it
+	return docStyleNoTopPadding.Render(b.String())
+}
+
+// PageLayout represents a consistent page layout structure
+type PageLayout struct {
+	Title    string // Main title (optional)
+	Subtitle string // Subtitle (optional)
+	Content  string // Main content area
+	Help     string // Help text at bottom
+}
+
+// RenderPage renders a page with consistent layout using the template
+// This ensures all pages have the same spacing and structure
+func RenderPage(layout PageLayout) string {
+	var b strings.Builder
+
+	// Add empty line after TERA header
+	b.WriteString("\n")
+
+	// Title (if provided)
+	if layout.Title != "" {
+		b.WriteString(layout.Title)
+		b.WriteString("\n")
+	}
+
+	// Subtitle (if provided)
+	if layout.Subtitle != "" {
+		b.WriteString(layout.Subtitle)
+		b.WriteString("\n")
+	}
+
+	// Main content
+	if layout.Content != "" {
+		b.WriteString(layout.Content)
+	}
+
+	// Help text (if provided)
+	if layout.Help != "" {
+		if layout.Content != "" {
+			b.WriteString("\n")
+		}
+		b.WriteString(helpStyle.Render(layout.Help))
+	}
+
+	return wrapPageWithHeader(b.String())
 }

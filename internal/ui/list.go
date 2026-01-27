@@ -686,104 +686,97 @@ func (m ListManagementModel) View() string {
 }
 
 // viewMenu renders the main menu
+// viewMenu renders the list management menu
 func (m ListManagementModel) viewMenu() string {
-	var b strings.Builder
+	var content strings.Builder
 
 	if m.message != "" {
 		style := successStyle
 		if strings.Contains(m.message, "✗") || m.err != nil {
 			style = errorStyle
 		}
-		b.WriteString(style.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString(style.Render(m.message))
+		content.WriteString("\n\n")
 	}
 
-	b.WriteString(m.listModel.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.listModel.View())
 
-	help := helpStyle.Render("↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // viewCreate renders the create list view
 func (m ListManagementModel) viewCreate() string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("Create New List"))
-	b.WriteString("\n\n")
+	var content strings.Builder
 
 	if len(m.lists) > 0 {
-		b.WriteString(subtitleStyle.Render("Current lists:"))
-		b.WriteString("\n")
+		content.WriteString(subtitleStyle.Render("Current lists:"))
+		content.WriteString("\n")
 		for _, list := range m.lists {
-			b.WriteString(fmt.Sprintf("  • %s\n", list))
+			content.WriteString(fmt.Sprintf("  • %s\n", list))
 		}
-		b.WriteString("\n")
+		content.WriteString("\n")
 	}
 
-	b.WriteString(m.textInput.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.textInput.View())
 
 	if m.message != "" {
-		b.WriteString(errorStyle.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString("\n\n")
+		content.WriteString(errorStyle.Render(m.message))
 	}
 
-	help := helpStyle.Render("Enter: Create • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "Create New List",
+		Content: content.String(),
+		Help:    "Enter: Create • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // viewDelete renders the delete list view
 func (m ListManagementModel) viewDelete() string {
-	var b strings.Builder
+	var content strings.Builder
 
-	b.WriteString(titleStyle.Render("Delete List"))
-	b.WriteString("\n\n")
-
-	b.WriteString(subtitleStyle.Render("Available lists:"))
-	b.WriteString("\n")
+	content.WriteString(subtitleStyle.Render("Available lists:"))
+	content.WriteString("\n")
 	for _, list := range m.lists {
 		if list == "My-favorites" {
-			b.WriteString(fmt.Sprintf("  • %s (protected)\n", list))
+			content.WriteString(fmt.Sprintf("  • %s (protected)\n", list))
 		} else {
-			b.WriteString(fmt.Sprintf("  • %s\n", list))
+			content.WriteString(fmt.Sprintf("  • %s\n", list))
 		}
 	}
-	b.WriteString("\n")
+	content.WriteString("\n")
 
-	b.WriteString(m.textInput.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.textInput.View())
 
 	if m.message != "" {
-		b.WriteString(errorStyle.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString("\n\n")
+		content.WriteString(errorStyle.Render(m.message))
 	}
 
-	help := helpStyle.Render("Enter: Continue • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "Delete List",
+		Content: content.String(),
+		Help:    "Enter: Continue • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // viewSelectListToDelete renders the list selection view for deletion
 func (m ListManagementModel) viewSelectListToDelete() string {
-	var b strings.Builder
+	var content strings.Builder
 
 	if m.message != "" {
 		style := successStyle
 		if strings.Contains(m.message, "✗") || m.message == "Cannot delete My-favorites (protected list)" {
 			style = errorStyle
 		}
-		b.WriteString(style.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString(style.Render(m.message))
+		content.WriteString("\n\n")
 	}
 
-	b.WriteString(m.listModel.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.listModel.View())
 
 	numLists := len(m.lists)
 	maxNum := numLists
@@ -791,78 +784,72 @@ func (m ListManagementModel) viewSelectListToDelete() string {
 		maxNum = 9
 	}
 
-	help := helpStyle.Render(fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum))
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Content: content.String(),
+		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
+	})
 }
 
 // viewConfirmDelete renders the delete confirmation view
 func (m ListManagementModel) viewConfirmDelete() string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("Confirm Deletion"))
-	b.WriteString("\n\n")
+	var content strings.Builder
 
 	warning := fmt.Sprintf("⚠ Are you sure you want to delete '%s'?", m.selectedList)
-	b.WriteString(errorStyle.Render(warning))
-	b.WriteString("\n\n")
+	content.WriteString(errorStyle.Render(warning))
+	content.WriteString("\n\n")
 
-	b.WriteString("This action cannot be undone.\n\n")
+	content.WriteString("This action cannot be undone.")
 
-	help := helpStyle.Render("y: Yes, Delete • n/Esc: Cancel")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "Confirm Deletion",
+		Content: content.String(),
+		Help:    "y: Yes, Delete • n/Esc: Cancel",
+	})
 }
 
 // viewEdit renders the edit list view
 func (m ListManagementModel) viewEdit() string {
-	var b strings.Builder
+	var content strings.Builder
 
-	b.WriteString(titleStyle.Render("Edit List Name"))
-	b.WriteString("\n\n")
-
-	b.WriteString(subtitleStyle.Render("Available lists:"))
-	b.WriteString("\n")
+	content.WriteString(subtitleStyle.Render("Available lists:"))
+	content.WriteString("\n")
 	for _, list := range m.lists {
 		if list == "My-favorites" {
-			b.WriteString(fmt.Sprintf("  • %s (protected)\n", list))
+			content.WriteString(fmt.Sprintf("  • %s (protected)\n", list))
 		} else {
-			b.WriteString(fmt.Sprintf("  • %s\n", list))
+			content.WriteString(fmt.Sprintf("  • %s\n", list))
 		}
 	}
-	b.WriteString("\n")
+	content.WriteString("\n")
 
-	b.WriteString(m.textInput.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.textInput.View())
 
 	if m.message != "" {
-		b.WriteString(errorStyle.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString("\n\n")
+		content.WriteString(errorStyle.Render(m.message))
 	}
 
-	help := helpStyle.Render("Enter: Continue • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "Edit List Name",
+		Content: content.String(),
+		Help:    "Enter: Continue • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // viewSelectListToEdit renders the list selection view for editing
 func (m ListManagementModel) viewSelectListToEdit() string {
-	var b strings.Builder
+	var content strings.Builder
 
 	if m.message != "" {
 		style := successStyle
 		if strings.Contains(m.message, "✗") || m.message == "Cannot rename My-favorites (protected list)" {
 			style = errorStyle
 		}
-		b.WriteString(style.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString(style.Render(m.message))
+		content.WriteString("\n\n")
 	}
 
-	b.WriteString(m.listModel.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.listModel.View())
 
 	numLists := len(m.lists)
 	maxNum := numLists
@@ -870,62 +857,54 @@ func (m ListManagementModel) viewSelectListToEdit() string {
 		maxNum = 9
 	}
 
-	help := helpStyle.Render(fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum))
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Content: content.String(),
+		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
+	})
 }
 
 // viewEnterNewName renders the new name input view
 func (m ListManagementModel) viewEnterNewName() string {
-	var b strings.Builder
+	var content strings.Builder
 
-	b.WriteString(titleStyle.Render("Edit List Name"))
-	b.WriteString("\n\n")
-
-	b.WriteString(subtitleStyle.Render(fmt.Sprintf("Renaming: %s", m.selectedList)))
-	b.WriteString("\n\n")
-
-	b.WriteString(m.textInput.View())
-	b.WriteString("\n\n")
+	content.WriteString(m.textInput.View())
 
 	if m.message != "" {
-		b.WriteString(errorStyle.Render(m.message))
-		b.WriteString("\n\n")
+		content.WriteString("\n\n")
+		content.WriteString(errorStyle.Render(m.message))
 	}
 
-	help := helpStyle.Render("Enter: Rename • Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:    "Edit List Name",
+		Subtitle: fmt.Sprintf("Renaming: %s", m.selectedList),
+		Content:  content.String(),
+		Help:     "Enter: Rename • Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // viewShowAll renders all lists
 func (m ListManagementModel) viewShowAll() string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("All Favorite Lists"))
-	b.WriteString("\n\n")
+	var content strings.Builder
 
 	if len(m.lists) == 0 {
-		b.WriteString(infoStyle.Render("No lists found"))
-		b.WriteString("\n\n")
-		b.WriteString("Create your first list using option 1.\n\n")
+		content.WriteString(infoStyle.Render("No lists found"))
+		content.WriteString("\n\n")
+		content.WriteString("Create your first list using option 1.")
 	} else {
 		for i, list := range m.lists {
 			if list == "My-favorites" {
-				b.WriteString(fmt.Sprintf("%d. %s (Quick Favorites)\n", i+1, list))
+				content.WriteString(fmt.Sprintf("%d. %s (Quick Favorites)\n", i+1, list))
 			} else {
-				b.WriteString(fmt.Sprintf("%d. %s\n", i+1, list))
+				content.WriteString(fmt.Sprintf("%d. %s\n", i+1, list))
 			}
 		}
-		b.WriteString("\n")
 	}
 
-	help := helpStyle.Render("Esc: Back • Ctrl+C: Quit")
-	b.WriteString(help)
-
-	return wrapPageWithHeader(b.String())
+	return RenderPage(PageLayout{
+		Title:   "All Favorite Lists",
+		Content: content.String(),
+		Help:    "Esc: Back • Ctrl+C: Quit",
+	})
 }
 
 // Messages
