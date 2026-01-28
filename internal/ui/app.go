@@ -21,6 +21,7 @@ const (
 	screenPlay
 	screenSearch
 	screenList
+	screenLucky
 	screenGist
 )
 
@@ -32,6 +33,8 @@ type App struct {
 	playScreen           PlayModel
 	searchScreen         SearchModel
 	listManagementScreen ListManagementModel
+	luckyScreen          LuckyModel
+	gistScreen           GistModel
 	apiClient            *api.Client
 	favoritePath         string
 	quickFavorites       []api.Station
@@ -75,7 +78,7 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Play from Favorites", "", "1"),
 		components.NewMenuItem("Search Stations", "", "2"),
 		components.NewMenuItem("Manage Lists", "", "3"),
-		components.NewMenuItem("I Feel Lucky", "(coming soon)", "4"),
+		components.NewMenuItem("I Feel Lucky", "", "4"),
 		components.NewMenuItem("Gist Management", "(coming soon)", "5"),
 	}
 
@@ -119,6 +122,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.playScreen.player.Stop()
 			} else if a.screen == screenSearch && a.searchScreen.player != nil {
 				a.searchScreen.player.Stop()
+			} else if a.screen == screenLucky && a.luckyScreen.player != nil {
+				a.luckyScreen.player.Stop()
 			}
 			return a, tea.Quit
 		}
@@ -170,6 +175,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.listManagementScreen.height = a.height
 			}
 			return a, a.listManagementScreen.Init()
+		case screenLucky:
+			a.luckyScreen = NewLuckyModel(a.apiClient, a.favoritePath)
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.luckyScreen.width = a.width
+				a.luckyScreen.height = a.height
+			}
+			return a, a.luckyScreen.Init()
+		case screenGist:
+			a.gistScreen = NewGistModel(a.favoritePath)
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.gistScreen.width = a.width
+				a.gistScreen.height = a.height
+			}
+			return a, a.gistScreen.Init()
 		case screenMainMenu:
 			// Return to main menu
 			return a, nil
@@ -215,6 +236,42 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenLucky:
+		var m tea.Model
+		m, cmd = a.luckyScreen.Update(msg)
+		a.luckyScreen = m.(LuckyModel)
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenGist:
+		var m tea.Model
+		m, cmd = a.gistScreen.Update(msg)
+		if model, ok := m.(GistModel); ok {
+			a.gistScreen = model
+		}
+
+		// Check if we should return to main menu or if the model itself requested quit/back
+		// The GistModel handles its own state (quitting -> Back)
+		// But in Update() of GistModel, it returns tea.Quit if it wants to quit app,
+		// or sets 'quitting' or state to menu?
+		// Logic in GistModel: if ESC at menu, returns m, tea.Quit.
+		// Wait, if GistModel returns Quit, the whole app quits.
+		// We want it to go back to Main Menu.
+		// In GistModel.Update:
+		// if msg.String() == "esc" {
+		//    if m.state == gistStateMenu { m.quitting = true; return m, tea.Quit } ...
+		// }
+		// We might need to adjust GistModel or handle it here.
+		// If GistModel has a 'quitting' flag that we can check?
+		if a.gistScreen.quitting {
+			a.screen = screenMainMenu
+			// Reset quitting so next time it's fresh?
+			// But NewGistModel creates a fresh one every time we navigate to it.
 		}
 		return a, cmd
 	}
@@ -265,11 +322,13 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 			return navigateMsg{screen: screenList}
 		}
 	case 3: // I Feel Lucky
-		// Coming soon
-		return a, nil
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenLucky}
+		}
 	case 4: // Gist Management
-		// Coming soon
-		return a, nil
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenGist}
+		}
 	}
 	return a, nil
 }
@@ -284,6 +343,10 @@ func (a App) View() string {
 		return a.searchScreen.View()
 	case screenList:
 		return a.listManagementScreen.View()
+	case screenLucky:
+		return a.luckyScreen.View()
+	case screenGist:
+		return a.gistScreen.View()
 	}
 	return "Unknown screen"
 }
@@ -307,9 +370,11 @@ func (a App) viewMainMenu() string {
 		}
 	}
 
-	// Use the consistent page template (no title/subtitle for main menu)
+	// Use the consistent page template with title and subtitle
 	return RenderPage(PageLayout{
-		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Quick select • Ctrl+C: Quit",
+		Title:    "Main Menu",
+		Subtitle: "Select an Option",
+		Content:  content.String(),
+		Help:     "↑↓/jk: Navigate • Enter: Select • 1-5: Quick select • Ctrl+C: Quit",
 	})
 }

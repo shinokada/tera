@@ -54,26 +54,22 @@ func TestPlayFromFavoritesLayout(t *testing.T) {
 	// Check for required elements
 	t.Run("Has empty line at top", func(t *testing.T) {
 		// After TERA header, there should be content starting with newline
-		if !containsPattern(view, "TERA\n\n") {
+		if !strings.Contains(view, "TERA\n\n") {
 			t.Error("Expected empty line at top after TERA header")
 		}
 	})
 
 	t.Run("Has Play from Favorites title left-aligned", func(t *testing.T) {
-		if !containsPattern(view, "Play from Favorites") {
+		if !strings.Contains(view, "Play from Favorites") {
 			t.Error("Expected 'Play from Favorites' title")
 		}
 	})
 
 	t.Run("Has Select a Favorite List subtitle left-aligned", func(t *testing.T) {
-		if !containsPattern(view, "Select a Favorite List") {
+		if !strings.Contains(view, "Select a Favorite List") {
 			t.Error("Expected 'Select a Favorite List' subtitle")
 		}
 	})
-}
-
-func containsPattern(s, pattern string) bool {
-	return strings.Contains(s, pattern)
 }
 
 func TestGetAvailableLists(t *testing.T) {

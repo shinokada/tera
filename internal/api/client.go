@@ -56,3 +56,33 @@ func (c *Client) doSearch(ctx context.Context, form url.Values) ([]Station, erro
 
 	return stations, nil
 }
+
+// VoteResult represents the response from voting for a station
+type VoteResult struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+// Vote increases the vote count for a station by one
+// Note: Can only vote once per IP per station every 10 minutes
+func (c *Client) Vote(ctx context.Context, stationUUID string) (*VoteResult, error) {
+	voteURL := "https://de1.api.radio-browser.info/json/vote/" + stationUUID
+
+	req, err := http.NewRequestWithContext(ctx, "POST", voteURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result VoteResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

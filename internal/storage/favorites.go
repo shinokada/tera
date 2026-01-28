@@ -78,6 +78,29 @@ func (s *Storage) AddStation(ctx context.Context, listName string, station api.S
 	return s.SaveList(ctx, list)
 }
 
+// GetAllLists returns a list of all favorite list names
+func (s *Storage) GetAllLists(ctx context.Context) ([]string, error) {
+	entries, err := os.ReadDir(s.favoritePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var lists []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if filepath.Ext(name) == ".json" {
+			// Remove .json extension
+			listName := name[:len(name)-5]
+			lists = append(lists, listName)
+		}
+	}
+
+	return lists, nil
+}
+
 // StationExists checks if a station exists in a list
 func (s *Storage) StationExists(ctx context.Context, listName string, stationUUID string) (bool, error) {
 	list, err := s.LoadList(ctx, listName)

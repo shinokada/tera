@@ -62,7 +62,7 @@ var (
 	selectedItemStyle = lipgloss.NewStyle().
 				Foreground(colorYellow).
 				Bold(true).
-				PaddingLeft(0)
+				PaddingLeft(2)
 
 	normalItemStyle = lipgloss.NewStyle().
 			PaddingLeft(2)
@@ -143,20 +143,20 @@ type PageLayout struct {
 func RenderPage(layout PageLayout) string {
 	var b strings.Builder
 
-	// Add empty line after TERA header
+	// Add consistent spacing after TERA header
 	b.WriteString("\n")
 
-	// Title (if provided)
+	// Title section - always takes up one line (empty or not) for consistency
 	if layout.Title != "" {
-		b.WriteString(layout.Title)
-		b.WriteString("\n")
+		b.WriteString(titleStyle.Render(layout.Title))
 	}
+	b.WriteString("\n")
 
-	// Subtitle (if provided)
+	// Subtitle section - always takes up one line (empty or not) for consistency  
 	if layout.Subtitle != "" {
-		b.WriteString(layout.Subtitle)
-		b.WriteString("\n")
+		b.WriteString(subtitleStyle.Render(layout.Subtitle))
 	}
+	b.WriteString("\n")
 
 	// Main content
 	if layout.Content != "" {
@@ -168,6 +168,56 @@ func RenderPage(layout PageLayout) string {
 		if layout.Content != "" {
 			b.WriteString("\n")
 		}
+		b.WriteString(helpStyle.Render(layout.Help))
+	}
+
+	return wrapPageWithHeader(b.String())
+}
+
+// RenderPageWithBottomHelp renders a page with help text at the bottom of the screen
+func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
+	var b strings.Builder
+
+	// Add consistent spacing after TERA header
+	b.WriteString("\n")
+
+	// Title section - always takes up one line (empty or not) for consistency
+	if layout.Title != "" {
+		b.WriteString(titleStyle.Render(layout.Title))
+	}
+	b.WriteString("\n")
+
+	// Subtitle section - always takes up one line (empty or not) for consistency  
+	if layout.Subtitle != "" {
+		b.WriteString(subtitleStyle.Render(layout.Subtitle))
+	}
+	b.WriteString("\n")
+
+	// Main content
+	if layout.Content != "" {
+		b.WriteString(layout.Content)
+	}
+
+	// Calculate how many lines we've used so far
+	// TERA header (3 lines) + blank line (1) + title (1) + subtitle (1) + content lines + padding (2)
+	contentLines := strings.Count(b.String(), "\n")
+	teraHeaderLines := 3
+	totalUsed := teraHeaderLines + contentLines + 2 // +2 for padding
+
+	// Calculate remaining space for help text to be at bottom
+	// Reserve 1 line for help text itself
+	remainingLines := terminalHeight - totalUsed - 1
+	if remainingLines < 0 {
+		remainingLines = 0
+	}
+
+	// Add spacing to push help text to bottom
+	for i := 0; i < remainingLines; i++ {
+		b.WriteString("\n")
+	}
+
+	// Help text (if provided)
+	if layout.Help != "" {
 		b.WriteString(helpStyle.Render(layout.Help))
 	}
 

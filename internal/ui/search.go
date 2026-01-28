@@ -29,6 +29,7 @@ const (
 	searchStateStationInfo
 	searchStatePlaying
 	searchStateSavePrompt
+	searchStateSelectList
 )
 
 // SearchModel represents the search screen
@@ -52,6 +53,9 @@ type SearchModel struct {
 	width           int
 	height          int
 	err             error
+	availableLists  []string
+	listItems       []list.Item
+	listModel       list.Model
 }
 
 // Messages for search screen
@@ -199,6 +203,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handlePlayerUpdate(msg)
 		case searchStateSavePrompt:
 			return m.handleSavePrompt(msg)
+		case searchStateSelectList:
+			return m.handleSelectList(msg)
 		}
 
 	case quickFavoritesLoadedMsg:
@@ -267,6 +273,16 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 150
 		return m, nil
 
+	case voteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+		m.saveMessageTime = 150
+		return m, nil
+
+	case voteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+		m.saveMessageTime = 150
+		return m, nil
+
 	case tickMsg:
 		// Handle save message countdown
 		if m.saveMessageTime > 0 {
@@ -277,6 +293,33 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Continue ticking
 		return m, ticksEverySecond()
+
+	case listsLoadedMsg:
+		m.availableLists = msg.lists
+		m.listItems = make([]list.Item, len(msg.lists))
+		for i, name := range msg.lists {
+			m.listItems[i] = playListItem{name: name}
+		}
+		if m.width > 0 && m.height > 0 {
+			m.initializeListModel()
+		}
+		return m, nil
+
+	case saveToListSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to %s", msg.stationName, msg.listName)
+		m.saveMessageTime = 150
+		m.state = searchStatePlaying
+		return m, nil
+
+	case saveToListFailedMsg:
+		if msg.isDuplicate {
+			m.saveMessage = "Already in this list"
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
+		}
+		m.saveMessageTime = 150
+		m.state = searchStatePlaying
+		return m, nil
 	}
 
 	return m, tea.Batch(cmds...)
@@ -304,6 +347,80 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleSelectList handles input during list selection
+func (m SearchModel) handleSelectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel and go back to playing
+		m.state = searchStatePlaying
+		return m, nil
+	case "enter":
+		// Save to selected list
+		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
+			return m, m.saveToList(i.name)
+		}
+	}
+
+	var cmd tea.Cmd
+	m.listModel, cmd = m.listModel.Update(msg)
+	return m, cmd
+}
+
+// loadAvailableLists loads all favorite lists
+func (m SearchModel) loadAvailableLists() tea.Cmd {
+	return func() tea.Msg {
+		store := storage.NewStorage(m.favoritePath)
+		lists, err := store.GetAllLists(context.Background())
+		if err != nil {
+			return saveToListFailedMsg{err: fmt.Errorf("failed to load lists: %w", err)}
+		}
+		return listsLoadedMsg{lists: lists}
+	}
+}
+
+// initializeListModel creates the list model with current dimensions
+func (m *SearchModel) initializeListModel() {
+	listHeight := m.height - 10
+	if listHeight < 5 {
+		listHeight = 5
+	}
+
+	delegate := createStyledDelegate()
+
+	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
+	m.listModel.Title = ""
+	m.listModel.SetShowStatusBar(false)
+	m.listModel.SetFilteringEnabled(false)
+	m.listModel.SetShowHelp(false)
+	m.listModel.Styles.Title = titleStyle
+	m.listModel.Styles.PaginationStyle = paginationStyle
+	m.listModel.Styles.HelpStyle = helpStyle
+}
+
+// saveToList saves the current station to a specific list
+func (m SearchModel) saveToList(listName string) tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return saveToListFailedMsg{err: fmt.Errorf("no station selected")}
+		}
+
+		store := storage.NewStorage(m.favoritePath)
+		err := store.AddStation(context.Background(), listName, *m.selectedStation)
+
+		if err != nil {
+			if err == storage.ErrDuplicateStation {
+				return saveToListFailedMsg{err: err, isDuplicate: true}
+			}
+			return saveToListFailedMsg{err: err}
+		}
+
+		return saveToListSuccessMsg{
+			listName:    listName,
+			stationName: m.selectedStation.TrimName(),
+		}
+	}
 }
 
 // executeSearchType sets up the search based on selected menu index
@@ -562,6 +679,13 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.player.Stop()
 		}
 		return m, tea.Quit
+	case "0":
+		// Return to main menu (Level 3 shortcut)
+		if m.player != nil {
+			m.player.Stop()
+		}
+		m.selectedStation = nil
+		return m, func() tea.Msg { return backToMainMsg{} }
 	case "esc":
 		// Esc during playback goes back without save prompt
 		if m.player != nil {
@@ -580,11 +704,12 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Save to Quick Favorites during playback
 		return m, m.saveToQuickFavorites(*m.selectedStation)
 	case "s":
-		// Save to a list (not implemented yet)
-		// TODO: Implement save to custom list
-		m.saveMessage = "Save to list feature coming soon"
-		m.saveMessageTime = 150
-		return m, nil
+		// Save to a list - show list selection
+		m.state = searchStateSelectList
+		return m, m.loadAvailableLists()
+	case "v":
+		// Vote for this station
+		return m, m.voteForStation()
 	}
 	return m, nil
 }
@@ -632,6 +757,26 @@ func (m SearchModel) saveToQuickFavorites(station api.Station) tea.Cmd {
 	}
 }
 
+// voteForStation votes for the currently selected station
+func (m SearchModel) voteForStation() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return voteFailedMsg{err: fmt.Errorf("no station selected")}
+		}
+
+		result, err := m.apiClient.Vote(context.Background(), m.selectedStation.StationUUID)
+		if err != nil {
+			return voteFailedMsg{err: err}
+		}
+
+		if !result.OK {
+			return voteFailedMsg{err: fmt.Errorf(result.Message)}
+		}
+
+		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
+	}
+}
+
 // View renders the search screen
 func (m SearchModel) View() string {
 	switch m.state {
@@ -642,21 +787,21 @@ func (m SearchModel) View() string {
 			content.WriteString("\n\n")
 			content.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 		}
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Content: content.String(),
 			Help:    "↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • Ctrl+C: Quit",
-		})
+		}, m.height)
 
 	case searchStateInput:
 		var content strings.Builder
 		content.WriteString(m.getSearchTypeLabel())
 		content.WriteString("\n\n")
 		content.WriteString(m.textInput.View())
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🔍 Search Radio Stations",
 			Content: content.String(),
 			Help:    "Enter) Search • Esc) Back • Ctrl+C) Quit",
-		})
+		}, m.height)
 
 	case searchStateLoading:
 		var content strings.Builder
@@ -702,11 +847,14 @@ func (m SearchModel) View() string {
 				content.WriteString(errorStyle.Render(m.saveMessage))
 			}
 		}
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
-			Help:    "Esc) Back • f) Save to Quick Favorites • s) Save to list • Ctrl+C) Quit",
-		})
+			Help:    "Esc: Back • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit",
+		}, m.height)
+
+	case searchStateSelectList:
+		return m.viewSelectList()
 	}
 
 	return RenderPage(PageLayout{
@@ -817,4 +965,47 @@ func renderStationDetails(station api.Station) string {
 	}
 
 	return s.String()
+}
+
+// viewSelectList renders the list selection view
+func (m SearchModel) viewSelectList() string {
+	if len(m.availableLists) == 0 {
+		var content strings.Builder
+		content.WriteString(errorStyle.Render("No lists available!"))
+		content.WriteString("\n\n")
+		content.WriteString("Create lists using the List Management menu.")
+
+		return RenderPage(PageLayout{
+			Title:   "💾 Save to List",
+			Content: content.String(),
+			Help:    "Esc: Back",
+		})
+	}
+
+	if m.selectedStation == nil {
+		return "No station selected"
+	}
+
+	var content strings.Builder
+
+	// Station name
+	content.WriteString("Station: ")
+	content.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	content.WriteString("\n\n")
+
+	// Instruction
+	content.WriteString("Select a list to save to:\n\n")
+
+	// List selection
+	if m.listModel.Items() != nil {
+		content.WriteString(m.listModel.View())
+	} else {
+		content.WriteString("Loading lists...")
+	}
+
+	return RenderPage(PageLayout{
+		Title:   "💾 Save to List",
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter: Select • Esc: Cancel",
+	})
 }

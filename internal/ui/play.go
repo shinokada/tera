@@ -23,6 +23,7 @@ const (
 	playStateStationSelection
 	playStatePlaying
 	playStateSavePrompt
+	playStateDeleteConfirm
 )
 
 // PlayModel represents the play screen
@@ -37,6 +38,7 @@ type PlayModel struct {
 	stationItems     []list.Item
 	stationListModel list.Model
 	selectedStation  *api.Station
+	stationToDelete  *api.Station
 	player           *player.MPVPlayer
 	saveMessage      string
 	saveMessageTime  int // frames to show message
@@ -195,6 +197,8 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePlaying(msg)
 		case playStateSavePrompt:
 			return m.updateSavePrompt(msg)
+		case playStateDeleteConfirm:
+			return m.updateDeleteConfirm(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -255,6 +259,16 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case deleteFailedMsg:
 		m.err = msg.err
+		return m, nil
+
+	case voteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+		m.saveMessageTime = 150
+		return m, nil
+
+	case voteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+		m.saveMessageTime = 150
 		return m, nil
 
 	case listsLoadedMsg:
@@ -352,6 +366,9 @@ func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
+	case "q":
+		// Prevent 'q' from quitting - do nothing or return to main menu
+		return m, nil
 	case "enter":
 		// Select list and move to station selection
 		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
@@ -376,13 +393,23 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stationItems = nil
 		m.stationListModel = list.Model{}
 		return m, nil
+	case "0":
+		// Return to main menu (Level 2+ shortcut)
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenMainMenu}
+		}
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
+	case "q":
+		// Prevent 'q' from quitting - do nothing
+		return m, nil
 	case "d":
-		// Delete selected station
+		// Show delete confirmation
 		if i, ok := m.stationListModel.SelectedItem().(stationListItem); ok {
-			return m, m.deleteStationFromList(&i.station)
+			m.stationToDelete = &i.station
+			m.state = playStateDeleteConfirm
+			return m, nil
 		}
 	case "enter":
 		// Select station and start playback
@@ -433,6 +460,13 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = playStateStationSelection
 		m.selectedStation = nil
 		return m, nil
+	case "0":
+		// Return to main menu (Level 3 shortcut)
+		m.player.Stop()
+		m.selectedStation = nil
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenMainMenu}
+		}
 	case "f":
 		// Save to Quick Favorites
 		return m, m.saveToQuickFavorites()
@@ -442,6 +476,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.saveMessage = "Save to list feature coming soon"
 		m.saveMessageTime = 150
 		return m, nil
+	case "v":
+		// Vote for this station
+		return m, m.voteForStation()
 	}
 	return m, nil
 }
@@ -458,6 +495,24 @@ func (m PlayModel) updateSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Save to Quick Favorites and return to station selection
 		cmd := m.saveToQuickFavorites()
 		m.state = playStateStationSelection
+		return m, cmd
+	}
+	return m, nil
+}
+
+// updateDeleteConfirm handles input during delete confirmation
+func (m PlayModel) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "n":
+		// Cancel delete, return to station selection
+		m.state = playStateStationSelection
+		m.stationToDelete = nil
+		return m, nil
+	case "y":
+		// Confirm delete
+		cmd := m.deleteStationFromList(m.stationToDelete)
+		m.state = playStateStationSelection
+		m.stationToDelete = nil
 		return m, cmd
 	}
 	return m, nil
@@ -498,6 +553,27 @@ func (m PlayModel) deleteStationFromList(station *api.Station) tea.Cmd {
 	}
 }
 
+// voteForStation votes for the currently playing station
+func (m PlayModel) voteForStation() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return voteFailedMsg{err: fmt.Errorf("no station selected")}
+		}
+
+		client := api.NewClient()
+		result, err := client.Vote(context.Background(), m.selectedStation.StationUUID)
+		if err != nil {
+			return voteFailedMsg{err: err}
+		}
+
+		if !result.OK {
+			return voteFailedMsg{err: fmt.Errorf(result.Message)}
+		}
+
+		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
+	}
+}
+
 // View renders the play screen
 func (m PlayModel) View() string {
 	if m.err != nil {
@@ -513,6 +589,8 @@ func (m PlayModel) View() string {
 		return m.viewPlaying()
 	case playStateSavePrompt:
 		return m.viewSavePrompt()
+	case playStateDeleteConfirm:
+		return m.viewDeleteConfirm()
 	}
 
 	return "Unknown state"
@@ -573,12 +651,12 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Use the consistent page template
-	return RenderPage(PageLayout{
+	// Use the consistent page template with bottom-aligned help
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "Esc) Back • f) Save to Quick Favorites • s) Save to list • q) Quit",
-	})
+		Help:    "Esc: Back • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
 }
 
 // formatStationInfo formats station information for display
@@ -635,7 +713,7 @@ func (m PlayModel) viewStationSelection() string {
 	return RenderPage(PageLayout{
 		Title:   "Play from Favorites",
 		Content: m.stationListModel.View(),
-		Help:    "↑↓/jk: Navigate • Enter: Play • d: Delete • Esc: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 	})
 }
 
@@ -706,6 +784,38 @@ func (m PlayModel) viewSavePrompt() string {
 	})
 }
 
+// viewDeleteConfirm renders the delete confirmation prompt
+func (m PlayModel) viewDeleteConfirm() string {
+	if m.stationToDelete == nil {
+		return "No station selected"
+	}
+
+	var content strings.Builder
+
+	// Warning message
+	content.WriteString(errorStyle.Render("⚠ Delete Station?"))
+	content.WriteString("\n\n")
+
+	// Station name
+	content.WriteString("Station: ")
+	content.WriteString(stationNameStyle.Render(m.stationToDelete.TrimName()))
+	content.WriteString("\n")
+	content.WriteString("From list: ")
+	content.WriteString(stationValueStyle.Render(m.selectedList))
+	content.WriteString("\n\n")
+
+	// Confirmation question
+	content.WriteString("Are you sure you want to delete this station?\n")
+	content.WriteString(infoStyle.Render("This action cannot be undone."))
+
+	// Use the consistent page template
+	return RenderPage(PageLayout{
+		Title:   "⚠️  Confirm Delete",
+		Content: content.String(),
+		Help:    "y: Yes, delete • n/Esc: No, cancel",
+	})
+}
+
 // Messages
 
 type listsLoadedMsg struct {
@@ -738,6 +848,14 @@ type deleteSuccessMsg struct {
 }
 
 type deleteFailedMsg struct {
+	err error
+}
+
+type voteSuccessMsg struct {
+	message string
+}
+
+type voteFailedMsg struct {
 	err error
 }
 
