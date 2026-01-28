@@ -13,8 +13,9 @@ const defaultBaseURL = "https://api.github.com"
 
 // Client handles communication with the GitHub Gist API
 type Client struct {
-	token   string
-	baseURL string
+	token      string
+	baseURL    string
+	httpClient *http.Client
 }
 
 // NewClient creates a new GitHub Gist API client
@@ -22,6 +23,9 @@ func NewClient(token string) *Client {
 	return &Client{
 		token:   token,
 		baseURL: defaultBaseURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
@@ -165,7 +169,7 @@ func (c *Client) do(req *http.Request, v interface{}) error {
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

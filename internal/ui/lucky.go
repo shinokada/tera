@@ -405,8 +405,7 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
-		// Pick a random station
-		rand.Seed(time.Now().UnixNano())
+		// Pick a random station (rand is auto-seeded since Go 1.20)
 		randomIndex := rand.Intn(len(stations))
 		selectedStation := stations[randomIndex]
 

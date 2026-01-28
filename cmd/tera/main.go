@@ -3,11 +3,27 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui"
 )
+
+// Version is set at build time via -ldflags "-X main.version=v1.0.0"
+var version = "dev"
+
+func getVersion() string {
+	// If version was set at build time, use it
+	if version != "dev" {
+		return version
+	}
+	// Otherwise try to get version from Go module info (works with go install)
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
 
 func main() {
 	// Handle CLI arguments
@@ -20,7 +36,7 @@ func main() {
 			printHelp()
 			return
 		case "--version", "-v":
-			fmt.Println("TERA v0.1.0")
+			fmt.Printf("TERA %s\n", getVersion())
 			return
 		}
 	}

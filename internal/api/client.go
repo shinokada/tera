@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -66,7 +67,8 @@ type VoteResult struct {
 // Vote increases the vote count for a station by one
 // Note: Can only vote once per IP per station every 10 minutes
 func (c *Client) Vote(ctx context.Context, stationUUID string) (*VoteResult, error) {
-	voteURL := "https://de1.api.radio-browser.info/json/vote/" + stationUUID
+	// Use baseURL for consistency (strip /stations suffix and add /vote)
+	voteURL := baseURL[:len(baseURL)-len("/stations")] + "/vote/" + stationUUID
 
 	req, err := http.NewRequestWithContext(ctx, "POST", voteURL, nil)
 	if err != nil {
@@ -78,6 +80,10 @@ func (c *Client) Vote(ctx context.Context, stationUUID string) (*VoteResult, err
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("vote request failed with status: %d", resp.StatusCode)
+	}
 
 	var result VoteResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

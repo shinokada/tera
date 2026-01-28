@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
@@ -32,7 +31,6 @@ type App struct {
 	width                int
 	height               int
 	mainMenuList         list.Model
-	menuTextInput        textinput.Model
 	playScreen           PlayModel
 	searchScreen         SearchModel
 	listManagementScreen ListManagementModel
@@ -44,6 +42,8 @@ type App struct {
 	quickFavPlayer       *player.MPVPlayer
 	playingFromMain      bool
 	playingStation       *api.Station
+	numberBuffer         string // Buffer for multi-digit number input
+	unifiedMenuIndex     int    // Unified index for navigating both menu and favorites
 }
 
 // navigateMsg is sent when changing screens
@@ -64,18 +64,10 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
 	}
 
-	// Initialize text input for menu filtering
-	ti := textinput.New()
-	ti.Placeholder = "Type to filter..."
-	ti.CharLimit = 50
-	ti.Width = 40
-	ti.Focus()
-
 	app := App{
 		screen:         screenMainMenu,
 		favoritePath:   favPath,
 		apiClient:      api.NewClient(),
-		menuTextInput:  ti,
 		quickFavPlayer: player.NewMPVPlayer(),
 	}
 
@@ -97,7 +89,7 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Search Stations", "", "2"),
 		components.NewMenuItem("Manage Lists", "", "3"),
 		components.NewMenuItem("I Feel Lucky", "", "4"),
-		components.NewMenuItem("Gist Management", "(coming soon)", "5"),
+		components.NewMenuItem("Gist Management", "", "5"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -138,7 +130,7 @@ func (a *App) loadQuickFavorites() {
 }
 
 func (a App) Init() tea.Cmd {
-	return textinput.Blink
+	return nil
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -319,88 +311,105 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a.playingFromMain = false
 			a.playingStation = nil
+			a.numberBuffer = "" // Clear buffer on escape
 			return a, nil
 		}
 
-		if msg.String() == "0" {
-			// Stop any playing stations before quitting
-			if a.playScreen.player != nil {
-				a.playScreen.player.Stop()
-			}
-			if a.searchScreen.player != nil {
-				a.searchScreen.player.Stop()
-			}
-			if a.quickFavPlayer != nil {
-				a.quickFavPlayer.Stop()
-			}
-			// Select exit option
-			a.mainMenuList.Select(len(a.mainMenuList.Items()) - 1)
-			return a, tea.Quit
-		}
-
-		// Check for quick play shortcuts (a-j for first 10 favorites)
+		// Handle number input for menu and quick favorites
 		key := msg.String()
-		quickPlayKeys := map[string]int{
-			"a": 0, "b": 1, "c": 2, "d": 3, "e": 4,
-			"f": 5, "g": 6, "h": 7, "i": 8, "l": 9,
-		}
-		if idx, ok := quickPlayKeys[key]; ok && idx < len(a.quickFavorites) {
-			return a.playQuickFavorite(idx)
+		if len(key) == 1 && key >= "0" && key <= "9" {
+			a.numberBuffer += key
+
+			// For numbers >= 10, we need at least 2 digits
+			// Allow up to 3 digits for larger lists (e.g., 100+)
+			if len(a.numberBuffer) >= 2 {
+				// Check if this could be a valid selection
+				num := 0
+				fmt.Sscanf(a.numberBuffer, "%d", &num)
+
+				// Calculate max valid number
+				maxFavNum := 9 + len(a.quickFavorites) // 10-based indexing
+
+				// If the number is valid for favorites, play it
+				if num >= 10 && num <= maxFavNum {
+					idx := num - 10
+					a.numberBuffer = "" // Clear buffer
+					return a.playQuickFavorite(idx)
+				}
+
+				// If number is too large or we have 3+ digits, clear and ignore
+				if num > maxFavNum || len(a.numberBuffer) >= 3 {
+					a.numberBuffer = ""
+					return a, nil
+				}
+			}
+
+			// Single digit - could be menu shortcut (1-5) or start of larger number
+			return a, nil
 		}
 
-		// Handle Enter key to select filtered menu item
+		// Handle Enter key to select filtered menu item or confirm number
 		if msg.String() == "enter" {
-			filterText := strings.ToLower(strings.TrimSpace(a.menuTextInput.Value()))
-			if filterText != "" {
-				// Find first matching menu item
-				for i, item := range a.mainMenuList.Items() {
-					if menuItem, ok := item.(components.MenuItem); ok {
-						if strings.Contains(strings.ToLower(menuItem.Title()), filterText) {
-							a.menuTextInput.Reset()
-							return a.executeMenuAction(i)
-						}
+			// Check if there's a buffered number to process
+			if a.numberBuffer != "" {
+				num := 0
+				fmt.Sscanf(a.numberBuffer, "%d", &num)
+				a.numberBuffer = "" // Clear buffer
+
+				// Numbers 1-5 are for menu items
+				if num >= 1 && num <= 5 {
+					a.unifiedMenuIndex = num - 1
+					return a.executeMenuAction(num - 1)
+				}
+				// Numbers 10+ are for quick favorites
+				if num >= 10 {
+					idx := num - 10
+					if idx < len(a.quickFavorites) {
+						return a.playQuickFavorite(idx)
 					}
 				}
+				return a, nil
+			}
+			// No buffered number, use current unified selection
+			menuItemCount := 5 // Number of main menu items
+			if a.unifiedMenuIndex < menuItemCount {
+				return a.executeMenuAction(a.unifiedMenuIndex)
 			} else {
-				// No filter text, use current selection
-				selected := a.mainMenuList.Index()
-				return a.executeMenuAction(selected)
-			}
-		}
-
-		// Handle arrow keys for menu navigation when no text is typed
-		if a.menuTextInput.Value() == "" {
-			switch msg.String() {
-			case "up", "k":
-				a.mainMenuList.CursorUp()
-				return a, nil
-			case "down", "j":
-				a.mainMenuList.CursorDown()
-				return a, nil
-			}
-		}
-
-		// Handle number shortcuts directly
-		for i, item := range a.mainMenuList.Items() {
-			if menuItem, ok := item.(components.MenuItem); ok {
-				if msg.String() == menuItem.Shortcut() {
-					a.menuTextInput.Reset()
-					a.mainMenuList.Select(i)
-					return a.executeMenuAction(i)
+				// It's a quick favorite
+				favIndex := a.unifiedMenuIndex - menuItemCount
+				if favIndex < len(a.quickFavorites) {
+					return a.playQuickFavorite(favIndex)
 				}
 			}
+			return a, nil
 		}
 
-		// Pass other keys to text input
-		var cmd tea.Cmd
-		a.menuTextInput, cmd = a.menuTextInput.Update(msg)
-		return a, cmd
+		// Handle arrow keys for unified menu navigation
+		menuItemCount := 5
+		favCount := len(a.quickFavorites)
+		totalItems := menuItemCount + favCount
+
+		switch msg.String() {
+		case "up", "k":
+			a.numberBuffer = "" // Clear buffer on navigation
+			if a.unifiedMenuIndex > 0 {
+				a.unifiedMenuIndex--
+			}
+			return a, nil
+		case "down", "j":
+			a.numberBuffer = "" // Clear buffer on navigation
+			if a.unifiedMenuIndex < totalItems-1 {
+				a.unifiedMenuIndex++
+			}
+			return a, nil
+		}
+
+		// Clear buffer on other keys
+		a.numberBuffer = ""
+		return a, nil
 
 	default:
-		// Handle text input updates (like blink)
-		var cmd tea.Cmd
-		a.menuTextInput, cmd = a.menuTextInput.Update(msg)
-		return a, cmd
+		return a, nil
 	}
 }
 
@@ -477,31 +486,36 @@ func (a App) View() string {
 func (a App) viewMainMenu() string {
 	var content strings.Builder
 
-	// Add "Choose an option:" with text input field
+	// Add "Choose an option:" with number buffer display
 	content.WriteString(subtitleStyle().Render("Choose an option:"))
-	content.WriteString(" ")
-	content.WriteString(a.menuTextInput.View())
+	if a.numberBuffer != "" {
+		content.WriteString(" ")
+		content.WriteString(highlightStyle().Render(a.numberBuffer + "_"))
+	}
 	content.WriteString("\n\n")
 
-	// Filter and display menu items based on text input
-	filterText := strings.ToLower(strings.TrimSpace(a.menuTextInput.Value()))
-	menuContent := ""
-	for i, item := range a.mainMenuList.Items() {
-		if menuItem, ok := item.(components.MenuItem); ok {
-			itemTitle := menuItem.Title()
-			// Show all items if no filter, or matching items if filter is set
-			if filterText == "" || strings.Contains(strings.ToLower(itemTitle), filterText) {
-				prefix := "  "
-				if i == a.mainMenuList.Index() && filterText == "" {
-					prefix = "> "
-					menuContent += selectedItemStyle().Render(fmt.Sprintf("%s%s. %s", prefix, menuItem.Shortcut(), itemTitle)) + "\n"
-				} else {
-					menuContent += normalItemStyle().Render(fmt.Sprintf("%s%s. %s", prefix, menuItem.Shortcut(), itemTitle)) + "\n"
-				}
-			}
-		}
+	// Display menu items with unified index
+	menuItems := []struct {
+		shortcut string
+		title    string
+	}{
+		{"1", "Play from Favorites"},
+		{"2", "Search Stations"},
+		{"3", "Manage Lists"},
+		{"4", "I Feel Lucky"},
+		{"5", "Gist Management"},
 	}
-	content.WriteString(menuContent)
+
+	for i, item := range menuItems {
+		prefix := "  "
+		if i == a.unifiedMenuIndex {
+			prefix = "> "
+			content.WriteString(selectedItemStyle().Render(fmt.Sprintf("%s%s. %s", prefix, item.shortcut, item.title)))
+		} else {
+			content.WriteString(normalItemStyle().Render(fmt.Sprintf("%s%s. %s", prefix, item.shortcut, item.title)))
+		}
+		content.WriteString("\n")
+	}
 
 	// Show currently playing station if playing from main menu
 	if a.playingFromMain && a.playingStation != nil {
@@ -511,20 +525,16 @@ func (a App) viewMainMenu() string {
 		content.WriteString("\n")
 	}
 
-	// Add quick play favorites if available
+	// Add quick play favorites if available (also part of unified navigation)
 	if len(a.quickFavorites) > 0 {
 		content.WriteString("\n")
 		content.WriteString(quickFavoritesStyle().Render("─── Quick Play Favorites ───"))
 		content.WriteString("\n")
 
-		// Define shortcut keys
-		shortcutKeys := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "l"}
-
+		menuItemCount := len(menuItems)
 		for i, station := range a.quickFavorites {
-			if i >= 10 {
-				break // Only show first 10
-			}
-			shortcut := shortcutKeys[i]
+			// Use numbers 10+ for quick favorites (no limit)
+			shortcut := fmt.Sprintf("%d", 10+i)
 
 			// Build station info line
 			var stationInfo strings.Builder
@@ -542,29 +552,48 @@ func (a App) viewMainMenu() string {
 				}
 			}
 
+			unifiedIdx := menuItemCount + i
+			prefix := "  "
+			if unifiedIdx == a.unifiedMenuIndex {
+				prefix = "> "
+			}
+
+			// Build the line content
+			lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
+
 			// Highlight if this is the playing station
 			if a.playingFromMain && a.playingStation != nil && a.playingStation.StationUUID == station.StationUUID {
-				content.WriteString(fmt.Sprintf("  %s) ", shortcut))
-				content.WriteString(successStyle().Render("▶ " + stationInfo.String()))
+				// Playing station - show with play icon
+				playingLine := fmt.Sprintf("%s%s. ▶ %s", prefix, shortcut, stationInfo.String())
+				if unifiedIdx == a.unifiedMenuIndex {
+					content.WriteString(selectedItemStyle().Render(playingLine))
+				} else {
+					content.WriteString(normalItemStyle().Render(playingLine))
+				}
 			} else {
-				content.WriteString(fmt.Sprintf("  %s) %s", shortcut, stationInfo.String()))
+				// Normal station
+				if unifiedIdx == a.unifiedMenuIndex {
+					content.WriteString(selectedItemStyle().Render(lineContent))
+				} else {
+					content.WriteString(normalItemStyle().Render(lineContent))
+				}
 			}
 			content.WriteString("\n")
 		}
 	}
 
 	// Build help text
-	helpText := "↑↓/jk: Navigate • Enter: Select • 1-5: Menu • a-l: Quick play"
+	helpText := "↑↓/jk: Navigate • Enter: Select • 1-5: Menu • 10+: Quick play"
 	if a.playingFromMain {
 		helpText += " • Esc: Stop"
 	}
 	helpText += " • Ctrl+C: Quit"
 
-	// Use the consistent page template with title and subtitle
-	return RenderPage(PageLayout{
-		Title:    "Main Menu",
-		Subtitle: "Select an Option",
+	// Use the page template with help at the bottom of the screen
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:    "Main Menu & Quick Play",
+		Subtitle: "",
 		Content:  content.String(),
 		Help:     helpText,
-	})
+	}, a.height)
 }

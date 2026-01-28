@@ -1,0 +1,110 @@
+# GoReleaser configuration for TERA
+# Documentation: https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: tera
+    main: ./cmd/tera
+    binary: tera
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Inject version at build time
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: tera-archive
+    builds:
+      - tera
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Use zip for Windows
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+# Homebrew tap (uncomment when you create the tap repository)
+# brews:
+#   - repository:
+#       owner: shinokada
+#       name: homebrew-tap
+#     homepage: https://github.com/shinokada/tera
+#     description: Terminal-based internet radio player
+#     license: MIT
+#     dependencies:
+#       - name: mpv
+#         type: required
+#     install: |
+#       bin.install "tera"
+#     test: |
+#       system "#{bin}/tera", "--version"
+
+# Scoop bucket (uncomment when you create the scoop bucket repository)
+# scoops:
+#   - repository:
+#       owner: shinokada
+#       name: scoop-bucket
+#     homepage: https://github.com/shinokada/tera
+#     description: Terminal-based internet radio player
+#     license: MIT
+
+release:
+  github:
+    owner: shinokada
+    name: tera
+  # Mark prereleases appropriately
+  prerelease: auto
+  # Release name template
+  name_template: "TERA {{.Version}}"
+  # Release notes header
+  header: |
+    ## TERA {{.Version}}
+    
+    ### Prerequisites
+    - [mpv](https://mpv.io/) must be installed on your system
+    
+    ### Installation
+    ```sh
+    # macOS/Linux - Download and extract, then move to PATH
+    tar -xzf tera_{{.Version}}_<os>_<arch>.tar.gz
+    sudo mv tera /usr/local/bin/
+    
+    # Or install via Go
+    go install github.com/shinokada/tera/cmd/tera@{{.Version}}
+    ```
+  footer: |
+    ---
+    **Full Changelog**: https://github.com/shinokada/tera/compare/{{ .PreviousTag }}...{{ .Tag }}

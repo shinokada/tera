@@ -722,11 +722,12 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 
 		// Restore files
 		for filename, file := range g.Files {
-			// Basic validation to prevent directory traversal
-			if strings.Contains(filename, "..") || strings.Contains(filename, "/") {
+			// Validate filename to prevent directory traversal
+			cleanName := filepath.Base(filename)
+			if cleanName != filename || cleanName == "." || cleanName == ".." {
 				continue
 			}
-			path := filepath.Join(m.favoritePath, filename)
+			path := filepath.Join(m.favoritePath, cleanName)
 			if err := os.WriteFile(path, []byte(file.Content), 0644); err != nil {
 				return errMsg{err}
 			}

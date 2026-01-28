@@ -542,6 +542,10 @@ func (m PlayModel) saveToQuickFavorites() tea.Cmd {
 // deleteStationFromList removes a station from the current list
 func (m PlayModel) deleteStationFromList(station *api.Station) tea.Cmd {
 	return func() tea.Msg {
+		if station == nil {
+			return deleteFailedMsg{err: fmt.Errorf("no station to delete")}
+		}
+
 		store := storage.NewStorage(m.favoritePath)
 		err := store.RemoveStation(context.Background(), m.selectedList, station.StationUUID)
 
