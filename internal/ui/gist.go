@@ -3,14 +3,15 @@ package ui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/gist"
 	"github.com/shinokada/tera/internal/ui/components"
 )
@@ -32,10 +33,6 @@ const (
 	gistStateTokenDelete
 	gistStateUpdateInput
 	gistStateDeleteConfirm
-)
-
-var (
-	quitTextStyle = lipgloss.NewStyle().Margin(1, 0, 2, 4)
 )
 
 type gistItem struct {
@@ -114,7 +111,7 @@ func NewGistModel(favoritePath string) GistModel {
 	ti.Width = 40
 
 	// Check for token
-	token, _ := gist.LoadToken()
+	token, tokenErr := gist.LoadToken()
 
 	m := GistModel{
 		state:          gistStateMenu,
@@ -125,6 +122,12 @@ func NewGistModel(favoritePath string) GistModel {
 		gistList:       gistList,
 		textInput:      ti,
 		token:          token,
+	}
+
+	// Surface token loading errors to user
+	if tokenErr != nil {
+		m.message = fmt.Sprintf("Warning: could not load token: %v", tokenErr)
+		m.messageIsError = true
 	}
 
 	if token != "" {
@@ -336,9 +339,13 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					switch m.state {
 					case gistStateList:
 						// Open in browser
-						// For now just show message
-						m.message = fmt.Sprintf("Opened %s in browser", m.selectedGist.URL)
-						m.messageIsError = false
+						if err := openBrowser(m.selectedGist.URL); err != nil {
+							m.message = fmt.Sprintf("Failed to open browser: %v", err)
+							m.messageIsError = true
+						} else {
+							m.message = fmt.Sprintf("Opened %s in browser", m.selectedGist.URL)
+							m.messageIsError = false
+						}
 						return m, nil
 					case gistStateUpdate:
 						m.inputPurpose = "description"
@@ -728,6 +735,30 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 			return errMsg{err}
 		}
 
+		// Create backup of existing files before overwriting
+		backupDir := filepath.Join(m.favoritePath, ".backup")
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			return errMsg{fmt.Errorf("failed to create backup directory: %w", err)}
+		}
+
+		// Backup existing files that will be overwritten
+		timestamp := time.Now().Format("20060102-150405")
+		for filename := range g.Files {
+			cleanName := filepath.Base(filename)
+			if cleanName != filename || cleanName == "." || cleanName == ".." {
+				continue
+			}
+			existingPath := filepath.Join(m.favoritePath, cleanName)
+			if _, err := os.Stat(existingPath); err == nil {
+				// File exists, create backup
+				backupName := fmt.Sprintf("%s.%s.bak", cleanName, timestamp)
+				backupPath := filepath.Join(backupDir, backupName)
+				if data, err := os.ReadFile(existingPath); err == nil {
+					os.WriteFile(backupPath, data, 0644)
+				}
+			}
+		}
+
 		// Restore files
 		for filename, file := range g.Files {
 			// Validate filename to prevent directory traversal
@@ -741,7 +772,7 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 			}
 		}
 
-		return successMsg{"Favorites restored successfully!"}
+		return successMsg{"Favorites restored successfully! (backups saved in .backup folder)"}
 	}
 }
 
@@ -776,6 +807,9 @@ func (m *GistModel) validateTokenCmd() tea.Cmd {
 
 func (m *GistModel) deleteGistCmd(id string) tea.Cmd {
 	return func() tea.Msg {
+		if m.gistClient == nil {
+			return errMsg{fmt.Errorf("no gist client configured")}
+		}
 		if err := m.gistClient.DeleteGist(id); err != nil {
 			return errMsg{err}
 		}
@@ -793,6 +827,24 @@ func (m *GistModel) deleteTokenCmd() tea.Cmd {
 		}
 		return tokenDeletedMsg{}
 	}
+}
+
+// openBrowser opens the specified URL in the default browser
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	return cmd.Start()
 }
 
 // Messages

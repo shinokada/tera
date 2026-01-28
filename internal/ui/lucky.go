@@ -254,6 +254,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Return to main menu (Level 2+ shortcut)
 		m.player.Stop()
 		m.selectedStation = nil
+		m.state = luckyStateInput
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
@@ -456,7 +457,11 @@ func (m LuckyModel) voteForStation() tea.Cmd {
 			return voteFailedMsg{err: fmt.Errorf("no station selected")}
 		}
 
-		client := api.NewClient()
+		// Reuse injected API client for consistency and testability
+		client := m.apiClient
+		if client == nil {
+			client = api.NewClient()
+		}
 		result, err := client.Vote(context.Background(), m.selectedStation.StationUUID)
 		if err != nil {
 			return voteFailedMsg{err: err}
