@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
 )
@@ -30,6 +32,7 @@ type App struct {
 	width                int
 	height               int
 	mainMenuList         list.Model
+	menuTextInput        textinput.Model
 	playScreen           PlayModel
 	searchScreen         SearchModel
 	listManagementScreen ListManagementModel
@@ -38,6 +41,9 @@ type App struct {
 	apiClient            *api.Client
 	favoritePath         string
 	quickFavorites       []api.Station
+	quickFavPlayer       *player.MPVPlayer
+	playingFromMain      bool
+	playingStation       *api.Station
 }
 
 // navigateMsg is sent when changing screens
@@ -58,10 +64,19 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
 	}
 
+	// Initialize text input for menu filtering
+	ti := textinput.New()
+	ti.Placeholder = "Type to filter..."
+	ti.CharLimit = 50
+	ti.Width = 40
+	ti.Focus()
+
 	app := App{
-		screen:       screenMainMenu,
-		favoritePath: favPath,
-		apiClient:    api.NewClient(),
+		screen:         screenMainMenu,
+		favoritePath:   favPath,
+		apiClient:      api.NewClient(),
+		menuTextInput:  ti,
+		quickFavPlayer: player.NewMPVPlayer(),
 	}
 
 	// Initialize main menu
@@ -69,6 +84,9 @@ func NewApp() App {
 
 	// Ensure My-favorites.json exists at startup
 	app.ensureMyFavorites()
+
+	// Load quick favorites
+	app.loadQuickFavorites()
 
 	return app
 }
@@ -107,8 +125,20 @@ func (a *App) ensureMyFavorites() {
 	}
 }
 
+// loadQuickFavorites loads stations from My-favorites.json for quick play
+func (a *App) loadQuickFavorites() {
+	store := storage.NewStorage(a.favoritePath)
+	list, err := store.LoadList(context.Background(), "My-favorites")
+	if err != nil {
+		// It's OK if My-favorites doesn't exist or is empty
+		a.quickFavorites = []api.Station{}
+		return
+	}
+	a.quickFavorites = list.Stations
+}
+
 func (a App) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -134,7 +164,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update main menu size
 		if a.screen == screenMainMenu {
-			h, v := docStyle.GetFrameSize()
+			h, v := docStyle().GetFrameSize()
 			// Ensure enough height for all menu items (5 items)
 			// Reserve 6 lines for TERA header (3 lines) + spacing + help line
 			minHeight := 12
@@ -282,6 +312,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle Escape to stop playing if playing from main menu
+		if msg.String() == "esc" && a.playingFromMain {
+			if a.quickFavPlayer != nil {
+				a.quickFavPlayer.Stop()
+			}
+			a.playingFromMain = false
+			a.playingStation = nil
+			return a, nil
+		}
+
 		if msg.String() == "0" {
 			// Stop any playing stations before quitting
 			if a.playScreen.player != nil {
@@ -290,21 +330,78 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.searchScreen.player != nil {
 				a.searchScreen.player.Stop()
 			}
+			if a.quickFavPlayer != nil {
+				a.quickFavPlayer.Stop()
+			}
 			// Select exit option
 			a.mainMenuList.Select(len(a.mainMenuList.Items()) - 1)
 			return a, tea.Quit
 		}
 
-		// Handle menu navigation
-		newList, selected := components.HandleMenuKey(msg, a.mainMenuList)
-		a.mainMenuList = newList
-
-		if selected >= 0 {
-			// Execute selected action
-			return a.executeMenuAction(selected)
+		// Check for quick play shortcuts (a-j for first 10 favorites)
+		key := msg.String()
+		quickPlayKeys := map[string]int{
+			"a": 0, "b": 1, "c": 2, "d": 3, "e": 4,
+			"f": 5, "g": 6, "h": 7, "i": 8, "l": 9,
 		}
+		if idx, ok := quickPlayKeys[key]; ok && idx < len(a.quickFavorites) {
+			return a.playQuickFavorite(idx)
+		}
+
+		// Handle Enter key to select filtered menu item
+		if msg.String() == "enter" {
+			filterText := strings.ToLower(strings.TrimSpace(a.menuTextInput.Value()))
+			if filterText != "" {
+				// Find first matching menu item
+				for i, item := range a.mainMenuList.Items() {
+					if menuItem, ok := item.(components.MenuItem); ok {
+						if strings.Contains(strings.ToLower(menuItem.Title()), filterText) {
+							a.menuTextInput.Reset()
+							return a.executeMenuAction(i)
+						}
+					}
+				}
+			} else {
+				// No filter text, use current selection
+				selected := a.mainMenuList.Index()
+				return a.executeMenuAction(selected)
+			}
+		}
+
+		// Handle arrow keys for menu navigation when no text is typed
+		if a.menuTextInput.Value() == "" {
+			switch msg.String() {
+			case "up", "k":
+				a.mainMenuList.CursorUp()
+				return a, nil
+			case "down", "j":
+				a.mainMenuList.CursorDown()
+				return a, nil
+			}
+		}
+
+		// Handle number shortcuts directly
+		for i, item := range a.mainMenuList.Items() {
+			if menuItem, ok := item.(components.MenuItem); ok {
+				if msg.String() == menuItem.Shortcut() {
+					a.menuTextInput.Reset()
+					a.mainMenuList.Select(i)
+					return a.executeMenuAction(i)
+				}
+			}
+		}
+
+		// Pass other keys to text input
+		var cmd tea.Cmd
+		a.menuTextInput, cmd = a.menuTextInput.Update(msg)
+		return a, cmd
+
+	default:
+		// Handle text input updates (like blink)
+		var cmd tea.Cmd
+		a.menuTextInput, cmd = a.menuTextInput.Update(msg)
+		return a, cmd
 	}
-	return a, nil
 }
 
 func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
@@ -333,6 +430,32 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// playQuickFavorite plays a station from the quick favorites list
+func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
+	if index >= len(a.quickFavorites) {
+		return a, nil
+	}
+
+	station := a.quickFavorites[index]
+	a.playingStation = &station
+	a.playingFromMain = true
+
+	// Stop any currently playing station
+	if a.quickFavPlayer != nil {
+		a.quickFavPlayer.Stop()
+	}
+
+	// Start playback
+	return a, func() tea.Msg {
+		if a.quickFavPlayer != nil {
+			if err := a.quickFavPlayer.Play(&station); err != nil {
+				return playbackErrorMsg{err}
+			}
+		}
+		return playbackStartedMsg{}
+	}
+}
+
 func (a App) View() string {
 	switch a.screen {
 	case screenMainMenu:
@@ -354,27 +477,94 @@ func (a App) View() string {
 func (a App) viewMainMenu() string {
 	var content strings.Builder
 
-	// Menu items
-	content.WriteString(a.mainMenuList.View())
+	// Add "Choose an option:" with text input field
+	content.WriteString(subtitleStyle().Render("Choose an option:"))
+	content.WriteString(" ")
+	content.WriteString(a.menuTextInput.View())
+	content.WriteString("\n\n")
+
+	// Filter and display menu items based on text input
+	filterText := strings.ToLower(strings.TrimSpace(a.menuTextInput.Value()))
+	menuContent := ""
+	for i, item := range a.mainMenuList.Items() {
+		if menuItem, ok := item.(components.MenuItem); ok {
+			itemTitle := menuItem.Title()
+			// Show all items if no filter, or matching items if filter is set
+			if filterText == "" || strings.Contains(strings.ToLower(itemTitle), filterText) {
+				prefix := "  "
+				if i == a.mainMenuList.Index() && filterText == "" {
+					prefix = "> "
+					menuContent += selectedItemStyle().Render(fmt.Sprintf("%s%s. %s", prefix, menuItem.Shortcut(), itemTitle)) + "\n"
+				} else {
+					menuContent += normalItemStyle().Render(fmt.Sprintf("%s%s. %s", prefix, menuItem.Shortcut(), itemTitle)) + "\n"
+				}
+			}
+		}
+	}
+	content.WriteString(menuContent)
+
+	// Show currently playing station if playing from main menu
+	if a.playingFromMain && a.playingStation != nil {
+		content.WriteString("\n")
+		content.WriteString(successStyle().Render("♫ Now Playing: "))
+		content.WriteString(stationNameStyle().Render(a.playingStation.TrimName()))
+		content.WriteString("\n")
+	}
 
 	// Add quick play favorites if available
 	if len(a.quickFavorites) > 0 {
-		content.WriteString("\n\n")
-		content.WriteString(quickFavoritesStyle.Render("Quick Play Favorites"))
+		content.WriteString("\n")
+		content.WriteString(quickFavoritesStyle().Render("─── Quick Play Favorites ───"))
+		content.WriteString("\n")
+
+		// Define shortcut keys
+		shortcutKeys := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "l"}
+
 		for i, station := range a.quickFavorites {
 			if i >= 10 {
 				break // Only show first 10
 			}
-			shortcut := fmt.Sprintf("%d", 10+i)
-			content.WriteString(fmt.Sprintf("\n  %s. ▶ %s", shortcut, station.TrimName()))
+			shortcut := shortcutKeys[i]
+
+			// Build station info line
+			var stationInfo strings.Builder
+			stationInfo.WriteString(station.TrimName())
+
+			if station.Country != "" {
+				stationInfo.WriteString(" • ")
+				stationInfo.WriteString(station.Country)
+			}
+			if station.Codec != "" {
+				stationInfo.WriteString(" • ")
+				stationInfo.WriteString(station.Codec)
+				if station.Bitrate > 0 {
+					stationInfo.WriteString(fmt.Sprintf(" %dkbps", station.Bitrate))
+				}
+			}
+
+			// Highlight if this is the playing station
+			if a.playingFromMain && a.playingStation != nil && a.playingStation.StationUUID == station.StationUUID {
+				content.WriteString(fmt.Sprintf("  %s) ", shortcut))
+				content.WriteString(successStyle().Render("▶ " + stationInfo.String()))
+			} else {
+				content.WriteString(fmt.Sprintf("  %s) %s", shortcut, stationInfo.String()))
+			}
+			content.WriteString("\n")
 		}
 	}
+
+	// Build help text
+	helpText := "↑↓/jk: Navigate • Enter: Select • 1-5: Menu • a-l: Quick play"
+	if a.playingFromMain {
+		helpText += " • Esc: Stop"
+	}
+	helpText += " • Ctrl+C: Quit"
 
 	// Use the consistent page template with title and subtitle
 	return RenderPage(PageLayout{
 		Title:    "Main Menu",
 		Subtitle: "Select an Option",
 		Content:  content.String(),
-		Help:     "↑↓/jk: Navigate • Enter: Select • 1-5: Quick select • Ctrl+C: Quit",
+		Help:     helpText,
 	})
 }

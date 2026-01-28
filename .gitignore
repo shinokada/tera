@@ -5,5 +5,6 @@
 
 # Environment variables (contains secrets)
 .env
-golang/questions/*
+
+# AI development documents
 ai-documents

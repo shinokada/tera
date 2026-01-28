@@ -331,9 +331,9 @@ func (m *PlayModel) initializeListModel() {
 	m.listModel.SetShowStatusBar(false)
 	m.listModel.SetFilteringEnabled(false)
 	m.listModel.SetShowHelp(false) // Disable built-in help to use custom help text
-	m.listModel.Styles.Title = titleStyle
-	m.listModel.Styles.PaginationStyle = paginationStyle
-	m.listModel.Styles.HelpStyle = helpStyle
+	m.listModel.Styles.Title = titleStyle()
+	m.listModel.Styles.PaginationStyle = paginationStyle()
+	m.listModel.Styles.HelpStyle = helpStyle()
 }
 
 // initializeStationListModel creates the station list model with current dimensions
@@ -350,9 +350,9 @@ func (m *PlayModel) initializeStationListModel() {
 	m.stationListModel.SetShowStatusBar(true)
 	m.stationListModel.SetFilteringEnabled(true) // Enable fzf-style filtering
 	m.stationListModel.SetShowHelp(false)        // Disable built-in help to use custom help text
-	m.stationListModel.Styles.Title = listTitleStyle
-	m.stationListModel.Styles.PaginationStyle = paginationStyle
-	m.stationListModel.Styles.HelpStyle = helpStyle
+	m.stationListModel.Styles.Title = listTitleStyle()
+	m.stationListModel.Styles.PaginationStyle = paginationStyle()
+	m.stationListModel.Styles.HelpStyle = helpStyle()
 }
 
 // updateListSelection handles input during list selection
@@ -567,7 +567,7 @@ func (m PlayModel) voteForStation() tea.Cmd {
 		}
 
 		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf(result.Message)}
+			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
 		}
 
 		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
@@ -626,14 +626,14 @@ func (m PlayModel) viewPlaying() string {
 
 	// Station info box
 	info := m.formatStationInfo(m.selectedStation)
-	content.WriteString(boxStyle.Render(info))
+	content.WriteString(boxStyle().Render(info))
 	content.WriteString("\n\n")
 
 	// Playback status
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle.Render("▶ Playing..."))
+		content.WriteString(successStyle().Render("▶ Playing..."))
 	} else {
-		content.WriteString(infoStyle.Render("⏸ Stopped"))
+		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}
 
 	// Save message (if any)
@@ -642,11 +642,11 @@ func (m PlayModel) viewPlaying() string {
 		// Determine style based on message content
 		var style lipgloss.Style
 		if strings.Contains(m.saveMessage, "✓") {
-			style = successStyle
+			style = successStyle()
 		} else if strings.Contains(m.saveMessage, "Already") {
-			style = infoStyle
+			style = infoStyle()
 		} else {
-			style = errorStyle
+			style = errorStyle()
 		}
 		content.WriteString(style.Render(m.saveMessage))
 	}
@@ -664,35 +664,35 @@ func (m PlayModel) formatStationInfo(station *api.Station) string {
 	var b strings.Builder
 
 	// Station name
-	b.WriteString(stationNameStyle.Render(station.TrimName()))
+	b.WriteString(stationNameStyle().Render(station.TrimName()))
 	b.WriteString("\n\n")
 
 	// Details
 	if station.Country != "" {
-		b.WriteString(stationFieldStyle.Render("Country: "))
-		b.WriteString(stationValueStyle.Render(station.Country))
+		b.WriteString(stationFieldStyle().Render("Country: "))
+		b.WriteString(stationValueStyle().Render(station.Country))
 		b.WriteString("\n")
 	}
 
 	if station.Codec != "" {
-		b.WriteString(stationFieldStyle.Render("Codec: "))
+		b.WriteString(stationFieldStyle().Render("Codec: "))
 		codecInfo := station.Codec
 		if station.Bitrate > 0 {
 			codecInfo += fmt.Sprintf(" (%d kbps)", station.Bitrate)
 		}
-		b.WriteString(stationValueStyle.Render(codecInfo))
+		b.WriteString(stationValueStyle().Render(codecInfo))
 		b.WriteString("\n")
 	}
 
 	if station.Tags != "" {
-		b.WriteString(stationFieldStyle.Render("Tags: "))
-		b.WriteString(stationValueStyle.Render(station.Tags))
+		b.WriteString(stationFieldStyle().Render("Tags: "))
+		b.WriteString(stationValueStyle().Render(station.Tags))
 		b.WriteString("\n")
 	}
 
 	if station.Votes > 0 {
-		b.WriteString(stationFieldStyle.Render("Votes: "))
-		b.WriteString(stationValueStyle.Render(fmt.Sprintf("%d", station.Votes)))
+		b.WriteString(stationFieldStyle().Render("Votes: "))
+		b.WriteString(stationValueStyle().Render(fmt.Sprintf("%d", station.Votes)))
 	}
 
 	return b.String()
@@ -721,7 +721,7 @@ func (m PlayModel) viewStationSelection() string {
 func noStationsView(listName string) string {
 	var content strings.Builder
 
-	content.WriteString(infoStyle.Render("This list is empty!"))
+	content.WriteString(infoStyle().Render("This list is empty!"))
 	content.WriteString("\n\n")
 	content.WriteString("Add stations to this list using Search or List Management.")
 
@@ -737,7 +737,7 @@ func noStationsView(listName string) string {
 func noListsView() string {
 	var content strings.Builder
 
-	content.WriteString(errorStyle.Render("No favorite lists found!"))
+	content.WriteString(errorStyle().Render("No favorite lists found!"))
 	content.WriteString("\n\n")
 	content.WriteString("Create your first list using the List Management menu.")
 
@@ -752,7 +752,7 @@ func noListsView() string {
 func errorView(err error) string {
 	return RenderPage(PageLayout{
 		Title:   "Error",
-		Content: errorStyle.Render(err.Error()),
+		Content: errorStyle().Render(err.Error()),
 		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
 	})
 }
@@ -769,7 +769,7 @@ func (m PlayModel) viewSavePrompt() string {
 	content.WriteString("Did you enjoy this station?\n\n")
 
 	// Station name
-	content.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
 	content.WriteString("\n\n")
 
 	// Options
@@ -793,20 +793,20 @@ func (m PlayModel) viewDeleteConfirm() string {
 	var content strings.Builder
 
 	// Warning message
-	content.WriteString(errorStyle.Render("⚠ Delete Station?"))
+	content.WriteString(errorStyle().Render("⚠ Delete Station?"))
 	content.WriteString("\n\n")
 
 	// Station name
 	content.WriteString("Station: ")
-	content.WriteString(stationNameStyle.Render(m.stationToDelete.TrimName()))
+	content.WriteString(stationNameStyle().Render(m.stationToDelete.TrimName()))
 	content.WriteString("\n")
 	content.WriteString("From list: ")
-	content.WriteString(stationValueStyle.Render(m.selectedList))
+	content.WriteString(stationValueStyle().Render(m.selectedList))
 	content.WriteString("\n\n")
 
 	// Confirmation question
 	content.WriteString("Are you sure you want to delete this station?\n")
-	content.WriteString(infoStyle.Render("This action cannot be undone."))
+	content.WriteString(infoStyle().Render("This action cannot be undone."))
 
 	// Use the consistent page template
 	return RenderPage(PageLayout{

@@ -30,6 +30,7 @@ const (
 	searchStatePlaying
 	searchStateSavePrompt
 	searchStateSelectList
+	searchStateNewListInput
 )
 
 // SearchModel represents the search screen
@@ -40,6 +41,7 @@ type SearchModel struct {
 	stationInfoMenu list.Model // Station info submenu navigation
 	apiClient       *api.Client
 	textInput       textinput.Model
+	newListInput    textinput.Model
 	spinner         spinner.Model
 	results         []api.Station
 	resultsItems    []list.Item
@@ -84,6 +86,12 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	ti.CharLimit = 100
 	ti.Width = 50
 
+	// New list input
+	nli := textinput.New()
+	nli.Placeholder = "Enter new list name..."
+	nli.CharLimit = 50
+	nli.Width = 50
+
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
@@ -116,6 +124,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		menuList:        menuList,
 		stationInfoMenu: stationInfoMenu,
 		textInput:       ti,
+		newListInput:    nli,
 		spinner:         sp,
 		favoritePath:    favoritePath,
 		player:          player.NewMPVPlayer(),
@@ -205,6 +214,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSavePrompt(msg)
 		case searchStateSelectList:
 			return m.handleSelectList(msg)
+		case searchStateNewListInput:
+			return m.handleNewListInput(msg)
 		}
 
 	case quickFavoritesLoadedMsg:
@@ -356,6 +367,12 @@ func (m SearchModel) handleSelectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Cancel and go back to playing
 		m.state = searchStatePlaying
 		return m, nil
+	case "n":
+		// Create new list
+		m.state = searchStateNewListInput
+		m.newListInput.SetValue("")
+		m.newListInput.Focus()
+		return m, textinput.Blink
 	case "enter":
 		// Save to selected list
 		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
@@ -365,6 +382,28 @@ func (m SearchModel) handleSelectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.listModel, cmd = m.listModel.Update(msg)
+	return m, cmd
+}
+
+// handleNewListInput handles input for new list name entry
+func (m SearchModel) handleNewListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel and go back to list selection
+		m.state = searchStateSelectList
+		return m, nil
+	case "enter":
+		// Save to new list
+		listName := strings.TrimSpace(m.newListInput.Value())
+		if listName == "" {
+			return m, nil
+		}
+		// saveToList handles both existing and new lists
+		return m, m.saveToList(listName)
+	}
+
+	var cmd tea.Cmd
+	m.newListInput, cmd = m.newListInput.Update(msg)
 	return m, cmd
 }
 
@@ -394,9 +433,9 @@ func (m *SearchModel) initializeListModel() {
 	m.listModel.SetShowStatusBar(false)
 	m.listModel.SetFilteringEnabled(false)
 	m.listModel.SetShowHelp(false)
-	m.listModel.Styles.Title = titleStyle
-	m.listModel.Styles.PaginationStyle = paginationStyle
-	m.listModel.Styles.HelpStyle = helpStyle
+	m.listModel.Styles.Title = titleStyle()
+	m.listModel.Styles.PaginationStyle = paginationStyle()
+	m.listModel.Styles.HelpStyle = helpStyle()
 }
 
 // saveToList saves the current station to a specific list
@@ -770,7 +809,7 @@ func (m SearchModel) voteForStation() tea.Cmd {
 		}
 
 		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf(result.Message)}
+			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
 		}
 
 		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
@@ -785,7 +824,7 @@ func (m SearchModel) View() string {
 		content.WriteString(m.menuList.View())
 		if m.err != nil {
 			content.WriteString("\n\n")
-			content.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
+			content.WriteString(errorStyle().Render(fmt.Sprintf("Error: %v", m.err)))
 		}
 		return RenderPageWithBottomHelp(PageLayout{
 			Content: content.String(),
@@ -840,11 +879,11 @@ func (m SearchModel) View() string {
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
 			if strings.Contains(m.saveMessage, "✓") {
-				content.WriteString(successStyle.Render(m.saveMessage))
+				content.WriteString(successStyle().Render(m.saveMessage))
 			} else if strings.Contains(m.saveMessage, "Already") {
-				content.WriteString(infoStyle.Render(m.saveMessage))
+				content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
-				content.WriteString(errorStyle.Render(m.saveMessage))
+				content.WriteString(errorStyle().Render(m.saveMessage))
 			}
 		}
 		return RenderPageWithBottomHelp(PageLayout{
@@ -855,6 +894,9 @@ func (m SearchModel) View() string {
 
 	case searchStateSelectList:
 		return m.viewSelectList()
+
+	case searchStateNewListInput:
+		return m.viewNewListInput()
 	}
 
 	return RenderPage(PageLayout{
@@ -897,11 +939,11 @@ func (m SearchModel) renderStationInfo() string {
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
 		if strings.Contains(m.saveMessage, "✓") {
-			content.WriteString(successStyle.Render(m.saveMessage))
+			content.WriteString(successStyle().Render(m.saveMessage))
 		} else if strings.Contains(m.saveMessage, "Already") {
-			content.WriteString(infoStyle.Render(m.saveMessage))
+			content.WriteString(infoStyle().Render(m.saveMessage))
 		} else {
-			content.WriteString(errorStyle.Render(m.saveMessage))
+			content.WriteString(errorStyle().Render(m.saveMessage))
 		}
 	}
 
@@ -918,7 +960,7 @@ func (m SearchModel) renderSavePrompt() string {
 
 	if m.selectedStation != nil {
 		content.WriteString("Did you enjoy this station?\n\n")
-		content.WriteString(boldStyle.Render(m.selectedStation.TrimName()))
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
 		content.WriteString("\n\n")
 	}
 
@@ -936,7 +978,7 @@ func (m SearchModel) renderSavePrompt() string {
 func renderStationDetails(station api.Station) string {
 	var s strings.Builder
 
-	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle.Render(station.TrimName())))
+	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
 
 	if station.Tags != "" {
 		s.WriteString(fmt.Sprintf("Tags:    %s\n", station.Tags))
@@ -969,19 +1011,6 @@ func renderStationDetails(station api.Station) string {
 
 // viewSelectList renders the list selection view
 func (m SearchModel) viewSelectList() string {
-	if len(m.availableLists) == 0 {
-		var content strings.Builder
-		content.WriteString(errorStyle.Render("No lists available!"))
-		content.WriteString("\n\n")
-		content.WriteString("Create lists using the List Management menu.")
-
-		return RenderPage(PageLayout{
-			Title:   "💾 Save to List",
-			Content: content.String(),
-			Help:    "Esc: Back",
-		})
-	}
-
 	if m.selectedStation == nil {
 		return "No station selected"
 	}
@@ -990,14 +1019,17 @@ func (m SearchModel) viewSelectList() string {
 
 	// Station name
 	content.WriteString("Station: ")
-	content.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
 	content.WriteString("\n\n")
 
 	// Instruction
 	content.WriteString("Select a list to save to:\n\n")
 
 	// List selection
-	if m.listModel.Items() != nil {
+	if len(m.availableLists) == 0 {
+		content.WriteString(infoStyle().Render("No existing lists."))
+		content.WriteString("\n")
+	} else if m.listModel.Items() != nil {
 		content.WriteString(m.listModel.View())
 	} else {
 		content.WriteString("Loading lists...")
@@ -1006,6 +1038,32 @@ func (m SearchModel) viewSelectList() string {
 	return RenderPage(PageLayout{
 		Title:   "💾 Save to List",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • Esc: Cancel",
+		Help:    "↑↓/jk: Navigate • Enter: Select • n: New list • Esc: Cancel",
+	})
+}
+
+// viewNewListInput renders the new list name input view
+func (m SearchModel) viewNewListInput() string {
+	if m.selectedStation == nil {
+		return "No station selected"
+	}
+
+	var content strings.Builder
+
+	// Station name
+	content.WriteString("Station: ")
+	content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
+	content.WriteString("\n\n")
+
+	// Instruction
+	content.WriteString("Enter new list name:\n\n")
+
+	// Text input
+	content.WriteString(m.newListInput.View())
+
+	return RenderPage(PageLayout{
+		Title:   "💾 Create New List",
+		Content: content.String(),
+		Help:    "Enter: Save • Esc: Cancel",
 	})
 }

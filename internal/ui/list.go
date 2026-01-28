@@ -64,9 +64,9 @@ func NewListManagementModel(favoritePath string) ListManagementModel {
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
 	l.SetShowPagination(false)
-	l.Styles.Title = titleStyle
-	l.Styles.PaginationStyle = paginationStyle
-	l.Styles.HelpStyle = helpStyle
+	l.Styles.Title = titleStyle()
+	l.Styles.PaginationStyle = paginationStyle()
+	l.Styles.HelpStyle = helpStyle()
 
 	return ListManagementModel{
 		state:        listManagementMenu,
@@ -288,12 +288,6 @@ func (m ListManagementModel) handleCreateInput(msg tea.KeyMsg) (tea.Model, tea.C
 		m.state = listManagementMenu
 		m.textInput.Blur()
 		return m, nil
-	case "m":
-		// Return to main menu
-		m.textInput.Blur()
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
 	case "enter":
 		name := strings.TrimSpace(m.textInput.Value())
 		if name == "" {
@@ -691,9 +685,9 @@ func (m ListManagementModel) viewMenu() string {
 	var content strings.Builder
 
 	if m.message != "" {
-		style := successStyle
+		style := successStyle()
 		if strings.Contains(m.message, "✗") || m.err != nil {
-			style = errorStyle
+			style = errorStyle()
 		}
 		content.WriteString(style.Render(m.message))
 		content.WriteString("\n\n")
@@ -712,7 +706,7 @@ func (m ListManagementModel) viewCreate() string {
 	var content strings.Builder
 
 	if len(m.lists) > 0 {
-		content.WriteString(subtitleStyle.Render("Current lists:"))
+		content.WriteString(subtitleStyle().Render("Current lists:"))
 		content.WriteString("\n")
 		for _, list := range m.lists {
 			content.WriteString(fmt.Sprintf("  • %s\n", list))
@@ -724,7 +718,7 @@ func (m ListManagementModel) viewCreate() string {
 
 	if m.message != "" {
 		content.WriteString("\n\n")
-		content.WriteString(errorStyle.Render(m.message))
+		content.WriteString(errorStyle().Render(m.message))
 	}
 
 	return RenderPage(PageLayout{
@@ -738,7 +732,7 @@ func (m ListManagementModel) viewCreate() string {
 func (m ListManagementModel) viewDelete() string {
 	var content strings.Builder
 
-	content.WriteString(subtitleStyle.Render("Available lists:"))
+	content.WriteString(subtitleStyle().Render("Available lists:"))
 	content.WriteString("\n")
 	for _, list := range m.lists {
 		if list == "My-favorites" {
@@ -753,7 +747,7 @@ func (m ListManagementModel) viewDelete() string {
 
 	if m.message != "" {
 		content.WriteString("\n\n")
-		content.WriteString(errorStyle.Render(m.message))
+		content.WriteString(errorStyle().Render(m.message))
 	}
 
 	return RenderPage(PageLayout{
@@ -768,9 +762,9 @@ func (m ListManagementModel) viewSelectListToDelete() string {
 	var content strings.Builder
 
 	if m.message != "" {
-		style := successStyle
+		style := successStyle()
 		if strings.Contains(m.message, "✗") || m.message == "Cannot delete My-favorites (protected list)" {
-			style = errorStyle
+			style = errorStyle()
 		}
 		content.WriteString(style.Render(m.message))
 		content.WriteString("\n\n")
@@ -795,7 +789,7 @@ func (m ListManagementModel) viewConfirmDelete() string {
 	var content strings.Builder
 
 	warning := fmt.Sprintf("⚠ Are you sure you want to delete '%s'?", m.selectedList)
-	content.WriteString(errorStyle.Render(warning))
+	content.WriteString(errorStyle().Render(warning))
 	content.WriteString("\n\n")
 
 	content.WriteString("This action cannot be undone.")
@@ -811,7 +805,7 @@ func (m ListManagementModel) viewConfirmDelete() string {
 func (m ListManagementModel) viewEdit() string {
 	var content strings.Builder
 
-	content.WriteString(subtitleStyle.Render("Available lists:"))
+	content.WriteString(subtitleStyle().Render("Available lists:"))
 	content.WriteString("\n")
 	for _, list := range m.lists {
 		if list == "My-favorites" {
@@ -826,7 +820,7 @@ func (m ListManagementModel) viewEdit() string {
 
 	if m.message != "" {
 		content.WriteString("\n\n")
-		content.WriteString(errorStyle.Render(m.message))
+		content.WriteString(errorStyle().Render(m.message))
 	}
 
 	return RenderPage(PageLayout{
@@ -841,9 +835,9 @@ func (m ListManagementModel) viewSelectListToEdit() string {
 	var content strings.Builder
 
 	if m.message != "" {
-		style := successStyle
+		style := successStyle()
 		if strings.Contains(m.message, "✗") || m.message == "Cannot rename My-favorites (protected list)" {
-			style = errorStyle
+			style = errorStyle()
 		}
 		content.WriteString(style.Render(m.message))
 		content.WriteString("\n\n")
@@ -871,7 +865,7 @@ func (m ListManagementModel) viewEnterNewName() string {
 
 	if m.message != "" {
 		content.WriteString("\n\n")
-		content.WriteString(errorStyle.Render(m.message))
+		content.WriteString(errorStyle().Render(m.message))
 	}
 
 	return RenderPage(PageLayout{
@@ -887,7 +881,7 @@ func (m ListManagementModel) viewShowAll() string {
 	var content strings.Builder
 
 	if len(m.lists) == 0 {
-		content.WriteString(infoStyle.Render("No lists found"))
+		content.WriteString(infoStyle().Render("No lists found"))
 		content.WriteString("\n\n")
 		content.WriteString("Create your first list using option 1.")
 	} else {

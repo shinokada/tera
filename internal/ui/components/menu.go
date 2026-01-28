@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/shinokada/tera/internal/theme"
 )
 
 // MenuItem represents a selectable menu item
@@ -41,17 +42,24 @@ func NewMenuDelegate() MenuDelegate {
 	return MenuDelegate{DefaultDelegate: d}
 }
 
-var (
-	selectedItemStyle = lipgloss.NewStyle().
-				PaddingLeft(2).
-				Foreground(lipgloss.Color("170"))
+// Style functions for menu items - use theme colors
+func selectedItemStyle() lipgloss.Style {
+	t := theme.Current()
+	return lipgloss.NewStyle().
+		PaddingLeft(t.Padding.ListItemLeft).
+		Foreground(t.HighlightColor())
+}
 
-	normalItemStyle = lipgloss.NewStyle().
-			PaddingLeft(2)
+func normalItemStyle() lipgloss.Style {
+	t := theme.Current()
+	return lipgloss.NewStyle().
+		PaddingLeft(t.Padding.ListItemLeft)
+}
 
-	shortcutStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
-)
+func shortcutStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241"))
+}
 
 func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	menuItem, ok := item.(MenuItem)
@@ -61,14 +69,14 @@ func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	str := fmt.Sprintf("%s. %s", menuItem.Shortcut(), menuItem.Title())
 
-	fn := normalItemStyle.Render
+	fn := normalItemStyle().Render
 	if index == m.Index() {
 		fn = func(s ...string) string {
-			return selectedItemStyle.Render("> " + str)
+			return selectedItemStyle().Render("> " + str)
 		}
 	} else {
 		fn = func(s ...string) string {
-			return normalItemStyle.Render("  " + str)
+			return normalItemStyle().Render("  " + str)
 		}
 	}
 
@@ -89,7 +97,8 @@ func CreateMenu(items []MenuItem, title string, width, height int) list.Model {
 	if height < itemHeight {
 		height = itemHeight + 4 // Add space for title
 	}
-	
+
+	t := theme.Current()
 	l := list.New(listItems, delegate, width, height)
 	l.Title = title
 	l.SetShowStatusBar(false)
@@ -97,9 +106,9 @@ func CreateMenu(items []MenuItem, title string, width, height int) list.Model {
 	l.SetShowHelp(false)
 	l.SetShowPagination(false) // Disable pagination dots
 	l.Styles.Title = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("170")).
+		Foreground(t.HighlightColor()).
 		Bold(true).
-		PaddingLeft(2)
+		PaddingLeft(t.Padding.ListItemLeft)
 
 	return l
 }

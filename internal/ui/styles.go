@@ -5,100 +5,155 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/shinokada/tera/internal/theme"
 )
 
-// Color palette matching bash version
-var (
-	colorCyan   = lipgloss.Color("6")  // Cyan for titles
-	colorBlue   = lipgloss.Color("12") // Bright blue for TERA header
-	colorYellow = lipgloss.Color("3")  // Yellow for highlights
-	colorRed    = lipgloss.Color("9")  // Red for errors
-	colorGreen  = lipgloss.Color("2")  // Green for success
-	colorGray   = lipgloss.Color("8")  // Gray for secondary text
-)
+// getThemeColors returns the current theme colors
+// Called at runtime to support dynamic theme changes
+func getThemeColors() (primary, secondary, highlight, errorC, success, muted, text lipgloss.Color) {
+	t := theme.Current()
+	return t.PrimaryColor(), t.SecondaryColor(), t.HighlightColor(),
+		t.ErrorColor(), t.SuccessColor(), t.MutedColor(), t.TextColor()
+}
 
-// Common styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Foreground(colorCyan).
-			Bold(true)
+// Color accessors - these call getThemeColors() to get current theme values
+func colorCyan() lipgloss.Color   { t := theme.Current(); return t.PrimaryColor() }
+func colorBlue() lipgloss.Color   { t := theme.Current(); return t.SecondaryColor() }
+func colorYellow() lipgloss.Color { t := theme.Current(); return t.HighlightColor() }
+func colorRed() lipgloss.Color    { t := theme.Current(); return t.ErrorColor() }
+func colorGreen() lipgloss.Color  { t := theme.Current(); return t.SuccessColor() }
+func colorGray() lipgloss.Color   { t := theme.Current(); return t.MutedColor() }
 
-	// Title style without padding for list titles
-	listTitleStyle = lipgloss.NewStyle().
-			Foreground(colorCyan).
-			Bold(true).
-			MarginLeft(-2) // Compensate for the page left padding
+// getPadding returns current theme padding values
+func getPadding() theme.PaddingConfig {
+	return theme.Current().Padding
+}
 
-	subtitleStyle = lipgloss.NewStyle().
-			Foreground(colorYellow).
-			Bold(true)
+// Style functions - return styles with current theme colors
+// These are functions rather than vars to support dynamic theme changes
 
-	highlightStyle = lipgloss.NewStyle().
-			Foreground(colorYellow).
-			Bold(true)
+func titleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorCyan()).
+		Bold(true)
+}
 
-	errorStyle = lipgloss.NewStyle().
-			Foreground(colorRed).
-			Bold(true)
+func listTitleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorCyan()).
+		Bold(true).
+		MarginLeft(-2) // Compensate for the page left padding
+}
 
-	successStyle = lipgloss.NewStyle().
-			Foreground(colorGreen).
-			Bold(true)
+func subtitleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorYellow()).
+		Bold(true)
+}
 
-	helpStyle = lipgloss.NewStyle().
-			Foreground(colorGray)
+func highlightStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorYellow()).
+		Bold(true)
+}
 
-	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("7"))
+func errorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorRed()).
+		Bold(true)
+}
 
-	// Text styles
-	boldStyle = lipgloss.NewStyle().
-			Bold(true)
+func successStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorGreen()).
+		Bold(true)
+}
 
-	subtleStyle = lipgloss.NewStyle().
-			Foreground(colorGray)
+func helpStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorGray())
+}
 
-	// List styles
-	selectedItemStyle = lipgloss.NewStyle().
-				Foreground(colorYellow).
-				Bold(true).
-				PaddingLeft(2)
+func infoStyle() lipgloss.Style {
+	t := theme.Current()
+	return lipgloss.NewStyle().
+		Foreground(t.TextColor())
+}
 
-	normalItemStyle = lipgloss.NewStyle().
-			PaddingLeft(2)
+func boldStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Bold(true)
+}
 
-	paginationStyle = lipgloss.NewStyle().
-			Foreground(colorCyan)
+func subtleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorGray())
+}
 
-	// Box styles
-	boxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorCyan).
-			Padding(1, 2)
+func selectedItemStyle() lipgloss.Style {
+	p := getPadding()
+	return lipgloss.NewStyle().
+		Foreground(colorYellow()).
+		Bold(true).
+		PaddingLeft(p.ListItemLeft)
+}
 
-	// Station info styles
-	stationNameStyle = lipgloss.NewStyle().
-				Foreground(colorCyan).
-				Bold(true)
+func normalItemStyle() lipgloss.Style {
+	p := getPadding()
+	return lipgloss.NewStyle().
+		PaddingLeft(p.ListItemLeft)
+}
 
-	stationFieldStyle = lipgloss.NewStyle().
-				Foreground(colorGray)
+func paginationStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorCyan())
+}
 
-	stationValueStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("7"))
+func boxStyle() lipgloss.Style {
+	p := getPadding()
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorCyan()).
+		Padding(p.BoxVertical, p.BoxHorizontal)
+}
 
-	teraHeaderStyle = lipgloss.NewStyle().
-			Foreground(colorCyan).
-			Bold(true).
-			Align(lipgloss.Center)
+func stationNameStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorCyan()).
+		Bold(true)
+}
 
-	quickFavoritesStyle = titleStyle.Foreground(lipgloss.Color("99"))
+func stationFieldStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorGray())
+}
 
-	docStyle = helpStyle.Padding(1, 2)
+func stationValueStyle() lipgloss.Style {
+	t := theme.Current()
+	return lipgloss.NewStyle().
+		Foreground(t.TextColor())
+}
 
-	// Style for content without top padding (used after header)
-	docStyleNoTopPadding = helpStyle.PaddingTop(0).PaddingBottom(1).PaddingLeft(2).PaddingRight(2)
-)
+func teraHeaderStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorCyan()).
+		Bold(true).
+		Align(lipgloss.Center)
+}
+
+func quickFavoritesStyle() lipgloss.Style {
+	return titleStyle().Foreground(lipgloss.Color("99"))
+}
+
+func docStyle() lipgloss.Style {
+	p := getPadding()
+	return helpStyle().Padding(p.PageVertical, p.PageHorizontal)
+}
+
+func docStyleNoTopPadding() lipgloss.Style {
+	p := getPadding()
+	return helpStyle().PaddingTop(0).PaddingBottom(p.PageVertical).PaddingLeft(p.PageHorizontal).PaddingRight(p.PageHorizontal)
+}
 
 // createStyledDelegate creates a list delegate with single-line items and consistent styling
 func createStyledDelegate() list.DefaultDelegate {
@@ -108,7 +163,7 @@ func createStyledDelegate() list.DefaultDelegate {
 	delegate.ShowDescription = false // Hide description text below items
 	// Remove vertical padding from delegate styles
 	delegate.Styles.NormalTitle = lipgloss.NewStyle()
-	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Foreground(colorYellow()).Bold(true)
 	return delegate
 }
 
@@ -119,7 +174,7 @@ func wrapPageWithHeader(content string) string {
 	header := lipgloss.NewStyle().
 		Width(50).
 		Align(lipgloss.Center).
-		Foreground(colorBlue). // Use blue color for TERA
+		Foreground(colorBlue()). // Use blue color for TERA
 		Bold(true).
 		PaddingTop(1).
 		Render("TERA")
@@ -127,7 +182,7 @@ func wrapPageWithHeader(content string) string {
 	b.WriteString("\n")
 	b.WriteString(content)
 	// Use style without top padding since header already has it
-	return docStyleNoTopPadding.Render(b.String())
+	return docStyleNoTopPadding().Render(b.String())
 }
 
 // PageLayout represents a consistent page layout structure
@@ -148,13 +203,13 @@ func RenderPage(layout PageLayout) string {
 
 	// Title section - always takes up one line (empty or not) for consistency
 	if layout.Title != "" {
-		b.WriteString(titleStyle.Render(layout.Title))
+		b.WriteString(titleStyle().Render(layout.Title))
 	}
 	b.WriteString("\n")
 
-	// Subtitle section - always takes up one line (empty or not) for consistency  
+	// Subtitle section - always takes up one line (empty or not) for consistency
 	if layout.Subtitle != "" {
-		b.WriteString(subtitleStyle.Render(layout.Subtitle))
+		b.WriteString(subtitleStyle().Render(layout.Subtitle))
 	}
 	b.WriteString("\n")
 
@@ -168,7 +223,7 @@ func RenderPage(layout PageLayout) string {
 		if layout.Content != "" {
 			b.WriteString("\n")
 		}
-		b.WriteString(helpStyle.Render(layout.Help))
+		b.WriteString(helpStyle().Render(layout.Help))
 	}
 
 	return wrapPageWithHeader(b.String())
@@ -183,13 +238,13 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 
 	// Title section - always takes up one line (empty or not) for consistency
 	if layout.Title != "" {
-		b.WriteString(titleStyle.Render(layout.Title))
+		b.WriteString(titleStyle().Render(layout.Title))
 	}
 	b.WriteString("\n")
 
-	// Subtitle section - always takes up one line (empty or not) for consistency  
+	// Subtitle section - always takes up one line (empty or not) for consistency
 	if layout.Subtitle != "" {
-		b.WriteString(subtitleStyle.Render(layout.Subtitle))
+		b.WriteString(subtitleStyle().Render(layout.Subtitle))
 	}
 	b.WriteString("\n")
 
@@ -218,7 +273,7 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 
 	// Help text (if provided)
 	if layout.Help != "" {
-		b.WriteString(helpStyle.Render(layout.Help))
+		b.WriteString(helpStyle().Render(layout.Help))
 	}
 
 	return wrapPageWithHeader(b.String())

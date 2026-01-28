@@ -601,9 +601,9 @@ func (m GistModel) renderMessage() string {
 		return ""
 	}
 	if m.messageIsError {
-		return errorStyle.Render(m.message)
+		return errorStyle().Render(m.message)
 	}
-	return successStyle.Render(m.message)
+	return successStyle().Render(m.message)
 }
 
 // Commands

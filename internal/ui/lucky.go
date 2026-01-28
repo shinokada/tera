@@ -25,6 +25,7 @@ const (
 	luckyStatePlaying
 	luckyStateSavePrompt
 	luckyStateSelectList
+	luckyStateNewListInput
 )
 
 // LuckyModel represents the I Feel Lucky screen
@@ -32,6 +33,7 @@ type LuckyModel struct {
 	state           luckyState
 	apiClient       *api.Client
 	textInput       textinput.Model
+	newListInput    textinput.Model
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	favoritePath    string
@@ -72,10 +74,17 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 	ti.Width = 50
 	ti.Focus()
 
+	// New list input
+	nli := textinput.New()
+	nli.Placeholder = "Enter new list name..."
+	nli.CharLimit = 50
+	nli.Width = 50
+
 	return LuckyModel{
 		state:        luckyStateInput,
 		apiClient:    apiClient,
 		textInput:    ti,
+		newListInput: nli,
 		favoritePath: favoritePath,
 		player:       player.NewMPVPlayer(),
 		width:        80,
@@ -101,6 +110,8 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSavePrompt(msg)
 		case luckyStateSelectList:
 			return m.updateSelectList(msg)
+		case luckyStateNewListInput:
+			return m.updateNewListInput(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -267,6 +278,12 @@ func (m LuckyModel) updateSelectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Cancel and go back to playing
 		m.state = luckyStatePlaying
 		return m, nil
+	case "n":
+		// Create new list
+		m.state = luckyStateNewListInput
+		m.newListInput.SetValue("")
+		m.newListInput.Focus()
+		return m, textinput.Blink
 	case "enter":
 		// Save to selected list
 		if i, ok := m.listModel.SelectedItem().(playListItem); ok {
@@ -276,6 +293,28 @@ func (m LuckyModel) updateSelectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.listModel, cmd = m.listModel.Update(msg)
+	return m, cmd
+}
+
+// updateNewListInput handles input for new list name entry
+func (m LuckyModel) updateNewListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel and go back to list selection
+		m.state = luckyStateSelectList
+		return m, nil
+	case "enter":
+		// Save to new list
+		listName := strings.TrimSpace(m.newListInput.Value())
+		if listName == "" {
+			return m, nil
+		}
+		// saveToList handles both existing and new lists
+		return m, m.saveToList(listName)
+	}
+
+	var cmd tea.Cmd
+	m.newListInput, cmd = m.newListInput.Update(msg)
 	return m, cmd
 }
 
@@ -305,9 +344,9 @@ func (m *LuckyModel) initializeListModel() {
 	m.listModel.SetShowStatusBar(false)
 	m.listModel.SetFilteringEnabled(false)
 	m.listModel.SetShowHelp(false)
-	m.listModel.Styles.Title = titleStyle
-	m.listModel.Styles.PaginationStyle = paginationStyle
-	m.listModel.Styles.HelpStyle = helpStyle
+	m.listModel.Styles.Title = titleStyle()
+	m.listModel.Styles.PaginationStyle = paginationStyle()
+	m.listModel.Styles.HelpStyle = helpStyle()
 }
 
 // saveToList saves the current station to a specific list
@@ -425,7 +464,7 @@ func (m LuckyModel) voteForStation() tea.Cmd {
 		}
 
 		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf(result.Message)}
+			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
 		}
 
 		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
@@ -445,6 +484,8 @@ func (m LuckyModel) View() string {
 		return m.viewSavePrompt()
 	case luckyStateSelectList:
 		return m.viewSelectList()
+	case luckyStateNewListInput:
+		return m.viewNewListInput()
 	}
 	return "Unknown state"
 }
@@ -456,7 +497,7 @@ func (m LuckyModel) viewInput() string {
 	// Instructions
 	content.WriteString("Type a genre of music: rock, classical, jazz, pop, country, hip, heavy, blues, soul.\n")
 	content.WriteString("Or type a keyword like: meditation, relax, mozart, Beatles, etc.\n\n")
-	content.WriteString(infoStyle.Render("Use only one word."))
+	content.WriteString(infoStyle().Render("Use only one word."))
 	content.WriteString("\n\n")
 
 	// Input field
@@ -466,7 +507,7 @@ func (m LuckyModel) viewInput() string {
 	// Error message if any
 	if m.err != nil {
 		content.WriteString("\n\n")
-		content.WriteString(errorStyle.Render(m.err.Error()))
+		content.WriteString(errorStyle().Render(m.err.Error()))
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
@@ -480,7 +521,7 @@ func (m LuckyModel) viewInput() string {
 func (m LuckyModel) viewSearching() string {
 	var content strings.Builder
 
-	content.WriteString(infoStyle.Render("🔍 Searching for stations..."))
+	content.WriteString(infoStyle().Render("🔍 Searching for stations..."))
 	content.WriteString("\n\n")
 	content.WriteString("Finding a random station for you...")
 
@@ -501,14 +542,14 @@ func (m LuckyModel) viewPlaying() string {
 
 	// Station info box
 	info := m.formatStationInfo(m.selectedStation)
-	content.WriteString(boxStyle.Render(info))
+	content.WriteString(boxStyle().Render(info))
 	content.WriteString("\n\n")
 
 	// Playback status
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle.Render("▶ Playing..."))
+		content.WriteString(successStyle().Render("▶ Playing..."))
 	} else {
-		content.WriteString(infoStyle.Render("⏸ Stopped"))
+		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}
 
 	// Save message (if any)
@@ -516,11 +557,11 @@ func (m LuckyModel) viewPlaying() string {
 		content.WriteString("\n\n")
 		var msgStyle lipgloss.Style
 		if strings.Contains(m.saveMessage, "✓") {
-			msgStyle = successStyle
+			msgStyle = successStyle()
 		} else if strings.Contains(m.saveMessage, "Already") {
-			msgStyle = infoStyle
+			msgStyle = infoStyle()
 		} else {
-			msgStyle = errorStyle
+			msgStyle = errorStyle()
 		}
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
@@ -537,35 +578,35 @@ func (m LuckyModel) formatStationInfo(station *api.Station) string {
 	var b strings.Builder
 
 	// Station name
-	b.WriteString(stationNameStyle.Render(station.TrimName()))
+	b.WriteString(stationNameStyle().Render(station.TrimName()))
 	b.WriteString("\n\n")
 
 	// Details
 	if station.Country != "" {
-		b.WriteString(stationFieldStyle.Render("Country: "))
-		b.WriteString(stationValueStyle.Render(station.Country))
+		b.WriteString(stationFieldStyle().Render("Country: "))
+		b.WriteString(stationValueStyle().Render(station.Country))
 		b.WriteString("\n")
 	}
 
 	if station.Codec != "" {
-		b.WriteString(stationFieldStyle.Render("Codec: "))
+		b.WriteString(stationFieldStyle().Render("Codec: "))
 		codecInfo := station.Codec
 		if station.Bitrate > 0 {
 			codecInfo += fmt.Sprintf(" (%d kbps)", station.Bitrate)
 		}
-		b.WriteString(stationValueStyle.Render(codecInfo))
+		b.WriteString(stationValueStyle().Render(codecInfo))
 		b.WriteString("\n")
 	}
 
 	if station.Tags != "" {
-		b.WriteString(stationFieldStyle.Render("Tags: "))
-		b.WriteString(stationValueStyle.Render(station.Tags))
+		b.WriteString(stationFieldStyle().Render("Tags: "))
+		b.WriteString(stationValueStyle().Render(station.Tags))
 		b.WriteString("\n")
 	}
 
 	if station.Votes > 0 {
-		b.WriteString(stationFieldStyle.Render("Votes: "))
-		b.WriteString(stationValueStyle.Render(fmt.Sprintf("%d", station.Votes)))
+		b.WriteString(stationFieldStyle().Render("Votes: "))
+		b.WriteString(stationValueStyle().Render(fmt.Sprintf("%d", station.Votes)))
 	}
 
 	return b.String()
@@ -583,7 +624,7 @@ func (m LuckyModel) viewSavePrompt() string {
 	content.WriteString("Did you enjoy this station?\n\n")
 
 	// Station name
-	content.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
 	content.WriteString("\n\n")
 
 	// Options
@@ -595,11 +636,11 @@ func (m LuckyModel) viewSavePrompt() string {
 		content.WriteString("\n\n")
 		var msgStyle lipgloss.Style
 		if strings.Contains(m.saveMessage, "✓") {
-			msgStyle = successStyle
+			msgStyle = successStyle()
 		} else if strings.Contains(m.saveMessage, "Already") {
-			msgStyle = infoStyle
+			msgStyle = infoStyle()
 		} else {
-			msgStyle = errorStyle
+			msgStyle = errorStyle()
 		}
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
@@ -613,19 +654,6 @@ func (m LuckyModel) viewSavePrompt() string {
 
 // viewSelectList renders the list selection view
 func (m LuckyModel) viewSelectList() string {
-	if len(m.availableLists) == 0 {
-		var content strings.Builder
-		content.WriteString(errorStyle.Render("No lists available!"))
-		content.WriteString("\n\n")
-		content.WriteString("Create lists using the List Management menu.")
-
-		return RenderPage(PageLayout{
-			Title:   "💾 Save to List",
-			Content: content.String(),
-			Help:    "Esc: Back",
-		})
-	}
-
 	if m.selectedStation == nil {
 		return "No station selected"
 	}
@@ -634,14 +662,17 @@ func (m LuckyModel) viewSelectList() string {
 
 	// Station name
 	content.WriteString("Station: ")
-	content.WriteString(stationNameStyle.Render(m.selectedStation.TrimName()))
+	content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
 	content.WriteString("\n\n")
 
 	// Instruction
 	content.WriteString("Select a list to save to:\n\n")
 
 	// List selection
-	if m.listModel.Items() != nil {
+	if len(m.availableLists) == 0 {
+		content.WriteString(infoStyle().Render("No existing lists."))
+		content.WriteString("\n")
+	} else if m.listModel.Items() != nil {
 		content.WriteString(m.listModel.View())
 	} else {
 		content.WriteString("Loading lists...")
@@ -650,6 +681,32 @@ func (m LuckyModel) viewSelectList() string {
 	return RenderPage(PageLayout{
 		Title:   "💾 Save to List",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • Esc: Cancel",
+		Help:    "↑↓/jk: Navigate • Enter: Select • n: New list • Esc: Cancel",
+	})
+}
+
+// viewNewListInput renders the new list name input view
+func (m LuckyModel) viewNewListInput() string {
+	if m.selectedStation == nil {
+		return "No station selected"
+	}
+
+	var content strings.Builder
+
+	// Station name
+	content.WriteString("Station: ")
+	content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
+	content.WriteString("\n\n")
+
+	// Instruction
+	content.WriteString("Enter new list name:\n\n")
+
+	// Text input
+	content.WriteString(m.newListInput.View())
+
+	return RenderPage(PageLayout{
+		Title:   "💾 Create New List",
+		Content: content.String(),
+		Help:    "Enter: Save • Esc: Cancel",
 	})
 }
