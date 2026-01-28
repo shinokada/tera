@@ -221,6 +221,14 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messageIsError = false
 		m.state = gistStateTokenMenu
 		return m, nil
+
+	case tokenDeletedMsg:
+		m.token = ""
+		m.gistClient = nil
+		m.message = "✓ Token has been deleted successfully!"
+		m.messageIsError = false
+		m.state = gistStateTokenMenu
+		return m, nil
 	}
 
 	switch m.state {
@@ -783,10 +791,7 @@ func (m *GistModel) deleteTokenCmd() tea.Cmd {
 		if err := gist.DeleteToken(); err != nil {
 			return errMsg{fmt.Errorf("failed to delete token: %v", err)}
 		}
-		// Clear the token from memory
-		m.token = ""
-		m.gistClient = nil
-		return successMsg{"✓ Token has been deleted successfully!"}
+		return tokenDeletedMsg{}
 	}
 }
 
@@ -797,3 +802,4 @@ type gistsMsg []*gist.GistMetadata
 type tokenSavedMsg struct {
 	token, user string
 }
+type tokenDeletedMsg struct{}

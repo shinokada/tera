@@ -94,7 +94,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 
 // Init initializes the lucky screen
 func (m LuckyModel) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, ticksEverySecond())
 }
 
 // Update handles messages for the lucky screen

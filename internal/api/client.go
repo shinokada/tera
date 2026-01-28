@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -67,8 +68,8 @@ type VoteResult struct {
 // Vote increases the vote count for a station by one
 // Note: Can only vote once per IP per station every 10 minutes
 func (c *Client) Vote(ctx context.Context, stationUUID string) (*VoteResult, error) {
-	// Use baseURL for consistency (strip /stations suffix and add /vote)
-	voteURL := baseURL[:len(baseURL)-len("/stations")] + "/vote/" + stationUUID
+	// Strip /stations suffix and add /vote endpoint
+	voteURL := strings.TrimSuffix(baseURL, "/stations") + "/vote/" + url.PathEscape(stationUUID)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", voteURL, nil)
 	if err != nil {

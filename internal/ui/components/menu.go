@@ -69,7 +69,7 @@ func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	str := fmt.Sprintf("%s. %s", menuItem.Shortcut(), menuItem.Title())
 
-	fn := normalItemStyle().Render
+	var fn func(s ...string) string
 	if index == m.Index() {
 		fn = func(s ...string) string {
 			return selectedItemStyle().Render("> " + str)
