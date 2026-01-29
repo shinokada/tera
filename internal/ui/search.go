@@ -835,6 +835,9 @@ func (m SearchModel) View() string {
 		var content strings.Builder
 		content.WriteString(m.getSearchTypeLabel())
 		content.WriteString("\n\n")
+		// Add helpful description based on search type
+		content.WriteString(m.getSearchTypeDescription())
+		content.WriteString("\n\n")
 		content.WriteString(m.textInput.View())
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🔍 Search Radio Stations",
@@ -922,6 +925,26 @@ func (m SearchModel) getSearchTypeLabel() string {
 		return "Advanced Search (multiple criteria)"
 	default:
 		return "Search"
+	}
+}
+
+// getSearchTypeDescription returns a helpful description for the current search type
+func (m SearchModel) getSearchTypeDescription() string {
+	switch m.searchType {
+	case api.SearchByTag:
+		return "Enter a genre or style tag (e.g., jazz, rock, news, classical)"
+	case api.SearchByName:
+		return "Enter a station name or partial name (e.g., BBC, NPR)"
+	case api.SearchByLanguage:
+		return "Enter a language (e.g., english, spanish, japanese)"
+	case api.SearchByCountry:
+		return "Enter a country code (e.g., US, UK, FR, JP)"
+	case api.SearchByState:
+		return "Enter a state or region (e.g., California, Bavaria)"
+	case api.SearchAdvanced:
+		return "Searches both station names AND tags.\nUse a word or phrase (e.g., smooth jazz, classic rock)"
+	default:
+		return ""
 	}
 }
 

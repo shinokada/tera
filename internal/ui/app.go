@@ -140,6 +140,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			// Stop any playing stations before quitting
+			if a.quickFavPlayer != nil {
+				a.quickFavPlayer.Stop()
+			}
 			if a.screen == screenPlay && a.playScreen.player != nil {
 				a.playScreen.player.Stop()
 			} else if a.screen == screenSearch && a.searchScreen.player != nil {
@@ -214,7 +217,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.gistScreen.Init()
 		case screenMainMenu:
-			// Return to main menu
+			// Return to main menu and reload favorites
+			a.loadQuickFavorites()
 			return a, nil
 		}
 		return a, nil
@@ -222,6 +226,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
+		// Reload quick favorites in case they were updated
+		a.loadQuickFavorites()
 		return a, nil
 	}
 

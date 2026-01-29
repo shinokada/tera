@@ -544,10 +544,8 @@ func (m LuckyModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info box
-	info := m.formatStationInfo(m.selectedStation)
-	content.WriteString(boxStyle().Render(info))
-	content.WriteString("\n\n")
+	// Station info (same format as Now Playing in search)
+	content.WriteString(renderStationDetails(*m.selectedStation))
 
 	// Playback status
 	if m.player.IsPlaying() {

@@ -55,7 +55,7 @@ func TestCreateGist(t *testing.T) {
 		"test.txt": "content",
 	}
 
-	gist, err := client.CreateGist("Test Gist", files)
+	gist, err := client.CreateGist("Test Gist", files, false)
 	if err != nil {
 		t.Fatalf("CreateGist failed: %v", err)
 	}
