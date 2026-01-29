@@ -247,12 +247,20 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		// Stop playback and show save prompt
-		_ = m.player.Stop()
+		if err := m.player.Stop(); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
+			m.saveMessageTime = 150
+			return m, nil
+		}
 		m.state = luckyStateSavePrompt
 		return m, nil
 	case "0":
 		// Return to main menu (Level 2+ shortcut)
-		_ = m.player.Stop()
+		if err := m.player.Stop(); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
+			m.saveMessageTime = 150
+			return m, nil
+		}
 		m.selectedStation = nil
 		m.state = luckyStateInput
 		return m, func() tea.Msg {

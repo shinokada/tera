@@ -23,6 +23,11 @@ This document describes how to release new versions of TERA.
 ### 1. Prepare the Release
 
 ```sh
+# Test locally
+make clean && make lint && make build && ./tera
+```
+
+```sh
 # Ensure you're on main branch with latest changes
 git checkout main
 git pull origin main

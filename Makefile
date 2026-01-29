@@ -1,4 +1,4 @@
-.PHONY: build test clean run lint
+.PHONY: build test clean run lint lint-fix
 
 build:
 	go build -o tera cmd/tera/main.go

@@ -219,6 +219,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
+			a.unifiedMenuIndex = 0
+			a.numberBuffer = ""
 			return a, nil
 		}
 		return a, nil
@@ -228,6 +230,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.screen = screenMainMenu
 		// Reload quick favorites in case they were updated
 		a.loadQuickFavorites()
+		a.unifiedMenuIndex = 0
+		a.numberBuffer = ""
 		return a, nil
 	}
 

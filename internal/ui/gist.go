@@ -782,8 +782,10 @@ func (m *GistModel) updateGistCmd(id, description string) tea.Cmd {
 		if err := m.gistClient.UpdateGist(id, description); err != nil {
 			return errMsg{err}
 		}
-		// Update local metadata cache (ignore errors as UI operation succeeded)
-		_ = gist.UpdateMetadata(id, description)
+		// Update local metadata cache
+		if err := gist.UpdateMetadata(id, description); err != nil {
+			return errMsg{fmt.Errorf("gist updated remotely but local cache failed: %w", err)}
+		}
 		return successMsg{"Gist updated!"}
 	}
 }
@@ -812,8 +814,10 @@ func (m *GistModel) deleteGistCmd(id string) tea.Cmd {
 		if err := m.gistClient.DeleteGist(id); err != nil {
 			return errMsg{err}
 		}
-		// Delete local metadata cache (ignore errors as UI operation succeeded)
-		_ = gist.DeleteMetadata(id)
+		// Delete local metadata cache
+		if err := gist.DeleteMetadata(id); err != nil {
+			return errMsg{fmt.Errorf("gist deleted remotely but local cache failed: %w", err)}
+		}
 		return successMsg{"Gist deleted!"}
 	}
 }
