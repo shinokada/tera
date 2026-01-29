@@ -4,6 +4,7 @@
 
 ```sh
 spt create shinokada/tera
+# Use amd64 for Architecture
 spt open
 ```
 
@@ -11,12 +12,12 @@ spt open
 Remove all unnecessary dir/files:
 
 ```sh
-cd /Users/shinichiokada/.cache/spt/pkg/tera_1.0.0-rc.2-1_all/usr/share/tera && rm -rf cmd images internal pkg .git .github && rm -f .gitignore .coderabbit.yml CNAME components.test Makefile note-to-ai.md RELEASING.md robots.txt .goreleaser.yaml go.mod go.sum
-rmdir /Users/shinichiokada/.cache/spt/pkg/tera_1.0.0-rc.2-1_all/usr/share/tera
+cd /Users/shinichiokada/.cache/spt/pkg/tera_1.0.0-rc.2-1_amd64/usr/share/tera && rm -rf cmd images internal pkg .git .github && rm -f .gitignore .coderabbit.yml CNAME components.test Makefile note-to-ai.md RELEASING.md robots.txt .goreleaser.yaml go.mod go.sum
+rmdir /Users/shinichiokada/.cache/spt/pkg/tera_1.0.0-rc.2-1_amd64/usr/share/tera
 ```
 
 ```text
-tera_1.0.0-rc.2-1_all/
+tera_1.0.0-rc.2-1_amd64/
 ├── DEBIAN/
 │   ├── control
 │   └── preinst
@@ -64,4 +65,10 @@ case "$1" in
 esac
 
 exit 0
+```
+
+## chmod
+Ensure chmod 755 on the preinst script
+```sh
+chmod +x path/to/DEBIAN/preinst
 ```

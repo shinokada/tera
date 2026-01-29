@@ -26,6 +26,13 @@ brew install shinokada/tera/tera
 brew upgrade shinokada/tera/tera
 ```
 
+### Debian/Ubuntu
+
+```sh
+# Download the deb package from https://github.com/shinokada/tera/releases
+sudo dpkg -i tera_1.x.x-1_amd64.deb
+```
+
 ### Windows Scoop
 
 ```sh
