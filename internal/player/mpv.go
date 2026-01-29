@@ -32,7 +32,7 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 
 	// Stop any existing playback
 	if p.playing {
-		p.stopInternal()
+		_ = p.stopInternal()
 	}
 
 	// Check if mpv is available

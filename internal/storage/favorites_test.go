@@ -35,7 +35,7 @@ func TestStorage_SaveList(t *testing.T) {
 	// Verify content
 	data, _ := os.ReadFile(path)
 	var stations []api.Station
-	json.Unmarshal(data, &stations)
+	_ = json.Unmarshal(data, &stations)
 
 	if len(stations) != 1 {
 		t.Errorf("Expected 1 station, got %d", len(stations))
@@ -106,7 +106,7 @@ func TestStorage_AddStation_ToExistingList(t *testing.T) {
 
 	// Create initial list
 	station1 := api.Station{StationUUID: "1", Name: "Station 1"}
-	store.AddStation(context.Background(), "favorites", station1)
+	_ = store.AddStation(context.Background(), "favorites", station1)
 
 	// Add another station
 	station2 := api.Station{StationUUID: "2", Name: "Station 2"}
@@ -137,7 +137,7 @@ func TestStorage_StationExists(t *testing.T) {
 
 	// Add a station
 	station := api.Station{StationUUID: "test-1", Name: "Test"}
-	store.AddStation(context.Background(), "favorites", station)
+	_ = store.AddStation(context.Background(), "favorites", station)
 
 	// Test existing station
 	exists, err = store.StationExists(context.Background(), "favorites", "test-1")

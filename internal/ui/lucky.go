@@ -247,12 +247,12 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		// Stop playback and show save prompt
-		m.player.Stop()
+		_ = m.player.Stop()
 		m.state = luckyStateSavePrompt
 		return m, nil
 	case "0":
 		// Return to main menu (Level 2+ shortcut)
-		m.player.Stop()
+		_ = m.player.Stop()
 		m.selectedStation = nil
 		m.state = luckyStateInput
 		return m, func() tea.Msg {
@@ -573,45 +573,6 @@ func (m LuckyModel) viewPlaying() string {
 		Content: content.String(),
 		Help:    "Esc: Stop • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
-}
-
-// formatStationInfo formats station information for display
-func (m LuckyModel) formatStationInfo(station *api.Station) string {
-	var b strings.Builder
-
-	// Station name
-	b.WriteString(stationNameStyle().Render(station.TrimName()))
-	b.WriteString("\n\n")
-
-	// Details
-	if station.Country != "" {
-		b.WriteString(stationFieldStyle().Render("Country: "))
-		b.WriteString(stationValueStyle().Render(station.Country))
-		b.WriteString("\n")
-	}
-
-	if station.Codec != "" {
-		b.WriteString(stationFieldStyle().Render("Codec: "))
-		codecInfo := station.Codec
-		if station.Bitrate > 0 {
-			codecInfo += fmt.Sprintf(" (%d kbps)", station.Bitrate)
-		}
-		b.WriteString(stationValueStyle().Render(codecInfo))
-		b.WriteString("\n")
-	}
-
-	if station.Tags != "" {
-		b.WriteString(stationFieldStyle().Render("Tags: "))
-		b.WriteString(stationValueStyle().Render(station.Tags))
-		b.WriteString("\n")
-	}
-
-	if station.Votes > 0 {
-		b.WriteString(stationFieldStyle().Render("Votes: "))
-		b.WriteString(stationValueStyle().Render(fmt.Sprintf("%d", station.Votes)))
-	}
-
-	return b.String()
 }
 
 // viewSavePrompt renders the save prompt after playback

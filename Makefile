@@ -1,10 +1,16 @@
-.PHONY: build test clean run
+.PHONY: build test clean run lint
 
 build:
 	go build -o tera cmd/tera/main.go
 
 test:
 	go test -v ./...
+
+lint:
+	golangci-lint run ./...
+
+lint-fix:
+	golangci-lint run --fix ./...
 
 coverage:
 	go test -coverprofile=coverage.out ./...

@@ -441,28 +441,18 @@ func (m PlayModel) startPlayback() tea.Cmd {
 	}
 }
 
-// stopPlayback stops the current playback
-func (m PlayModel) stopPlayback() tea.Cmd {
-	return func() tea.Msg {
-		if err := m.player.Stop(); err != nil {
-			return errMsg{err}
-		}
-		return playbackStoppedMsg{}
-	}
-}
-
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		// Stop playback and go back
-		m.player.Stop()
+		_ = m.player.Stop()
 		m.state = playStateStationSelection
 		m.selectedStation = nil
 		return m, nil
 	case "0":
 		// Return to main menu (Level 3 shortcut)
-		m.player.Stop()
+		_ = m.player.Stop()
 		m.selectedStation = nil
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}

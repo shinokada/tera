@@ -44,7 +44,7 @@ func TestCreateGist(t *testing.T) {
 				"test.txt": {Content: "content"},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer ts.Close()
 
@@ -74,7 +74,7 @@ func TestListGists(t *testing.T) {
 			{ID: "1", Description: "Gist 1"},
 			{ID: "2", Description: "Gist 2"},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer ts.Close()
 

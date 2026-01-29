@@ -1,11 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 )
@@ -30,13 +27,13 @@ type SearchParams struct {
 	Country  string
 	State    string
 	// Advanced search can combine multiple parameters
-	TagExact     bool
-	NameExact    bool
-	Order        string // votes, clickcount, bitrate, name
-	Reverse      bool
-	Limit        int
-	Offset       int
-	HideBroken   bool
+	TagExact   bool
+	NameExact  bool
+	Order      string // votes, clickcount, bitrate, name
+	Reverse    bool
+	Limit      int
+	Offset     int
+	HideBroken bool
 }
 
 // Search performs a search based on the given parameters
@@ -160,36 +157,4 @@ func (c *Client) SearchAdvanced(ctx context.Context, params SearchParams) ([]Sta
 	params.HideBroken = true
 
 	return c.Search(ctx, params)
-}
-
-// doSearchWithEndpoint performs a search using a specific endpoint (for special search types)
-func (c *Client) doSearchWithEndpoint(ctx context.Context, endpoint string, form url.Values) ([]Station, error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		"POST",
-		endpoint,
-		bytes.NewBufferString(form.Encode()),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var stations []Station
-	if err := json.NewDecoder(resp.Body).Decode(&stations); err != nil {
-		return nil, err
-	}
-
-	return stations, nil
 }

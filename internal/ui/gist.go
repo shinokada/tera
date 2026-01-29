@@ -154,19 +154,20 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle ESC and 0 based on state
-		if m.state == gistStateMenu {
+		switch m.state {
+		case gistStateMenu:
 			if msg.String() == "esc" || msg.String() == "0" {
 				// Go back to main app menu
 				m.quitting = true
 				return m, func() tea.Msg { return backToMainMsg{} }
 			}
-		} else if m.state == gistStateCreateVisibility {
+		case gistStateCreateVisibility:
 			if msg.String() == "esc" {
 				m.state = gistStateMenu
 				m.message = ""
 				return m, nil
 			}
-		} else if m.state == gistStateList || m.state == gistStateUpdate || m.state == gistStateDelete || m.state == gistStateRecover || m.state == gistStateTokenMenu {
+		case gistStateList, gistStateUpdate, gistStateDelete, gistStateRecover, gistStateTokenMenu:
 			if msg.String() == "esc" {
 				m.state = gistStateMenu
 				m.message = ""
@@ -754,7 +755,7 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 				backupName := fmt.Sprintf("%s.%s.bak", cleanName, timestamp)
 				backupPath := filepath.Join(backupDir, backupName)
 				if data, err := os.ReadFile(existingPath); err == nil {
-					os.WriteFile(backupPath, data, 0644)
+					_ = os.WriteFile(backupPath, data, 0644)
 				}
 			}
 		}
@@ -781,10 +782,8 @@ func (m *GistModel) updateGistCmd(id, description string) tea.Cmd {
 		if err := m.gistClient.UpdateGist(id, description); err != nil {
 			return errMsg{err}
 		}
-		if err := gist.UpdateMetadata(id, description); err != nil {
-			// Don't fail UI if local update fails, but warn?
-			// ignoring for now or could return errMsg
-		}
+		// Update local metadata cache (ignore errors as UI operation succeeded)
+		_ = gist.UpdateMetadata(id, description)
 		return successMsg{"Gist updated!"}
 	}
 }
@@ -813,9 +812,8 @@ func (m *GistModel) deleteGistCmd(id string) tea.Cmd {
 		if err := m.gistClient.DeleteGist(id); err != nil {
 			return errMsg{err}
 		}
-		if err := gist.DeleteMetadata(id); err != nil {
-			// ignoring
-		}
+		// Delete local metadata cache (ignore errors as UI operation succeeded)
+		_ = gist.DeleteMetadata(id)
 		return successMsg{"Gist deleted!"}
 	}
 }

@@ -96,7 +96,8 @@ func TestSearchBackNavigation(t *testing.T) {
 			searchModel := updatedModel.(SearchModel)
 
 			if tt.shouldGoBack {
-				if tt.initialState == searchStateMenu {
+				switch tt.initialState {
+				case searchStateMenu:
 					// From menu, should send backToMainMsg
 					if cmd == nil {
 						t.Error("Expected back command, got nil")
@@ -106,7 +107,7 @@ func TestSearchBackNavigation(t *testing.T) {
 							t.Errorf("Expected backToMainMsg, got %T", result)
 						}
 					}
-				} else if tt.initialState == searchStateInput {
+				case searchStateInput:
 					// From input, should go back to menu
 					if searchModel.state != searchStateMenu {
 						t.Errorf("Expected state change to menu, got state %v", searchModel.state)

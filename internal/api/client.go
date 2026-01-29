@@ -49,7 +49,7 @@ func (c *Client) doSearch(ctx context.Context, form url.Values) ([]Station, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var stations []Station
 	if err := json.NewDecoder(resp.Body).Decode(&stations); err != nil {
@@ -80,7 +80,7 @@ func (c *Client) Vote(ctx context.Context, stationUUID string) (*VoteResult, err
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("vote request failed with status: %d", resp.StatusCode)

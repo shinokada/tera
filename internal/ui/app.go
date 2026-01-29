@@ -141,14 +141,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			// Stop any playing stations before quitting
 			if a.quickFavPlayer != nil {
-				a.quickFavPlayer.Stop()
+				_ = a.quickFavPlayer.Stop()
 			}
 			if a.screen == screenPlay && a.playScreen.player != nil {
-				a.playScreen.player.Stop()
+				_ = a.playScreen.player.Stop()
 			} else if a.screen == screenSearch && a.searchScreen.player != nil {
-				a.searchScreen.player.Stop()
+				_ = a.searchScreen.player.Stop()
 			} else if a.screen == screenLucky && a.luckyScreen.player != nil {
-				a.luckyScreen.player.Stop()
+				_ = a.luckyScreen.player.Stop()
 			}
 			return a, tea.Quit
 		}
@@ -313,7 +313,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle Escape to stop playing if playing from main menu
 		if msg.String() == "esc" && a.playingFromMain {
 			if a.quickFavPlayer != nil {
-				a.quickFavPlayer.Stop()
+				_ = a.quickFavPlayer.Stop()
 			}
 			a.playingFromMain = false
 			a.playingStation = nil
@@ -331,7 +331,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(a.numberBuffer) >= 2 {
 				// Check if this could be a valid selection
 				num := 0
-				fmt.Sscanf(a.numberBuffer, "%d", &num)
+				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 
 				// Calculate max valid number
 				maxFavNum := 9 + len(a.quickFavorites) // 10-based indexing
@@ -359,7 +359,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check if there's a buffered number to process
 			if a.numberBuffer != "" {
 				num := 0
-				fmt.Sscanf(a.numberBuffer, "%d", &num)
+				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 				a.numberBuffer = "" // Clear buffer
 
 				// Numbers 1-5 are for menu items
@@ -457,7 +457,7 @@ func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 
 	// Stop any currently playing station
 	if a.quickFavPlayer != nil {
-		a.quickFavPlayer.Stop()
+		_ = a.quickFavPlayer.Stop()
 	}
 
 	// Start playback

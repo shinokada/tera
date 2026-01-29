@@ -56,11 +56,6 @@ func normalItemStyle() lipgloss.Style {
 		PaddingLeft(t.Padding.ListItemLeft)
 }
 
-func shortcutStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241"))
-}
-
 func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	menuItem, ok := item.(MenuItem)
 	if !ok {
@@ -80,7 +75,7 @@ func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		}
 	}
 
-	fmt.Fprint(w, fn())
+	_, _ = fmt.Fprint(w, fn())
 }
 
 // CreateMenu creates a new menu list with the given items

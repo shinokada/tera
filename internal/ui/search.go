@@ -342,7 +342,7 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" || msg.String() == "m" {
 		// Stop any playing station when exiting
 		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		return m, func() tea.Msg { return backToMainMsg{} }
@@ -564,7 +564,7 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Stop any playing station when going back
 		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		m.state = searchStateMenu
@@ -572,7 +572,7 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "0":
 		// Return to main menu
 		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		return m, func() tea.Msg { return backToMainMsg{} }
@@ -582,7 +582,7 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation = &item.station
 			// Stop any currently playing station first
 			if m.player != nil && m.player.IsPlaying() {
-				m.player.Stop()
+				_ = m.player.Stop()
 			}
 			m.state = searchStatePlaying
 			return m, m.playStation(item.station)
@@ -610,7 +610,7 @@ func (m SearchModel) handleStationInfoInput(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 	if msg.String() == "esc" {
 		// Stop player when going back
 		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		m.state = searchStateResults
@@ -626,7 +626,7 @@ func (m SearchModel) executeStationAction(index int) (tea.Model, tea.Cmd) {
 	case 0: // Play station
 		// Stop any currently playing station first
 		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.state = searchStatePlaying
 		return m, m.playStation(*m.selectedStation)
@@ -635,7 +635,7 @@ func (m SearchModel) executeStationAction(index int) (tea.Model, tea.Cmd) {
 	case 2: // Back to results
 		// Stop player when going back
 		if m.player != nil && m.player.IsPlaying() {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		m.state = searchStateResults
@@ -715,20 +715,20 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		// Quit application
 		if m.player != nil {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		return m, tea.Quit
 	case "0":
 		// Return to main menu (Level 3 shortcut)
 		if m.player != nil {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		return m, func() tea.Msg { return backToMainMsg{} }
 	case "esc":
 		// Esc during playback goes back without save prompt
 		if m.player != nil {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		m.state = searchStateResults
@@ -736,7 +736,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "1":
 		// Stop playback and trigger save prompt flow
 		if m.player != nil {
-			m.player.Stop()
+			_ = m.player.Stop()
 		}
 		return m.handlePlaybackStopped()
 	case "f":

@@ -8,15 +8,7 @@ import (
 	"github.com/shinokada/tera/internal/theme"
 )
 
-// getThemeColors returns the current theme colors
-// Called at runtime to support dynamic theme changes
-func getThemeColors() (primary, secondary, highlight, errorC, success, muted, text lipgloss.Color) {
-	t := theme.Current()
-	return t.PrimaryColor(), t.SecondaryColor(), t.HighlightColor(),
-		t.ErrorColor(), t.SuccessColor(), t.MutedColor(), t.TextColor()
-}
-
-// Color accessors - these call getThemeColors() to get current theme values
+// Color accessors - these call theme.Current() to get current theme values
 func colorCyan() lipgloss.Color   { t := theme.Current(); return t.PrimaryColor() }
 func colorBlue() lipgloss.Color   { t := theme.Current(); return t.SecondaryColor() }
 func colorYellow() lipgloss.Color { t := theme.Current(); return t.HighlightColor() }
@@ -85,11 +77,6 @@ func boldStyle() lipgloss.Style {
 		Bold(true)
 }
 
-func subtleStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(colorGray())
-}
-
 func selectedItemStyle() lipgloss.Style {
 	p := getPadding()
 	return lipgloss.NewStyle().
@@ -132,13 +119,6 @@ func stationValueStyle() lipgloss.Style {
 	t := theme.Current()
 	return lipgloss.NewStyle().
 		Foreground(t.TextColor())
-}
-
-func teraHeaderStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		Foreground(colorCyan()).
-		Bold(true).
-		Align(lipgloss.Center)
 }
 
 func quickFavoritesStyle() lipgloss.Style {

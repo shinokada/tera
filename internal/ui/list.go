@@ -32,11 +32,9 @@ type ListManagementModel struct {
 	state        listManagementState
 	favoritePath string
 	lists        []string
-	listItems    []list.Item
 	listModel    list.Model
 	textInput    textinput.Model
 	selectedList string
-	newListName  string
 	err          error
 	message      string
 	messageTime  int
@@ -132,22 +130,16 @@ func (m ListManagementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case listManagementListsLoadedMsg:
 		m.lists = msg.lists
-		// If we're in the select to delete state, populate the list model with actual lists
-		if m.state == listManagementSelectListToDelete {
+		// Populate list model based on current state
+		switch m.state {
+		case listManagementSelectListToDelete, listManagementSelectListToEdit:
 			items := make([]list.Item, len(m.lists))
 			for i, listName := range m.lists {
 				items[i] = components.NewMenuItem(listName, "", fmt.Sprintf("%d", i+1))
 			}
 			m.listModel.SetItems(items)
 			m.listModel.Select(0)
-		} else if m.state == listManagementSelectListToEdit {
-			items := make([]list.Item, len(m.lists))
-			for i, listName := range m.lists {
-				items[i] = components.NewMenuItem(listName, "", fmt.Sprintf("%d", i+1))
-			}
-			m.listModel.SetItems(items)
-			m.listModel.Select(0)
-		} else if m.state == listManagementMenu {
+		case listManagementMenu:
 			// Reset to main menu items
 			items := []list.Item{
 				components.NewMenuItem("Create New List", "Create a new favorites list", "1"),

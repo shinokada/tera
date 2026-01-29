@@ -549,11 +549,3 @@ func TestLuckyViewStates(t *testing.T) {
 		})
 	}
 }
-
-// Helper to create a tea.Msg from command
-func execCmd(cmd tea.Cmd) tea.Msg {
-	if cmd == nil {
-		return nil
-	}
-	return cmd()
-}

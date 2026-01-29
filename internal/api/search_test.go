@@ -16,7 +16,7 @@ func TestSearchByName(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[
+		_, _ = w.Write([]byte(`[
 			{
 				"stationuuid": "test-uuid-1",
 				"name": "Test Jazz Station",
@@ -70,7 +70,7 @@ func TestSearchByLanguage(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[
+		_, _ = w.Write([]byte(`[
 			{
 				"stationuuid": "test-uuid-1",
 				"name": "English Station",
@@ -112,7 +112,7 @@ func TestSearchByCountry(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[
+		_, _ = w.Write([]byte(`[
 			{
 				"stationuuid": "test-uuid-1",
 				"name": "US Station",
@@ -155,7 +155,7 @@ func TestSearchByState(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[
+		_, _ = w.Write([]byte(`[
 			{
 				"stationuuid": "test-uuid-1",
 				"name": "California Station",
@@ -294,7 +294,7 @@ func TestSearchAdvanced(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[
+		_, _ = w.Write([]byte(`[
 			{
 				"stationuuid": "test-uuid-1",
 				"name": "Test Station",
@@ -372,7 +372,7 @@ func TestSearchTrimming(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[]`))
+		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer server.Close()
 
@@ -399,7 +399,7 @@ func TestSearchWithContext(t *testing.T) {
 		// In real scenario, this would be cancelled by context
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[]`))
+		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer server.Close()
 

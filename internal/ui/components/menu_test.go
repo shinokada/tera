@@ -53,13 +53,16 @@ func TestHandleMenuKey(t *testing.T) {
 			// Reset menu to first item
 			menu.Select(0)
 
-			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
-			if tt.key == "down" {
+			var msg tea.KeyMsg
+			switch tt.key {
+			case "down":
 				msg = tea.KeyMsg{Type: tea.KeyDown}
-			} else if tt.key == "up" {
+			case "up":
 				msg = tea.KeyMsg{Type: tea.KeyUp}
-			} else if tt.key == "enter" {
+			case "enter":
 				msg = tea.KeyMsg{Type: tea.KeyEnter}
+			default:
+				msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
 			}
 
 			_, selected := HandleMenuKey(msg, menu)
