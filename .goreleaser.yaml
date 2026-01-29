@@ -36,7 +36,7 @@ archives:
       - goos: windows
         format: zip
     files:
-      - docs/README.md
+      - README.md
       - LICENSE
 
 checksum:
@@ -62,7 +62,7 @@ nfpms:
     contents:
       - src: ./LICENSE
         dst: /usr/share/doc/tera/LICENSE
-      - src: ./docs/README.md
+      - src: ./README.md
         dst: /usr/share/doc/tera/README.md
 
 snapshot:
