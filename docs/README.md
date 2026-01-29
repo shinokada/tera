@@ -20,7 +20,6 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 ## Installation
 
 ### Homebrew (macOS/Linux)
-
 ```sh
 # update and upgrade
 brew update && brew upgrade
@@ -30,7 +29,6 @@ brew upgrade shinokada/tera/tera
 ```
 
 ### Debian/Ubuntu
-
 ```sh
 sudo dpkg -i tera_1.x.x_linux_amd64.deb
 sudo apt-get install -f  # Install mpv dependency if needed
@@ -42,7 +40,6 @@ sudo rpm -i tera_1.x.x_linux_amd64.rpm
 ```
 
 ### Windows Scoop
-
 ```sh
 scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
 scoop install tera
