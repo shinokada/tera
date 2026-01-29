@@ -32,8 +32,13 @@ brew upgrade shinokada/tera/tera
 ### Debian/Ubuntu
 
 ```sh
-# Download the deb package from https://github.com/shinokada/tera/releases
-sudo dpkg -i tera_1.x.x-1_amd64.deb
+sudo dpkg -i tera_1.x.x_linux_amd64.deb
+sudo apt-get install -f  # Install mpv dependency if needed
+```
+
+### Fedora/RHEL
+```sh
+sudo rpm -i tera_1.x.x_linux_amd64.rpm
 ```
 
 ### Windows Scoop
