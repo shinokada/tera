@@ -744,6 +744,7 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 
 		// Backup existing files that will be overwritten
 		timestamp := time.Now().Format("20060102-150405")
+		var backupFailures []string
 		for filename := range g.Files {
 			cleanName := filepath.Base(filename)
 			if cleanName != filename || cleanName == "." || cleanName == ".." {
@@ -755,7 +756,9 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 				backupName := fmt.Sprintf("%s.%s.bak", cleanName, timestamp)
 				backupPath := filepath.Join(backupDir, backupName)
 				if data, err := os.ReadFile(existingPath); err == nil {
-					_ = os.WriteFile(backupPath, data, 0644)
+					if writeErr := os.WriteFile(backupPath, data, 0644); writeErr != nil {
+						backupFailures = append(backupFailures, cleanName)
+					}
 				}
 			}
 		}
@@ -773,6 +776,9 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 			}
 		}
 
+		if len(backupFailures) > 0 {
+			return successMsg{fmt.Sprintf("Favorites restored! (Warning: %d backup(s) failed to save)", len(backupFailures))}
+		}
 		return successMsg{"Favorites restored successfully! (backups saved in .backup folder)"}
 	}
 }
