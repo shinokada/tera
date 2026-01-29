@@ -759,6 +759,8 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 					if writeErr := os.WriteFile(backupPath, data, 0644); writeErr != nil {
 						backupFailures = append(backupFailures, cleanName)
 					}
+				} else {
+					backupFailures = append(backupFailures, cleanName)
 				}
 			}
 		}
