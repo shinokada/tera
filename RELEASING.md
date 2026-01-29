@@ -25,18 +25,6 @@ This document describes how to release new versions of TERA.
 ```sh
 # Test locally
 make clean && make lint && make build && ./tera
-```
-
-```sh
-# Ensure you're on main branch with latest changes
-git checkout main
-git pull origin main
-
-# Run tests
-go test ./...
-
-# Build locally to verify
-go build ./cmd/tera
 ./tera --version
 ```
 
@@ -54,10 +42,10 @@ ls -la dist/
 
 ```sh
 # Create annotated tag
-git tag -a v1.0.0-rc.1 -m "Release v1.0.0-rc.1"
+git tag -a v1.0.0-rc.x -m "Release v1.0.0-rc.x"
 
 # Push the tag (this triggers the GitHub Action)
-git push origin v1.0.0-rc.1
+git push origin v1.0.0-rc.x
 ```
 
 ### 4. Monitor the Release
