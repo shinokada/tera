@@ -1,3 +1,25 @@
+// Package main provides the TERA terminal-based internet radio player.
+//
+// TERA is a keyboard-driven radio player powered by Radio Browser that supports
+// searching stations by name, tag, language, country, or state. Features include:
+//   - Search and browse thousands of internet radio stations
+//   - Organize favorites into custom lists
+//   - Quick play shortcuts for instant station access
+//   - Gist sync for backing up favorites via GitHub
+//   - Customizable themes via YAML configuration
+//
+// Requirements:
+//   - mpv must be installed for audio playback
+//
+// Basic usage:
+//
+//	tera                  # Start the application
+//	tera theme path       # Show theme config location
+//	tera theme reset      # Reset theme to defaults
+//	tera --version        # Show version
+//	tera --help           # Show help
+//
+// For complete documentation, visit: https://tera.codewithshin.com/
 package main
 
 import (
