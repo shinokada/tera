@@ -1,4 +1,4 @@
-# Tera
+# Tera: Terminal Radio
 
 A terminal-based internet radio player powered by [Radio Browser](https://www.radio-browser.info/).
 
@@ -15,13 +15,52 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 ## Requirements
 
 - [mpv](https://mpv.io/) - Media player for audio playback
-- Go 1.21+ (for building from source)
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
 ```sh
-go install github.com/shinokada/tera/cmd/tera@latest
+brew install shinokada/tera/tera
+// if you already installed
+brew upgrade shinokada/tera/tera
 ```
+
+### Windows Scoop
+
+```sh
+scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
+scoop install tera
+```
+
+### Manual Download
+
+Download the latest binary for your platform from the [releases page](https://github.com/shinokada/tera/releases):
+
+| Platform | Architecture  | File                                  |
+| -------- | ------------- | ------------------------------------- |
+| macOS    | Intel         | `tera_1.0.0-rc.1_darwin_amd64.tar.gz` |
+| macOS    | Apple Silicon | `tera_1.0.0-rc.1_darwin_arm64.tar.gz` |
+| Linux    | x86_64        | `tera_1.0.0-rc.1_linux_amd64.tar.gz`  |
+| Linux    | ARM64         | `tera_1.0.0-rc.1_linux_arm64.tar.gz`  |
+| Windows  | x86_64        | `tera_1.0.0-rc.1_windows_amd64.zip`   |
+| Windows  | ARM64         | `tera_1.0.0-rc.1_windows_arm64.zip`   |
+
+#### macOS/Linux
+
+```sh
+# Download and extract (example for macOS Apple Silicon)
+tar -xzf tera_1.0.0-rc.1_darwin_arm64.tar.gz
+
+# Move to a directory in your PATH
+sudo mv tera /usr/local/bin/
+```
+
+#### Windows
+
+1. Download the `.zip` file for your architecture
+2. Extract the archive
+3. Add the extracted directory to your PATH or move `tera.exe` to a directory already in your PATH
 
 ## Usage
 
