@@ -57,29 +57,29 @@ changelog:
       - Merge branch
 
 # Homebrew tap (uncomment when you create the tap repository)
-# brews:
-#   - repository:
-#       owner: shinokada
-#       name: homebrew-tap
-#     homepage: https://github.com/shinokada/tera
-#     description: Terminal-based internet radio player
-#     license: MIT
-#     dependencies:
-#       - name: mpv
-#         type: required
-#     install: |
-#       bin.install "tera"
-#     test: |
-#       system "#{bin}/tera", "--version"
+brews:
+  - repository:
+      owner: shinokada
+      name: homebrew-tera
+    homepage: https://github.com/shinokada/tera
+    description: Terminal-based internet radio player
+    license: MIT
+    dependencies:
+      - name: mpv
+        type: required
+    install: |
+      bin.install "tera"
+    test: |
+      system "#{bin}/tera", "--version"
 
 # Scoop bucket (uncomment when you create the scoop bucket repository)
-# scoops:
-#   - repository:
-#       owner: shinokada
-#       name: scoop-bucket
-#     homepage: https://github.com/shinokada/tera
-#     description: Terminal-based internet radio player
-#     license: MIT
+scoops:
+  - repository:
+      owner: shinokada
+      name: scoop-bucket
+    homepage: https://github.com/shinokada/tera
+    description: Terminal-based internet radio player
+    license: MIT
 
 release:
   github:
@@ -97,6 +97,29 @@ release:
     - [mpv](https://mpv.io/) must be installed on your system
     
     ### Installation
+
+    #### Homebrew (macOS/Linux)
+    ```sh
+    # update and upgrade
+    brew update && brew upgrade
+    brew install shinokada/tera/tera
+    # Upgrade existing installation
+    brew upgrade shinokada/tera/tera
+    ```
+    
+    ### Debian/Ubuntu
+    ```sh
+    # Download the deb package from https://github.com/shinokada/tera/releases
+    sudo dpkg -i tera_1.x.x-1_amd64.deb
+    ```
+
+    ### Windows Scoop
+    ```sh
+    scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
+    scoop install tera
+    ```
+
+    #### Manual Installation
     ```sh
     # macOS/Linux - Download and extract, then move to PATH
     tar -xzf tera_{{.Version}}_<os>_<arch>.tar.gz

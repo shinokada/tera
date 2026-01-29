@@ -24,7 +24,7 @@ This document describes how to release new versions of TERA.
 
 ```sh
 # Test locally
-make clean && make lint && make build && ./tera
+make clean && make lint && make build
 ./tera --version
 ```
 

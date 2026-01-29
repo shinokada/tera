@@ -22,6 +22,8 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 ### Homebrew (macOS/Linux)
 
 ```sh
+# update and upgrade
+brew update && brew upgrade
 brew install shinokada/tera/tera
 # Upgrade existing installation
 brew upgrade shinokada/tera/tera
@@ -171,12 +173,12 @@ padding:
 ## Keyboard Shortcuts
 
 ### Global Navigation
-| Key         | Action           |
-| ----------- | ---------------- |
-| `↑↓` / `jk` | Navigate         |
-| `Enter`     | Select / Play    |
-| `Esc`       | Back             |
-| `Ctrl+C`    | Quit             |
+| Key         | Action        |
+| ----------- | ------------- |
+| `↑↓` / `jk` | Navigate      |
+| `Enter`     | Select / Play |
+| `Esc`       | Back          |
+| `Ctrl+C`    | Quit          |
 
 ### Main Menu
 | Key      | Action                       |
@@ -185,17 +187,17 @@ padding:
 | `10-99+` | Quick play from My-favorites |
 
 ### Playing/Browsing Stations
-| Key  | Action                  |
-| ---- | ----------------------- |
-| `f`  | Save to My-favorites    |
-| `s`  | Save to another list    |
-| `v`  | Vote for station        |
+| Key | Action               |
+| --- | -------------------- |
+| `f` | Save to My-favorites |
+| `s` | Save to another list |
+| `v` | Vote for station     |
 
 ### List Management
-| Key  | Action                  |
-| ---- | ----------------------- |
-| `n`  | New list (in dialogs)   |
-| `d`  | Delete item             |
+| Key | Action                |
+| --- | --------------------- |
+| `n` | New list (in dialogs) |
+| `d` | Delete item           |
 
 ## Search Guide
 
