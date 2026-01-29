@@ -61,6 +61,7 @@ brews:
   - repository:
       owner: shinokada
       name: homebrew-tera
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/shinokada/tera
     description: Terminal-based internet radio player
     license: MIT
@@ -77,6 +78,7 @@ scoops:
   - repository:
       owner: shinokada
       name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
     homepage: https://github.com/shinokada/tera
     description: Terminal-based internet radio player
     license: MIT

@@ -29,4 +29,6 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.GH_PAT }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.GH_PAT }}
