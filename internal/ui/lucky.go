@@ -555,7 +555,8 @@ func (m LuckyModel) viewPlaying() string {
 	// Station info (same format as Now Playing in search)
 	content.WriteString(renderStationDetails(*m.selectedStation))
 
-	// Playback status
+	// Playback status with proper spacing
+	content.WriteString("\n")
 	if m.player.IsPlaying() {
 		content.WriteString(successStyle().Render("▶ Playing..."))
 	} else {

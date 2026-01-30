@@ -624,12 +624,11 @@ func (m PlayModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info box
-	info := m.formatStationInfo(m.selectedStation)
-	content.WriteString(boxStyle().Render(info))
-	content.WriteString("\n\n")
+	// Station info (consistent format across all playing views)
+	content.WriteString(renderStationDetails(*m.selectedStation))
 
-	// Playback status
+	// Playback status with proper spacing
+	content.WriteString("\n")
 	if m.player.IsPlaying() {
 		content.WriteString(successStyle().Render("▶ Playing..."))
 	} else {

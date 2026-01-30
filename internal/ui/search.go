@@ -878,6 +878,13 @@ func (m SearchModel) View() string {
 		var content strings.Builder
 		if m.selectedStation != nil {
 			content.WriteString(renderStationDetails(*m.selectedStation))
+			// Playback status with proper spacing
+			content.WriteString("\n")
+			if m.player.IsPlaying() {
+				content.WriteString(successStyle().Render("▶ Playing..."))
+			} else {
+				content.WriteString(infoStyle().Render("⏸ Stopped"))
+			}
 		}
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
