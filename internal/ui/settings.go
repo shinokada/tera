@@ -298,7 +298,8 @@ func (m SettingsModel) updateTheme(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.message = fmt.Sprintf("✓ Theme '%s' applied!", selectedTheme.name)
 				m.currentTheme = selectedTheme.name
 			}
-			m.messageTime = 150
+			// messageTime is in seconds (tickEverySecond ticks once per second)
+			m.messageTime = 3
 		}
 		return m, tickEverySecond()
 	}
