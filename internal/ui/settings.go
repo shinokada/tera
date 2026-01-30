@@ -24,14 +24,15 @@ var Version = "dev"
 
 // SettingsModel represents the settings screen
 type SettingsModel struct {
-	state        settingsState
-	menuList     list.Model
-	themeList    list.Model
-	width        int
-	height       int
-	message      string
-	messageTime  int
-	currentTheme string
+	state            settingsState
+	menuList         list.Model
+	themeList        list.Model
+	width            int
+	height           int
+	message          string
+	messageTime      int
+	messageIsSuccess bool
+	currentTheme     string
 }
 
 // Predefined themes
@@ -150,7 +151,6 @@ var predefinedThemes = []struct {
 type themeItem struct {
 	name        string
 	description string
-	index       int
 }
 
 func (i themeItem) FilterValue() string { return i.name }
@@ -172,7 +172,6 @@ func NewSettingsModel() SettingsModel {
 		themeItems[i] = themeItem{
 			name:        t.name,
 			description: t.description,
-			index:       i,
 		}
 	}
 
@@ -289,13 +288,21 @@ func (m SettingsModel) updateTheme(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if idx >= 0 && idx < len(predefinedThemes) {
 			selectedTheme := predefinedThemes[idx]
 			currentTheme := theme.Current()
+			if currentTheme == nil {
+				m.message = "✗ Failed to load current theme"
+				m.messageIsSuccess = false
+				m.messageTime = 3
+				return m, tickEverySecond()
+			}
 			currentTheme.Colors = selectedTheme.colors
 
 			// Save the theme
 			if err := theme.Save(currentTheme); err != nil {
 				m.message = fmt.Sprintf("✗ Failed to save theme: %v", err)
+				m.messageIsSuccess = false
 			} else {
 				m.message = fmt.Sprintf("✓ Theme '%s' applied!", selectedTheme.name)
+				m.messageIsSuccess = true
 				m.currentTheme = selectedTheme.name
 			}
 			// messageTime is in seconds (tickEverySecond ticks once per second)
@@ -341,7 +348,7 @@ func (m SettingsModel) viewMenu() string {
 
 	if m.message != "" {
 		content.WriteString("\n\n")
-		if strings.Contains(m.message, "✓") {
+		if m.messageIsSuccess {
 			content.WriteString(successStyle().Render(m.message))
 		} else {
 			content.WriteString(errorStyle().Render(m.message))
@@ -366,7 +373,7 @@ func (m SettingsModel) viewTheme() string {
 
 	if m.message != "" {
 		content.WriteString("\n\n")
-		if strings.Contains(m.message, "✓") {
+		if m.messageIsSuccess {
 			content.WriteString(successStyle().Render(m.message))
 		} else {
 			content.WriteString(errorStyle().Render(m.message))

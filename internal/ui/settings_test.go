@@ -216,7 +216,6 @@ func TestThemeItemInterface(t *testing.T) {
 	item := themeItem{
 		name:        "Test Theme",
 		description: "A test theme",
-		index:       0,
 	}
 
 	if item.FilterValue() != "Test Theme" {
