@@ -27,6 +27,9 @@ const (
 	screenSettings
 )
 
+// Main menu configuration
+const mainMenuItemCount = 6
+
 type App struct {
 	screen               Screen
 	width                int
@@ -388,7 +391,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.numberBuffer = "" // Clear buffer
 
 				// Numbers 1-6 are for menu items
-				if num >= 1 && num <= 6 {
+				if num >= 1 && num <= mainMenuItemCount {
 					a.unifiedMenuIndex = num - 1
 					return a.executeMenuAction(num - 1)
 				}
@@ -402,7 +405,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			// No buffered number, use current unified selection
-			menuItemCount := 6 // Number of main menu items
+			menuItemCount := mainMenuItemCount
 			if a.unifiedMenuIndex < menuItemCount {
 				return a.executeMenuAction(a.unifiedMenuIndex)
 			} else {
@@ -416,7 +419,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle arrow keys for unified menu navigation
-		menuItemCount := 6
+		menuItemCount := mainMenuItemCount
 		favCount := len(a.quickFavorites)
 		totalItems := menuItemCount + favCount
 

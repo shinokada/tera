@@ -73,8 +73,6 @@ type quickFavoritesLoadedMsg struct {
 	stations []api.Station
 }
 
-type backToMainMsg struct{}
-
 type playerErrorMsg struct {
 	err error
 }
@@ -149,8 +147,6 @@ func ticksEverySecond() tea.Cmd {
 		return tickMsg(t)
 	})
 }
-
-type tickMsg time.Time
 
 // loadQuickFavorites loads My-favorites.json for duplicate checking
 func (m SearchModel) loadQuickFavorites() tea.Cmd {

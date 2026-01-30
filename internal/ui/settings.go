@@ -183,8 +183,17 @@ func NewSettingsModel() SettingsModel {
 	themeList.SetFilteringEnabled(false)
 	themeList.SetShowHelp(false)
 
-	// Get current theme name
+	// Get current theme name - detect from saved theme
 	currentTheme := "Default"
+	if current := theme.Current(); current != nil {
+		// Try to match current colors to a predefined theme
+		for _, t := range predefinedThemes {
+			if t.colors == current.Colors {
+				currentTheme = t.name
+				break
+			}
+		}
+	}
 
 	return SettingsModel{
 		state:        settingsStateMenu,
@@ -227,6 +236,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.messageTime == 0 {
 				m.message = ""
 			}
+			return m, tickEverySecond()
 		}
 		return m, nil
 	}
@@ -290,7 +300,7 @@ func (m SettingsModel) updateTheme(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.messageTime = 150
 		}
-		return m, nil
+		return m, tickEverySecond()
 	}
 
 	// Handle list navigation
