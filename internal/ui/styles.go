@@ -96,14 +96,6 @@ func paginationStyle() lipgloss.Style {
 		Foreground(colorCyan())
 }
 
-func boxStyle() lipgloss.Style {
-	p := getPadding()
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorCyan()).
-		Padding(p.BoxVertical, p.BoxHorizontal)
-}
-
 func stationNameStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Foreground(colorCyan()).

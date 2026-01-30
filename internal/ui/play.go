@@ -658,45 +658,6 @@ func (m PlayModel) viewPlaying() string {
 	}, m.height)
 }
 
-// formatStationInfo formats station information for display
-func (m PlayModel) formatStationInfo(station *api.Station) string {
-	var b strings.Builder
-
-	// Station name
-	b.WriteString(stationNameStyle().Render(station.TrimName()))
-	b.WriteString("\n\n")
-
-	// Details
-	if station.Country != "" {
-		b.WriteString(stationFieldStyle().Render("Country: "))
-		b.WriteString(stationValueStyle().Render(station.Country))
-		b.WriteString("\n")
-	}
-
-	if station.Codec != "" {
-		b.WriteString(stationFieldStyle().Render("Codec: "))
-		codecInfo := station.Codec
-		if station.Bitrate > 0 {
-			codecInfo += fmt.Sprintf(" (%d kbps)", station.Bitrate)
-		}
-		b.WriteString(stationValueStyle().Render(codecInfo))
-		b.WriteString("\n")
-	}
-
-	if station.Tags != "" {
-		b.WriteString(stationFieldStyle().Render("Tags: "))
-		b.WriteString(stationValueStyle().Render(station.Tags))
-		b.WriteString("\n")
-	}
-
-	if station.Votes > 0 {
-		b.WriteString(stationFieldStyle().Render("Votes: "))
-		b.WriteString(stationValueStyle().Render(fmt.Sprintf("%d", station.Votes)))
-	}
-
-	return b.String()
-}
-
 // viewStationSelection renders the station selection view
 func (m PlayModel) viewStationSelection() string {
 	// Check if we have stations but no model yet (waiting for dimensions)
