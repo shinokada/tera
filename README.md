@@ -10,7 +10,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
-- 🎨 **Themes** - Customizable colors via YAML config
+- 🎨 **Themes** - Choose from predefined themes or customize via YAML config
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 
 ## Requirements
@@ -153,7 +153,25 @@ Type 10-12 to play instantly!
 
 ## Theme Configuration
 
-Customize colors and padding by editing `~/.config/tera/theme.yaml`:
+### In-App Theme Selection
+
+The easiest way to change themes is through the Settings menu:
+
+1. Press `6` from the main menu to open Settings
+2. Select "Theme / Colors"
+3. Choose from predefined themes:
+   - **Default** - Cyan and blue tones
+   - **Ocean** - Deep blue theme
+   - **Forest** - Green nature theme
+   - **Sunset** - Warm orange and red
+   - **Purple Haze** - Purple and magenta
+   - **Monochrome** - Classic black and white
+   - **Dracula** - Popular dark theme
+   - **Nord** - Arctic, north-bluish
+
+### Manual Configuration
+
+You can also customize colors and padding by editing `~/.config/tera/theme.yaml`:
 
 ```sh
 tera theme path   # Show config file location
@@ -185,7 +203,7 @@ padding:
 ### Main Menu
 | Key      | Action                       |
 | -------- | ---------------------------- |
-| `1-5`    | Quick select menu item       |
+| `1-6`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
 ### Playing/Browsing Stations

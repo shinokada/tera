@@ -24,6 +24,7 @@ const (
 	screenList
 	screenLucky
 	screenGist
+	screenSettings
 )
 
 type App struct {
@@ -36,6 +37,7 @@ type App struct {
 	listManagementScreen ListManagementModel
 	luckyScreen          LuckyModel
 	gistScreen           GistModel
+	settingsScreen       SettingsModel
 	apiClient            *api.Client
 	favoritePath         string
 	quickFavorites       []api.Station
@@ -90,6 +92,7 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Manage Lists", "", "3"),
 		components.NewMenuItem("I Feel Lucky", "", "4"),
 		components.NewMenuItem("Gist Management", "", "5"),
+		components.NewMenuItem("Settings", "", "6"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -160,7 +163,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update main menu size
 		if a.screen == screenMainMenu {
 			h, v := docStyle().GetFrameSize()
-			// Ensure enough height for all menu items (5 items)
+			// Ensure enough height for all menu items (6 items)
 			// Reserve 6 lines for TERA header (3 lines) + spacing + help line
 			minHeight := 12
 			menuHeight := msg.Height - v - 6
@@ -216,6 +219,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.gistScreen.height = a.height
 			}
 			return a, a.gistScreen.Init()
+		case screenSettings:
+			a.settingsScreen = NewSettingsModel()
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.settingsScreen.width = a.width
+				a.settingsScreen.height = a.height
+			}
+			return a, a.settingsScreen.Init()
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
@@ -306,6 +317,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// But NewGistModel creates a fresh one every time we navigate to it.
 		}
 		return a, cmd
+	case screenSettings:
+		var m tea.Model
+		m, cmd = a.settingsScreen.Update(msg)
+		a.settingsScreen = m.(SettingsModel)
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
 	}
 
 	return a, nil
@@ -354,7 +375,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Single digit - could be menu shortcut (1-5) or start of larger number
+			// Single digit - could be menu shortcut (1-6) or start of larger number
 			return a, nil
 		}
 
@@ -366,8 +387,8 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 				a.numberBuffer = "" // Clear buffer
 
-				// Numbers 1-5 are for menu items
-				if num >= 1 && num <= 5 {
+				// Numbers 1-6 are for menu items
+				if num >= 1 && num <= 6 {
 					a.unifiedMenuIndex = num - 1
 					return a.executeMenuAction(num - 1)
 				}
@@ -381,7 +402,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			// No buffered number, use current unified selection
-			menuItemCount := 5 // Number of main menu items
+			menuItemCount := 6 // Number of main menu items
 			if a.unifiedMenuIndex < menuItemCount {
 				return a.executeMenuAction(a.unifiedMenuIndex)
 			} else {
@@ -395,7 +416,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle arrow keys for unified menu navigation
-		menuItemCount := 5
+		menuItemCount := 6
 		favCount := len(a.quickFavorites)
 		totalItems := menuItemCount + favCount
 
@@ -445,6 +466,10 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
+	case 5: // Settings
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenSettings}
+		}
 	}
 	return a, nil
 }
@@ -489,6 +514,8 @@ func (a App) View() string {
 		return a.luckyScreen.View()
 	case screenGist:
 		return a.gistScreen.View()
+	case screenSettings:
+		return a.settingsScreen.View()
 	}
 	return "Unknown screen"
 }
@@ -514,6 +541,7 @@ func (a App) viewMainMenu() string {
 		{"3", "Manage Lists"},
 		{"4", "I Feel Lucky"},
 		{"5", "Gist Management"},
+		{"6", "Settings"},
 	}
 
 	for i, item := range menuItems {
@@ -593,7 +621,7 @@ func (a App) viewMainMenu() string {
 	}
 
 	// Build help text
-	helpText := "↑↓/jk: Navigate • Enter: Select • 1-5: Menu • 10+: Quick play"
+	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6: Menu • 10+: Quick play"
 	if a.playingFromMain {
 		helpText += " • Esc: Stop"
 	}

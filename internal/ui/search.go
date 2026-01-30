@@ -842,7 +842,7 @@ func (m SearchModel) View() string {
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🔍 Search Radio Stations",
 			Content: content.String(),
-			Help:    "Enter) Search • Esc) Back • Ctrl+C) Quit",
+			Help:    "Enter: Search • Esc: Back • Ctrl+C: Quit",
 		}, m.height)
 
 	case searchStateLoading:
@@ -865,7 +865,7 @@ func (m SearchModel) View() string {
 		}
 		return RenderPage(PageLayout{
 			Content: m.resultsList.View(),
-			Help:    "↑↓/jk: Navigate • Enter: Play • Esc) Back • 0) Main Menu • Ctrl+C) Quit",
+			Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 		})
 
 	case searchStateStationInfo:

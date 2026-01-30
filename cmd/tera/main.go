@@ -68,6 +68,9 @@ func main() {
 		fmt.Printf("Warning: Could not load theme: %v\n", err)
 	}
 
+	// Set version in UI package for About screen
+	ui.Version = getVersion()
+
 	p := tea.NewProgram(ui.NewApp(), tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
