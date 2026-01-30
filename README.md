@@ -12,6 +12,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
+- **Theme-selector** - Choose from pre-defined theme or create your own.
 
 ## Requirements
 
