@@ -85,6 +85,7 @@ brews:
       owner: shinokada
       name: homebrew-tera
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
     homepage: https://github.com/shinokada/tera
     description: Terminal-based internet radio player
     license: MIT
