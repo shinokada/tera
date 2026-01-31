@@ -14,8 +14,18 @@ func TestNewSettingsModel(t *testing.T) {
 		t.Errorf("Expected initial state to be settingsStateMenu, got %v", m.state)
 	}
 
-	if m.currentTheme != "Default" {
-		t.Errorf("Expected currentTheme to be 'Default', got %s", m.currentTheme)
+	// currentTheme should be set to one of the predefined themes
+	// (depends on user's saved theme, so we just check it's not empty)
+	validThemes := []string{"Default", "Ocean", "Forest", "Sunset", "Purple Haze", "Monochrome", "Dracula", "Nord"}
+	isValid := false
+	for _, theme := range validThemes {
+		if m.currentTheme == theme {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		t.Errorf("Expected currentTheme to be a valid predefined theme, got '%s'", m.currentTheme)
 	}
 }
 

@@ -448,6 +448,13 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
+	// Stop any currently playing quick favorite before navigating
+	if a.playingFromMain && a.quickFavPlayer != nil {
+		_ = a.quickFavPlayer.Stop()
+	}
+	a.playingFromMain = false
+	a.playingStation = nil
+
 	switch index {
 	case 0: // Play from Favorites
 		return a, func() tea.Msg {
