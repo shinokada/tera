@@ -386,8 +386,11 @@ func (m SettingsModel) updateUpdates(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "0":
 		return m, func() tea.Msg { return backToMainMsg{} }
-	case "r":
+	case "r", "enter":
 		// Refresh/recheck for updates
+		if m.updateChecking {
+			return m, nil
+		}
 		m.updateChecking = true
 		m.updateChecked = false
 		m.updateError = ""

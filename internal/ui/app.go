@@ -398,7 +398,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
-				if a.playingStation != nil {
+				if a.playingStation != nil && newVol >= 0 {
 					a.playingStation.SetVolume(newVol)
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
@@ -426,7 +426,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
-				if a.playingStation != nil {
+				if a.playingStation != nil && !muted && vol >= 0 {
 					a.playingStation.SetVolume(vol)
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)

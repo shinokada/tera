@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -144,7 +145,7 @@ func TestStation_VolumeOmittedInJSON(t *testing.T) {
 	}
 
 	jsonStr := string(data)
-	if contains(jsonStr, "volume") {
+	if strings.Contains(jsonStr, "volume") {
 		t.Errorf("Expected JSON to omit volume field when nil, got: %s", jsonStr)
 	}
 
@@ -156,20 +157,7 @@ func TestStation_VolumeOmittedInJSON(t *testing.T) {
 	}
 
 	jsonStr = string(data)
-	if !contains(jsonStr, `"volume":50`) {
+	if !strings.Contains(jsonStr, `"volume":50`) {
 		t.Errorf("Expected JSON to contain volume:50, got: %s", jsonStr)
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
