@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/theme"
 )
 
@@ -249,4 +251,39 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	}
 
 	return wrapPageWithHeader(b.String())
+}
+
+// RenderStationDetails renders station details in a formatted way
+func RenderStationDetails(station api.Station) string {
+	var s strings.Builder
+
+	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
+
+	if station.Tags != "" {
+		s.WriteString(fmt.Sprintf("Tags:    %s\n", station.Tags))
+	}
+
+	if station.Country != "" {
+		s.WriteString(fmt.Sprintf("Country: %s", station.Country))
+		if station.State != "" {
+			s.WriteString(fmt.Sprintf(", %s", station.State))
+		}
+		s.WriteString("\n")
+	}
+
+	if station.Language != "" {
+		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
+	}
+
+	s.WriteString(fmt.Sprintf("Votes:   %d\n", station.Votes))
+
+	if station.Codec != "" {
+		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))
+		if station.Bitrate > 0 {
+			s.WriteString(fmt.Sprintf(" @ %d kbps", station.Bitrate))
+		}
+		s.WriteString("\n")
+	}
+
+	return s.String()
 }

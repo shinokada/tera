@@ -1,11 +1,14 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui/components"
 )
@@ -16,6 +19,7 @@ type settingsState int
 const (
 	settingsStateMenu settingsState = iota
 	settingsStateTheme
+	settingsStateUpdates
 	settingsStateAbout
 )
 
@@ -33,6 +37,12 @@ type SettingsModel struct {
 	messageTime      int
 	messageIsSuccess bool
 	currentTheme     string
+	// Update checking
+	latestVersion   string
+	updateAvailable bool
+	updateChecked   bool
+	updateChecking  bool
+	updateError     string
 }
 
 // Predefined themes
@@ -157,12 +167,34 @@ func (i themeItem) FilterValue() string { return i.name }
 func (i themeItem) Title() string       { return i.name }
 func (i themeItem) Description() string { return i.description }
 
+// versionCheckMsg is sent when version check completes
+type versionCheckMsg struct {
+	latestVersion string
+	err           error
+}
+
+// checkForUpdates performs the version check in the background
+func checkForUpdates() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		checker := api.NewVersionChecker()
+		release, err := checker.GetLatestRelease(ctx)
+		if err != nil {
+			return versionCheckMsg{err: err}
+		}
+		return versionCheckMsg{latestVersion: release.TagName}
+	}
+}
+
 // NewSettingsModel creates a new settings screen model
 func NewSettingsModel() SettingsModel {
 	// Main settings menu
 	menuItems := []components.MenuItem{
 		components.NewMenuItem("Theme / Colors", "Choose a color theme", "1"),
-		components.NewMenuItem("About TERA", "Version and information", "2"),
+		components.NewMenuItem("Check for Updates", "Check for new versions", "2"),
+		components.NewMenuItem("About TERA", "Version and information", "3"),
 	}
 	menuList := components.CreateMenu(menuItems, "", 50, 10)
 
@@ -199,6 +231,9 @@ func NewSettingsModel() SettingsModel {
 		menuList:     menuList,
 		themeList:    themeList,
 		currentTheme: currentTheme,
+		// Update fields initialized to defaults
+		updateChecked:  false,
+		updateChecking: false,
 	}
 }
 
@@ -210,12 +245,25 @@ func (m SettingsModel) Init() tea.Cmd {
 // Update handles messages for the settings screen
 func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case versionCheckMsg:
+		m.updateChecking = false
+		m.updateChecked = true
+		if msg.err != nil {
+			m.updateError = msg.err.Error()
+			return m, nil
+		}
+		m.latestVersion = msg.latestVersion
+		m.updateAvailable = api.IsNewerVersion(Version, msg.latestVersion)
+		return m, nil
+
 	case tea.KeyMsg:
 		switch m.state {
 		case settingsStateMenu:
 			return m.updateMenu(msg)
 		case settingsStateTheme:
 			return m.updateTheme(msg)
+		case settingsStateUpdates:
+			return m.updateUpdates(msg)
 		case settingsStateAbout:
 			return m.updateAbout(msg)
 		}
@@ -253,6 +301,14 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "2":
+		m.state = settingsStateUpdates
+		if !m.updateChecked && !m.updateChecking {
+			m.updateChecking = true
+			return m, checkForUpdates()
+		}
+		return m, nil
+
+	case "3":
 		m.state = settingsStateAbout
 		return m, nil
 
@@ -262,6 +318,12 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 0:
 			m.state = settingsStateTheme
 		case 1:
+			m.state = settingsStateUpdates
+			if !m.updateChecked && !m.updateChecking {
+				m.updateChecking = true
+				return m, checkForUpdates()
+			}
+		case 2:
 			m.state = settingsStateAbout
 		}
 		return m, nil
@@ -317,6 +379,26 @@ func (m SettingsModel) updateTheme(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m SettingsModel) updateUpdates(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.state = settingsStateMenu
+		return m, nil
+	case "0":
+		return m, func() tea.Msg { return backToMainMsg{} }
+	case "r", "enter":
+		// Refresh/recheck for updates
+		if m.updateChecking {
+			return m, nil
+		}
+		m.updateChecking = true
+		m.updateChecked = false
+		m.updateError = ""
+		return m, checkForUpdates()
+	}
+	return m, nil
+}
+
 func (m SettingsModel) updateAbout(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "enter":
@@ -335,6 +417,8 @@ func (m SettingsModel) View() string {
 		return m.viewMenu()
 	case settingsStateTheme:
 		return m.viewTheme()
+	case settingsStateUpdates:
+		return m.viewUpdates()
 	case settingsStateAbout:
 		return m.viewAbout()
 	}
@@ -358,7 +442,7 @@ func (m SettingsModel) viewMenu() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-2: Shortcut • Esc/0: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Shortcut • Esc/0: Back • Ctrl+C: Quit",
 	}, m.height)
 }
 
@@ -384,6 +468,66 @@ func (m SettingsModel) viewTheme() string {
 		Title:   "🎨 Theme / Colors",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Apply Theme • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
+}
+
+func (m SettingsModel) viewUpdates() string {
+	var content strings.Builder
+
+	// Current version
+	currentVersion := Version
+	if currentVersion == "" {
+		currentVersion = "dev"
+	}
+	content.WriteString(stationFieldStyle().Render("Current version: "))
+	content.WriteString(highlightStyle().Render(currentVersion))
+	content.WriteString("\n\n")
+
+	content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
+	content.WriteString("\n\n")
+
+	if m.updateChecking {
+		content.WriteString(stationValueStyle().Render("⏳ Checking for updates..."))
+	} else if m.updateError != "" {
+		content.WriteString(errorStyle().Render("✗ Error checking for updates:"))
+		content.WriteString("\n")
+		content.WriteString(helpStyle().Render("  " + m.updateError))
+		content.WriteString("\n\n")
+		content.WriteString(stationValueStyle().Render("Press 'r' to retry"))
+	} else if m.updateChecked {
+		if m.updateAvailable {
+			content.WriteString(successStyle().Render("⬆ New version available!"))
+			content.WriteString("\n\n")
+			content.WriteString(stationFieldStyle().Render("Latest version: "))
+			content.WriteString(highlightStyle().Render(m.latestVersion))
+			content.WriteString("\n\n")
+			content.WriteString(stationFieldStyle().Render("Release page:"))
+			content.WriteString("\n")
+			content.WriteString(stationValueStyle().Render("  " + api.ReleasePageURL))
+			content.WriteString("\n\n")
+			content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
+			content.WriteString("\n\n")
+			content.WriteString(helpStyle().Render("Update instructions:"))
+			content.WriteString("\n\n")
+			content.WriteString(stationValueStyle().Render("  If installed via Go:"))
+			content.WriteString("\n")
+			content.WriteString(highlightStyle().Render("    go install github.com/shinokada/tera/cmd/tera@latest"))
+			content.WriteString("\n\n")
+			content.WriteString(stationValueStyle().Render("  Or visit the release page to download binaries."))
+		} else {
+			content.WriteString(successStyle().Render("✓ You're up to date!"))
+			content.WriteString("\n\n")
+			content.WriteString(stationFieldStyle().Render("Latest version: "))
+			content.WriteString(highlightStyle().Render(m.latestVersion))
+		}
+	} else {
+		content.WriteString(stationValueStyle().Render("Press Enter or 'r' to check for updates"))
+	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🔄 Check for Updates",
+		Content: content.String(),
+		Help:    "r: Refresh • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
 }
 

@@ -47,8 +47,15 @@ type App struct {
 	QuickFavPlayer       *player.MPVPlayer // Exported for MPRIS integration
 	playingFromMain      bool
 	playingStation       *api.Station
-	numberBuffer         string // Buffer for multi-digit number input
-	unifiedMenuIndex     int    // Unified index for navigating both menu and favorites
+	numberBuffer         string               // Buffer for multi-digit number input
+	unifiedMenuIndex     int                  // Unified index for navigating both menu and favorites
+	helpModel            components.HelpModel // Help overlay
+	volumeDisplay        string               // Temporary volume display message
+	volumeDisplayFrames  int                  // Countdown for volume display
+	// Update checking
+	latestVersion   string // Latest version from GitHub
+	updateAvailable bool   // True if a newer version exists
+	updateChecked   bool   // True if version check completed
 }
 
 // navigateMsg is sent when changing screens
@@ -74,6 +81,7 @@ func NewApp() App {
 		favoritePath:   favPath,
 		apiClient:      api.NewClient(),
 		QuickFavPlayer: player.NewMPVPlayer(),
+		helpModel:      components.NewHelpModel(components.CreateMainMenuHelp()),
 	}
 
 	// Initialize main menu
@@ -136,11 +144,21 @@ func (a *App) loadQuickFavorites() {
 }
 
 func (a App) Init() tea.Cmd {
-	return nil
+	// Check for updates in the background on startup
+	return checkForUpdates()
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case versionCheckMsg:
+		// Handle version check result (from startup or settings)
+		a.updateChecked = true
+		if msg.err == nil {
+			a.latestVersion = msg.latestVersion
+			a.updateAvailable = api.IsNewerVersion(Version, msg.latestVersion)
+		}
+		return a, nil
+
 	case tea.KeyMsg:
 		// Global key bindings
 		switch msg.String() {
@@ -162,6 +180,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
+
+		// Update help model size
+		a.helpModel.SetSize(msg.Width, msg.Height)
 
 		// Update main menu size
 		if a.screen == screenMainMenu {
@@ -228,6 +249,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.width > 0 && a.height > 0 {
 				a.settingsScreen.width = a.width
 				a.settingsScreen.height = a.height
+			}
+			// Pass update info from App to Settings
+			if a.updateChecked {
+				a.settingsScreen.updateChecked = true
+				a.settingsScreen.latestVersion = a.latestVersion
+				a.settingsScreen.updateAvailable = a.updateAvailable
 			}
 			return a, a.settingsScreen.Init()
 		case screenMainMenu:
@@ -337,7 +364,89 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		// Handle volume display countdown
+		if a.volumeDisplayFrames > 0 {
+			a.volumeDisplayFrames--
+			if a.volumeDisplayFrames == 0 {
+				a.volumeDisplay = ""
+			}
+			return a, tickEverySecond()
+		}
+		return a, nil
+
 	case tea.KeyMsg:
+		// If help is visible, let it handle the key
+		if a.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			a.helpModel, cmd = a.helpModel.Update(msg)
+			return a, cmd
+		}
+
+		// Handle ? for help
+		if msg.String() == "?" {
+			a.helpModel.Show()
+			return a, nil
+		}
+
+		// Handle volume controls when playing
+		if a.playingFromMain && a.quickFavPlayer != nil {
+			switch msg.String() {
+			case "/":
+				// Decrease volume
+				newVol := a.quickFavPlayer.DecreaseVolume(5)
+				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
+				startTick := a.volumeDisplayFrames == 0
+				a.volumeDisplayFrames = 2 // Show for 2 seconds
+				// Update station volume if we have one
+				if a.playingStation != nil && newVol >= 0 {
+					a.playingStation.SetVolume(newVol)
+					// Save updated volume to favorites
+					a.saveStationVolume(a.playingStation)
+				}
+				if startTick {
+					return a, tickEverySecond()
+				}
+				return a, nil
+			case "*":
+				// Increase volume
+				newVol := a.quickFavPlayer.IncreaseVolume(5)
+				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
+				startTick := a.volumeDisplayFrames == 0
+				a.volumeDisplayFrames = 2 // Show for 2 seconds
+				// Update station volume if we have one
+				if a.playingStation != nil {
+					a.playingStation.SetVolume(newVol)
+					// Save updated volume to favorites
+					a.saveStationVolume(a.playingStation)
+				}
+				if startTick {
+					return a, tickEverySecond()
+				}
+				return a, nil
+			case "m":
+				// Toggle mute
+				muted, vol := a.quickFavPlayer.ToggleMute()
+				if muted {
+					a.volumeDisplay = "Volume: Muted"
+				} else {
+					a.volumeDisplay = fmt.Sprintf("Volume: %d%%", vol)
+				}
+				startTick := a.volumeDisplayFrames == 0
+				a.volumeDisplayFrames = 2 // Show for 2 seconds
+				// Update station volume if we have one
+				if a.playingStation != nil && !muted && vol >= 0 {
+					a.playingStation.SetVolume(vol)
+					// Save updated volume to favorites
+					a.saveStationVolume(a.playingStation)
+				}
+				if startTick {
+					return a, tickEverySecond()
+				}
+				return a, nil
+			}
+		}
+
 		// Handle Escape to stop playing if playing from main menu
 		if msg.String() == "esc" && a.playingFromMain {
 			if a.QuickFavPlayer != nil {
@@ -530,6 +639,33 @@ func (a App) View() string {
 	return "Unknown screen"
 }
 
+// saveStationVolume saves the updated volume for a station in the favorites list
+func (a *App) saveStationVolume(station *api.Station) {
+	if station == nil {
+		return
+	}
+
+	store := storage.NewStorage(a.favoritePath)
+	list, err := store.LoadList(context.Background(), "My-favorites")
+	if err != nil {
+		return
+	}
+
+	// Find and update the station
+	for i := range list.Stations {
+		if list.Stations[i].StationUUID == station.StationUUID {
+			list.Stations[i].Volume = station.Volume
+			break
+		}
+	}
+
+	// Save the updated list
+	_ = store.SaveList(context.Background(), list)
+
+	// Reload quick favorites to reflect the change
+	a.loadQuickFavorites()
+}
+
 func (a App) viewMainMenu() string {
 	var content strings.Builder
 
@@ -630,18 +766,38 @@ func (a App) viewMainMenu() string {
 		}
 	}
 
-	// Build help text
-	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6: Menu • 10+: Quick play"
-	if a.playingFromMain {
-		helpText += " • Esc: Stop"
+	// Add volume display if visible
+	if a.volumeDisplay != "" {
+		content.WriteString("\n")
+		content.WriteString(highlightStyle().Render(a.volumeDisplay))
+		content.WriteString("\n")
 	}
-	helpText += " • Ctrl+C: Quit"
 
-	// Use the page template with help at the bottom of the screen
-	return RenderPageWithBottomHelp(PageLayout{
+	// Build help text based on playing state
+	var helpText string
+	if a.playingFromMain {
+		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
+	} else {
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-6: Menu • 10+: Quick Play • ?: Help"
+	}
+
+	// Add update indicator if available (yellow)
+	if a.updateAvailable {
+		helpText += " • " + highlightStyle().Render("⬆ Update")
+	}
+
+	// Render the page
+	page := RenderPageWithBottomHelp(PageLayout{
 		Title:    "Main Menu & Quick Play",
 		Subtitle: "",
 		Content:  content.String(),
 		Help:     helpText,
 	}, a.height)
+
+	// Overlay help if visible
+	if a.helpModel.IsVisible() {
+		return a.helpModel.View()
+	}
+
+	return page
 }

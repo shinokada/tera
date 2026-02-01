@@ -14,6 +14,7 @@ import (
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/internal/ui/components"
 )
 
 // luckyState represents the current state in the lucky screen
@@ -45,6 +46,7 @@ type LuckyModel struct {
 	availableLists  []string
 	listItems       []list.Item
 	listModel       list.Model
+	helpModel       components.HelpModel
 }
 
 // Messages for lucky screen
@@ -89,6 +91,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 		player:       player.NewMPVPlayer(),
 		width:        80,
 		height:       24,
+		helpModel:    components.NewHelpModel(components.CreatePlayingHelp()),
 	}
 }
 
@@ -101,6 +104,12 @@ func (m LuckyModel) Init() tea.Cmd {
 func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			m.helpModel, cmd = m.helpModel.Update(msg)
+			return m, cmd
+		}
+
 		switch m.state {
 		case luckyStateInput:
 			return m.updateInput(msg)
@@ -117,6 +126,9 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		m.helpModel.SetSize(msg.Width, msg.Height)
+
 		return m, nil
 
 	case luckySearchResultsMsg:
@@ -246,14 +258,17 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// Stop playback and show save prompt
+		// Stop playback and return to main menu
 		if err := m.player.Stop(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
 			m.saveMessageTime = 150
 			return m, nil
 		}
-		m.state = luckyStateSavePrompt
-		return m, nil
+		m.state = luckyStateInput
+		m.selectedStation = nil
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenMainMenu}
+		}
 	case "0":
 		// Return to main menu (Level 2+ shortcut)
 		if err := m.player.Stop(); err != nil {
@@ -276,6 +291,44 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
+	case "/":
+		// Decrease volume
+		newVol := m.player.DecreaseVolume(5)
+		if m.selectedStation != nil && newVol >= 0 {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		return m, nil
+	case "*":
+		// Increase volume
+		newVol := m.player.IncreaseVolume(5)
+		if m.selectedStation != nil {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		return m, nil
+	case "m":
+		// Toggle mute
+		muted, vol := m.player.ToggleMute()
+		if muted {
+			m.saveMessage = "Volume: Muted"
+		} else {
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+		}
+		if m.selectedStation != nil && !muted && vol >= 0 {
+			m.selectedStation.SetVolume(vol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		return m, nil
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
 	}
 	return m, nil
 }
@@ -483,8 +536,34 @@ func (m LuckyModel) voteForStation() tea.Cmd {
 	}
 }
 
+// saveStationVolume saves the updated volume for a station in My-favorites
+func (m LuckyModel) saveStationVolume(station *api.Station) {
+	if station == nil {
+		return
+	}
+
+	store := storage.NewStorage(m.favoritePath)
+	// Save to My-favorites if the station exists there
+	list, err := store.LoadList(context.Background(), "My-favorites")
+	if err != nil {
+		return
+	}
+
+	for i := range list.Stations {
+		if list.Stations[i].StationUUID == station.StationUUID {
+			list.Stations[i].Volume = station.Volume
+			break
+		}
+	}
+	_ = store.SaveList(context.Background(), list)
+}
+
 // View renders the lucky screen
 func (m LuckyModel) View() string {
+	if m.helpModel.IsVisible() {
+		return m.helpModel.View()
+	}
+
 	switch m.state {
 	case luckyStateInput:
 		return m.viewInput()
@@ -553,7 +632,7 @@ func (m LuckyModel) viewPlaying() string {
 	var content strings.Builder
 
 	// Station info (same format as Now Playing in search)
-	content.WriteString(renderStationDetails(*m.selectedStation))
+	content.WriteString(RenderStationDetails(*m.selectedStation))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
@@ -567,8 +646,12 @@ func (m LuckyModel) viewPlaying() string {
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
 		var msgStyle lipgloss.Style
-		if strings.Contains(m.saveMessage, "✓") {
-			msgStyle = successStyle()
+		if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Volume:") {
+			if strings.Contains(m.saveMessage, "Muted") {
+				msgStyle = infoStyle()
+			} else {
+				msgStyle = successStyle()
+			}
 		} else if strings.Contains(m.saveMessage, "Already") {
 			msgStyle = infoStyle()
 		} else {
@@ -580,7 +663,7 @@ func (m LuckyModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "Esc: Stop • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit",
+		Help:    "f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
 	}, m.height)
 }
 

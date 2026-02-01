@@ -13,6 +13,7 @@ import (
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/internal/ui/components"
 )
 
 // playState represents the current state in the play screen
@@ -45,8 +46,9 @@ type PlayModel struct {
 	width            int
 	height           int
 	err              error
-	listsNeedInit    bool // Flag to trigger list model initialization
-	stationsNeedInit bool // Flag to trigger station model initialization
+	listsNeedInit    bool                 // Flag to trigger list model initialization
+	stationsNeedInit bool                 // Flag to trigger station model initialization
+	helpModel        components.HelpModel // Help overlay
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -96,6 +98,7 @@ func NewPlayModel(favoritePath string) PlayModel {
 		lists:        []string{},
 		listItems:    []list.Item{},
 		player:       player.NewMPVPlayer(),
+		helpModel:    components.NewHelpModel(components.CreateFavoritesHelp()),
 	}
 }
 
@@ -188,6 +191,12 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			m.helpModel, cmd = m.helpModel.Update(msg)
+			return m, cmd
+		}
+
 		switch m.state {
 		case playStateListSelection:
 			return m.updateListSelection(msg)
@@ -223,6 +232,9 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.stationListModel.Items() != nil && len(m.stationListModel.Items()) > 0 {
 			m.stationListModel.SetSize(msg.Width, listHeight)
 		}
+
+		m.helpModel.SetSize(msg.Width, msg.Height)
+
 		return m, nil
 
 	case playbackStartedMsg:
@@ -302,6 +314,16 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, nil
+
+	case tickMsg:
+		// Countdown save message
+		if m.saveMessageTime > 0 {
+			m.saveMessageTime--
+			if m.saveMessageTime == 0 {
+				m.saveMessage = ""
+			}
+		}
+		return m, ticksEverySecond()
 
 	case errMsg:
 		m.err = msg.err
@@ -475,6 +497,56 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
+	case "/":
+		// Decrease volume
+		newVol := m.player.DecreaseVolume(5)
+		if m.selectedStation != nil && newVol >= 0 {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		startTick := m.saveMessageTime == 0
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
+	case "*":
+		// Increase volume
+		newVol := m.player.IncreaseVolume(5)
+		if m.selectedStation != nil {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		startTick := m.saveMessageTime == 0
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
+	case "m":
+		// Toggle mute
+		muted, vol := m.player.ToggleMute()
+		if muted {
+			m.saveMessage = "Volume: Muted"
+		} else {
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+		}
+		if m.selectedStation != nil && !muted && vol >= 0 {
+			m.selectedStation.SetVolume(vol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		startTick := m.saveMessageTime == 0
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
 	}
 	return m, nil
 }
@@ -553,6 +625,30 @@ func (m PlayModel) deleteStationFromList(station *api.Station) tea.Cmd {
 	}
 }
 
+// saveStationVolume saves the updated volume for a station in the current list
+func (m PlayModel) saveStationVolume(station *api.Station) {
+	if station == nil || m.selectedList == "" {
+		return
+	}
+
+	store := storage.NewStorage(m.favoritePath)
+	list, err := store.LoadList(context.Background(), m.selectedList)
+	if err != nil {
+		return
+	}
+
+	// Find and update the station
+	for i := range list.Stations {
+		if list.Stations[i].StationUUID == station.StationUUID {
+			list.Stations[i].Volume = station.Volume
+			break
+		}
+	}
+
+	// Save the updated list
+	_ = store.SaveList(context.Background(), list)
+}
+
 // voteForStation votes for the currently playing station
 func (m PlayModel) voteForStation() tea.Cmd {
 	return func() tea.Msg {
@@ -576,6 +672,10 @@ func (m PlayModel) voteForStation() tea.Cmd {
 
 // View renders the play screen
 func (m PlayModel) View() string {
+	if m.helpModel.IsVisible() {
+		return m.helpModel.View()
+	}
+
 	if m.err != nil {
 		return errorView(m.err)
 	}
@@ -625,7 +725,7 @@ func (m PlayModel) viewPlaying() string {
 	var content strings.Builder
 
 	// Station info (consistent format across all playing views)
-	content.WriteString(renderStationDetails(*m.selectedStation))
+	content.WriteString(RenderStationDetails(*m.selectedStation))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
@@ -640,8 +740,12 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString("\n\n")
 		// Determine style based on message content
 		var style lipgloss.Style
-		if strings.Contains(m.saveMessage, "✓") {
-			style = successStyle()
+		if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Volume:") {
+			if strings.Contains(m.saveMessage, "Muted") {
+				style = infoStyle()
+			} else {
+				style = successStyle()
+			}
 		} else if strings.Contains(m.saveMessage, "Already") {
 			style = infoStyle()
 		} else {
@@ -654,7 +758,7 @@ func (m PlayModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "Esc: Back • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit",
+		Help:    "f: Favorites • v: Vote • 0: Main Menu • ?: Help",
 	}, m.height)
 }
 

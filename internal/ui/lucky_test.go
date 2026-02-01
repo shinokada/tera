@@ -177,12 +177,26 @@ func TestLuckyPlayingStateEscNavigation(t *testing.T) {
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
 	msg := tea.KeyMsg{Type: tea.KeyEsc}
-	updatedModel, _ := model.Update(msg)
+	updatedModel, cmd := model.Update(msg)
 
 	luckyModel := updatedModel.(LuckyModel)
-	// ESC during playback should stop and show save prompt
-	if luckyModel.state != luckyStateSavePrompt {
-		t.Errorf("Expected state to be luckyStateSavePrompt, got %v", luckyModel.state)
+	// ESC during playback should stop and return to main menu
+	if luckyModel.state != luckyStateInput {
+		t.Errorf("Expected state to be luckyStateInput, got %v", luckyModel.state)
+	}
+
+	if cmd == nil {
+		t.Error("Expected command to be returned for navigation")
+	}
+
+	// Verify navigation to main menu
+	resultMsg := cmd()
+	if navMsg, ok := resultMsg.(navigateMsg); ok {
+		if navMsg.screen != screenMainMenu {
+			t.Errorf("Expected navigation to screenMainMenu, got %v", navMsg.screen)
+		}
+	} else {
+		t.Error("Expected navigateMsg from command")
 	}
 }
 

@@ -401,7 +401,7 @@ func TestRenderStationDetails(t *testing.T) {
 		Bitrate:     128,
 	}
 
-	details := renderStationDetails(station)
+	details := RenderStationDetails(station)
 
 	// Check that details contain expected information
 	if !contains(details, "Test Station") {

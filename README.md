@@ -8,9 +8,11 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎲 **I Feel Lucky** - Random station discovery by keyword
 - 💾 **Favorites** - Organize stations into custom lists with duplicate detection
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
+- 🔊 **Volume Control** - Adjust volume and mute during playback
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
+- 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 
 ## Requirements
@@ -190,23 +192,59 @@ padding:
   list_item_left: 2
 ```
 
+## Update Checker
+
+TERA automatically checks for new versions on startup. When an update is available:
+
+- A yellow **⬆ Update** indicator appears in the main menu footer
+- Go to **Settings → Check for Updates** for details and update instructions
+
+### Checking for Updates
+
+1. Press `6` from the main menu to open Settings
+2. Select "Check for Updates" (option 2)
+3. View the latest version and release notes link
+4. Follow the update instructions for your installation method
+
+### Update Commands
+
+| Installation Method | Update Command                                                            |
+| ------------------- | ------------------------------------------------------------------------- |
+| Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
+| Go install          | `go install github.com/shinokada/tera/cmd/tera@latest`                    |
+| Scoop               | `scoop update tera`                                                       |
+| Manual              | Download from [releases page](https://github.com/shinokada/tera/releases) |
+
 ## Keyboard Shortcuts
 
 ### Global Navigation
+
 | Key         | Action        |
 | ----------- | ------------- |
 | `↑↓` / `jk` | Navigate      |
 | `Enter`     | Select / Play |
-| `Esc`       | Back          |
+| `Esc`       | Back / Stop   |
+| `0`         | Main Menu     |
+| `?`         | Help          |
 | `Ctrl+C`    | Quit          |
 
 ### Main Menu
+
 | Key      | Action                       |
 | -------- | ---------------------------- |
 | `1-6`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
+### Playback Controls
+
+| Key | Action            |
+| --- | ----------------- |
+| `*` | Volume up (+5%)   |
+| `/` | Volume down (-5%) |
+| `m` | Toggle mute       |
+
 ### Playing/Browsing Stations
+
 | Key | Action               |
 | --- | -------------------- |
 | `f` | Save to My-favorites |
@@ -214,6 +252,7 @@ padding:
 | `v` | Vote for station     |
 
 ### List Management
+
 | Key | Action                |
 | --- | --------------------- |
 | `n` | New list (in dialogs) |

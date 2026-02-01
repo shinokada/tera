@@ -15,9 +15,23 @@ type Station struct {
 	Votes       int    `json:"votes"`
 	Codec       string `json:"codec"`
 	Bitrate     int    `json:"bitrate"`
+	Volume      *int   `json:"volume,omitempty"` // Per-station volume (0-100), nil means use default
 }
 
 // TrimName returns station name with whitespace trimmed
 func (s *Station) TrimName() string {
 	return strings.TrimSpace(s.Name)
+}
+
+// SetVolume sets the station's volume (0-100)
+func (s *Station) SetVolume(vol int) {
+	s.Volume = &vol
+}
+
+// GetVolume returns the station's volume or -1 if not set
+func (s *Station) GetVolume() int {
+	if s.Volume == nil {
+		return -1
+	}
+	return *s.Volume
 }
