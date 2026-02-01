@@ -760,6 +760,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		newVol := m.player.DecreaseVolume(5)
 		if m.selectedStation != nil && newVol >= 0 {
 			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
@@ -773,6 +774,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		newVol := m.player.IncreaseVolume(5)
 		if m.selectedStation != nil {
 			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
@@ -791,6 +793,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.selectedStation != nil && !muted && vol >= 0 {
 			m.selectedStation.SetVolume(vol)
+			m.saveStationVolume(m.selectedStation)
 		}
 		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
@@ -867,6 +870,28 @@ func (m SearchModel) voteForStation() tea.Cmd {
 
 		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
 	}
+}
+
+// saveStationVolume saves the updated volume for a station in My-favorites
+func (m SearchModel) saveStationVolume(station *api.Station) {
+	if station == nil {
+		return
+	}
+
+	store := storage.NewStorage(m.favoritePath)
+	// Save to My-favorites if the station exists there
+	list, err := store.LoadList(context.Background(), "My-favorites")
+	if err != nil {
+		return
+	}
+
+	for i := range list.Stations {
+		if list.Stations[i].StationUUID == station.StationUUID {
+			list.Stations[i].Volume = station.Volume
+			break
+		}
+	}
+	_ = store.SaveList(context.Background(), list)
 }
 
 // View renders the search screen

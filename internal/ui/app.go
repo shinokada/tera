@@ -396,6 +396,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Decrease volume
 				newVol := a.quickFavPlayer.DecreaseVolume(5)
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
+				startTick := a.volumeDisplayFrames == 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil && newVol >= 0 {
@@ -403,11 +404,15 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
 				}
-				return a, tickEverySecond()
+				if startTick {
+					return a, tickEverySecond()
+				}
+				return a, nil
 			case "*":
 				// Increase volume
 				newVol := a.quickFavPlayer.IncreaseVolume(5)
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
+				startTick := a.volumeDisplayFrames == 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil {
@@ -415,7 +420,10 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
 				}
-				return a, tickEverySecond()
+				if startTick {
+					return a, tickEverySecond()
+				}
+				return a, nil
 			case "m":
 				// Toggle mute
 				muted, vol := a.quickFavPlayer.ToggleMute()
@@ -424,6 +432,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					a.volumeDisplay = fmt.Sprintf("Volume: %d%%", vol)
 				}
+				startTick := a.volumeDisplayFrames == 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil && !muted && vol >= 0 {
@@ -431,7 +440,10 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
 				}
-				return a, tickEverySecond()
+				if startTick {
+					return a, tickEverySecond()
+				}
+				return a, nil
 			}
 		}
 
