@@ -54,7 +54,7 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 
 	// Determine volume to use: station-specific volume or current player volume
 	volumeToUse := p.volume
-	if station.Volume > 0 {
+	if station.Volume >= 0 {
 		volumeToUse = station.Volume
 	}
 	// Clamp volume to valid range (0-100) to prevent unexpectedly loud playback

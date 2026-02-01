@@ -15,7 +15,7 @@ type Station struct {
 	Votes       int    `json:"votes"`
 	Codec       string `json:"codec"`
 	Bitrate     int    `json:"bitrate"`
-	Volume      int    `json:"volume,omitempty"` // Per-station volume (0-100), 0 means use default
+	Volume      int    `json:"volume"` // Per-station volume (0-100), -1 means use default
 }
 
 // TrimName returns station name with whitespace trimmed
