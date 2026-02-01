@@ -23,11 +23,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"runtime/debug"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/go-music-players/mpris"
+	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui"
 )
@@ -48,6 +51,11 @@ func getVersion() string {
 }
 
 func main() {
+	// Define flags
+	enableMpris := flag.Bool("mpris", false, "Enable MPRIS2 support")
+	showVersion := flag.Bool("version", false, "Show version")
+	showHelp := flag.Bool("help", false, "Show help")
+
 	// Handle CLI arguments
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -60,7 +68,25 @@ func main() {
 		case "--version", "-v":
 			fmt.Printf("TERA %s\n", getVersion())
 			return
+		case "--mpris":
+			// Parse remaining flags
+			flag.CommandLine.Parse(os.Args[2:])
+		default:
+			// Try parsing as flags
+			flag.CommandLine.Parse(os.Args[1:])
 		}
+	} else {
+		flag.Parse()
+	}
+
+	if *showHelp {
+		printHelp()
+		return
+	}
+
+	if *showVersion {
+		fmt.Printf("TERA %s\n", getVersion())
+		return
 	}
 
 	// Initialize theme before starting UI
@@ -71,7 +97,23 @@ func main() {
 	// Set version in UI package for About screen
 	ui.Version = getVersion()
 
-	p := tea.NewProgram(ui.NewApp(), tea.WithAltScreen())
+	app := ui.NewApp()
+
+	// Initialize MPRIS if enabled
+	var mprisServer *mpris.Server
+	if *enableMpris {
+		adapter := player.NewMPRISAdapter(app.QuickFavPlayer)
+		var err error
+		mprisServer, err = mpris.NewServer("tera", adapter)
+		if err != nil {
+			fmt.Printf("Warning: Unable to register MPRIS with DBUS: %s\n", err)
+			fmt.Println("Continuing without MPRIS support...")
+		} else {
+			defer mprisServer.Close()
+		}
+	}
+
+	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -146,7 +188,7 @@ Example: Edit ~/.config/tera/theme.yaml to customize your theme.`)
 func printHelp() {
 	fmt.Println(`TERA - Terminal Radio Player
 
-Usage: tera [command]
+Usage: tera [command] [options]
 
 Commands:
   theme    Manage theme settings (reset, path, edit)
@@ -154,6 +196,7 @@ Commands:
 Options:
   -h, --help     Show this help message
   -v, --version  Show version
+  --mpris        Enable MPRIS2 support for desktop integration
 
 Run without arguments to start the interactive radio player.`)
 }
