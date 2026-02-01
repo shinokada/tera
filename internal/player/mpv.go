@@ -57,6 +57,13 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	if station.Volume > 0 {
 		volumeToUse = station.Volume
 	}
+	// Clamp volume to valid range (0-100) to prevent unexpectedly loud playback
+	if volumeToUse < 0 {
+		volumeToUse = 0
+	}
+	if volumeToUse > 100 {
+		volumeToUse = 100
+	}
 
 	// Create unique socket path for IPC
 	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
@@ -123,6 +130,12 @@ func (p *MPVPlayer) connectToSocket() {
 		conn, err := net.Dial("unix", socketPath)
 		if err == nil {
 			p.mu.Lock()
+			// Guard against stale IPC connections when Play restarts quickly
+			if !p.playing || p.socketPath != socketPath || p.conn != nil {
+				p.mu.Unlock()
+				_ = conn.Close()
+				return
+			}
 			p.conn = conn
 			currentVol := p.volume
 			muted := p.muted

@@ -294,7 +294,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
-		if m.selectedStation != nil && newVol > 0 {
+		if m.selectedStation != nil && newVol >= 0 {
 			m.selectedStation.Volume = newVol
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
@@ -317,7 +317,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 		}
-		if m.selectedStation != nil && !muted && vol > 0 {
+		if m.selectedStation != nil && !muted && vol >= 0 {
 			m.selectedStation.Volume = vol
 		}
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
