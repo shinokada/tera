@@ -44,7 +44,7 @@ type App struct {
 	apiClient            *api.Client
 	favoritePath         string
 	quickFavorites       []api.Station
-	quickFavPlayer       *player.MPVPlayer
+	QuickFavPlayer       *player.MPVPlayer // Exported for MPRIS integration
 	playingFromMain      bool
 	playingStation       *api.Station
 	numberBuffer         string // Buffer for multi-digit number input
@@ -73,7 +73,7 @@ func NewApp() App {
 		screen:         screenMainMenu,
 		favoritePath:   favPath,
 		apiClient:      api.NewClient(),
-		quickFavPlayer: player.NewMPVPlayer(),
+		QuickFavPlayer: player.NewMPVPlayer(),
 	}
 
 	// Initialize main menu
@@ -146,8 +146,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			// Stop any playing stations before quitting
-			if a.quickFavPlayer != nil {
-				_ = a.quickFavPlayer.Stop()
+			if a.QuickFavPlayer != nil {
+				_ = a.QuickFavPlayer.Stop()
 			}
 			if a.screen == screenPlay && a.playScreen.player != nil {
 				_ = a.playScreen.player.Stop()
@@ -340,8 +340,8 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Handle Escape to stop playing if playing from main menu
 		if msg.String() == "esc" && a.playingFromMain {
-			if a.quickFavPlayer != nil {
-				_ = a.quickFavPlayer.Stop()
+			if a.QuickFavPlayer != nil {
+				_ = a.QuickFavPlayer.Stop()
 			}
 			a.playingFromMain = false
 			a.playingStation = nil
@@ -449,8 +449,8 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	// Stop any currently playing quick favorite before navigating
-	if a.playingFromMain && a.quickFavPlayer != nil {
-		_ = a.quickFavPlayer.Stop()
+	if a.playingFromMain && a.QuickFavPlayer != nil {
+		_ = a.QuickFavPlayer.Stop()
 	}
 	a.playingFromMain = false
 	a.playingStation = nil
@@ -495,14 +495,14 @@ func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	a.playingFromMain = true
 
 	// Stop any currently playing station
-	if a.quickFavPlayer != nil {
-		_ = a.quickFavPlayer.Stop()
+	if a.QuickFavPlayer != nil {
+		_ = a.QuickFavPlayer.Stop()
 	}
 
 	// Start playback
 	return a, func() tea.Msg {
-		if a.quickFavPlayer != nil {
-			if err := a.quickFavPlayer.Play(&station); err != nil {
+		if a.QuickFavPlayer != nil {
+			if err := a.QuickFavPlayer.Play(&station); err != nil {
 				return playbackErrorMsg{err}
 			}
 		}
