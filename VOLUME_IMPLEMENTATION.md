@@ -86,7 +86,7 @@
 
 **Option A: Restart playback with volume 0**
 - When user presses `m`, restart the stream with `--volume=0`
-- Store previous volume to restore on unmute
+- Store previous volume to restore when unmuting
 - Display "Muted" message
 
 **Option B: Remove mute feature**
@@ -187,4 +187,3 @@ Would you like me to:
 3. Focus on a specific screen?
 4. Add the mute functionality (with stream restart)?
 
-Let me know which approach you prefer!

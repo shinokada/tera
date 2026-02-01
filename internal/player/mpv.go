@@ -122,7 +122,14 @@ func (p *MPVPlayer) connectToSocket() {
 		if err == nil {
 			p.mu.Lock()
 			p.conn = conn
+			currentVol := p.volume
+			muted := p.muted
 			p.mu.Unlock()
+			// Sync volume state to mpv after connection establishes
+			if muted {
+				currentVol = 0
+			}
+			_ = p.sendCommand([]interface{}{"set_property", "volume", float64(currentVol)})
 			return
 		}
 	}

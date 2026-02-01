@@ -478,8 +478,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.state = playStateStationSelection
 		m.selectedStation = nil
-		m.state = playStateStationSelection
-		m.selectedStation = nil
 		return m, nil
 	case "0":
 		// Return to main menu (Level 3 shortcut)
@@ -506,12 +504,20 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
+		if m.selectedStation != nil {
+			m.selectedStation.Volume = newVol
+			m.saveStationVolume(m.selectedStation)
+		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
 		return m, ticksEverySecond()
 	case "*":
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
+		if m.selectedStation != nil {
+			m.selectedStation.Volume = newVol
+			m.saveStationVolume(m.selectedStation)
+		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
 		return m, ticksEverySecond()
@@ -522,6 +528,10 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveMessage = "Volume: Muted"
 		} else {
 			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+		}
+		if m.selectedStation != nil {
+			m.selectedStation.Volume = vol
+			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
 		return m, ticksEverySecond()
@@ -605,6 +615,30 @@ func (m PlayModel) deleteStationFromList(station *api.Station) tea.Cmd {
 
 		return deleteSuccessMsg{stationName: station.TrimName()}
 	}
+}
+
+// saveStationVolume saves the updated volume for a station in the current list
+func (m PlayModel) saveStationVolume(station *api.Station) {
+	if station == nil || m.selectedList == "" {
+		return
+	}
+
+	store := storage.NewStorage(m.favoritePath)
+	list, err := store.LoadList(context.Background(), m.selectedList)
+	if err != nil {
+		return
+	}
+
+	// Find and update the station
+	for i := range list.Stations {
+		if list.Stations[i].StationUUID == station.StationUUID {
+			list.Stations[i].Volume = station.Volume
+			break
+		}
+	}
+
+	// Save the updated list
+	_ = store.SaveList(context.Background(), list)
 }
 
 // voteForStation votes for the currently playing station

@@ -77,7 +77,7 @@ Current:
   Esc: Back • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit
 ```
 
-Update:/
+Update:
 ```text
 
                          TERA
@@ -119,7 +119,7 @@ Actions
 ## Search Results Page
 
 Current:
-```tex
+```text
 
                          TERA
 

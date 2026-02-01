@@ -17,7 +17,7 @@ func main() {
 	}
 
 	favPath := filepath.Join(home, ".tera", "favorites")
-	if err := os.MkdirAll(favPath, 0755); err != nil {
+	if err := os.MkdirAll(favPath, 0700); err != nil {
 		panic(err)
 	}
 
