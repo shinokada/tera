@@ -299,7 +299,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, ticksEverySecond()
+		return m, nil
 	case "*":
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
@@ -308,7 +308,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, ticksEverySecond()
+		return m, nil
 	case "m":
 		// Toggle mute
 		muted, vol := m.player.ToggleMute()
@@ -321,7 +321,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation.Volume = vol
 		}
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, ticksEverySecond()
+		return m, nil
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Toggle()

@@ -155,6 +155,10 @@ func (p *MPVPlayer) sendCommand(command []interface{}) error {
 	// Add newline as message terminator
 	data = append(data, '\n')
 
+	// Prevent UI stalls on blocked IPC writes
+	_ = p.conn.SetWriteDeadline(time.Now().Add(250 * time.Millisecond))
+	defer func() { _ = p.conn.SetWriteDeadline(time.Time{}) }()
+
 	_, err = p.conn.Write(data)
 	return err
 }

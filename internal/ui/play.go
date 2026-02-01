@@ -505,8 +505,12 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, ticksEverySecond()
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
 	case "*":
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
@@ -515,8 +519,12 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, ticksEverySecond()
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
 	case "m":
 		// Toggle mute
 		muted, vol := m.player.ToggleMute()
@@ -529,8 +537,12 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation.Volume = vol
 			m.saveStationVolume(m.selectedStation)
 		}
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, ticksEverySecond()
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Toggle()
