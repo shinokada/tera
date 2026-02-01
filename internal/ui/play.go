@@ -501,7 +501,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
 		if m.selectedStation != nil && newVol >= 0 {
-			m.selectedStation.Volume = newVol
+			m.selectedStation.SetVolume(newVol)
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
@@ -515,7 +515,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
 		if m.selectedStation != nil {
-			m.selectedStation.Volume = newVol
+			m.selectedStation.SetVolume(newVol)
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
@@ -534,7 +534,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 		}
 		if m.selectedStation != nil && !muted && vol >= 0 {
-			m.selectedStation.Volume = vol
+			m.selectedStation.SetVolume(vol)
 			m.saveStationVolume(m.selectedStation)
 		}
 		startTick := m.saveMessageTime == 0

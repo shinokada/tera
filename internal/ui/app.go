@@ -52,6 +52,10 @@ type App struct {
 	helpModel            components.HelpModel // Help overlay
 	volumeDisplay        string               // Temporary volume display message
 	volumeDisplayFrames  int                  // Countdown for volume display
+	// Update checking
+	latestVersion   string // Latest version from GitHub
+	updateAvailable bool   // True if a newer version exists
+	updateChecked   bool   // True if version check completed
 }
 
 // navigateMsg is sent when changing screens
@@ -140,11 +144,21 @@ func (a *App) loadQuickFavorites() {
 }
 
 func (a App) Init() tea.Cmd {
-	return nil
+	// Check for updates in the background on startup
+	return checkForUpdates()
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case versionCheckMsg:
+		// Handle version check result (from startup or settings)
+		a.updateChecked = true
+		if msg.err == nil {
+			a.latestVersion = msg.latestVersion
+			a.updateAvailable = api.IsNewerVersion(Version, msg.latestVersion)
+		}
+		return a, nil
+
 	case tea.KeyMsg:
 		// Global key bindings
 		switch msg.String() {
@@ -235,6 +249,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.width > 0 && a.height > 0 {
 				a.settingsScreen.width = a.width
 				a.settingsScreen.height = a.height
+			}
+			// Pass update info from App to Settings
+			if a.updateChecked {
+				a.settingsScreen.updateChecked = true
+				a.settingsScreen.latestVersion = a.latestVersion
+				a.settingsScreen.updateAvailable = a.updateAvailable
 			}
 			return a, a.settingsScreen.Init()
 		case screenMainMenu:
@@ -379,7 +399,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil {
-					a.playingStation.Volume = newVol
+					a.playingStation.SetVolume(newVol)
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
 				}
@@ -391,7 +411,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil {
-					a.playingStation.Volume = newVol
+					a.playingStation.SetVolume(newVol)
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
 				}
@@ -407,7 +427,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil {
-					a.playingStation.Volume = vol
+					a.playingStation.SetVolume(vol)
 					// Save updated volume to favorites
 					a.saveStationVolume(a.playingStation)
 				}
@@ -747,6 +767,11 @@ func (a App) viewMainMenu() string {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
 		helpText = "↑↓/jk: Navigate • Enter: Select • 1-6: Menu • 10+: Quick Play • ?: Help"
+	}
+
+	// Add update indicator if available (yellow)
+	if a.updateAvailable {
+		helpText += " • " + highlightStyle().Render("⬆ Update")
 	}
 
 	// Render the page

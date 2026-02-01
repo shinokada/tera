@@ -12,6 +12,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
+- 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 
 ## Requirements
@@ -190,6 +191,29 @@ colors:
 padding:
   list_item_left: 2
 ```
+
+## Update Checker
+
+TERA automatically checks for new versions on startup. When an update is available:
+
+- A yellow **⬆ Update** indicator appears in the main menu footer
+- Go to **Settings → Check for Updates** for details and update instructions
+
+### Checking for Updates
+
+1. Press `6` from the main menu to open Settings
+2. Select "Check for Updates" (option 2)
+3. View the latest version and release notes link
+4. Follow the update instructions for your installation method
+
+### Update Commands
+
+| Installation Method | Update Command                                                            |
+| ------------------- | ------------------------------------------------------------------------- |
+| Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
+| Go install          | `go install github.com/shinokada/tera/cmd/tera@latest`                    |
+| Scoop               | `scoop update tera`                                                       |
+| Manual              | Download from [releases page](https://github.com/shinokada/tera/releases) |
 
 ## Keyboard Shortcuts
 

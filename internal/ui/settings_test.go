@@ -45,7 +45,8 @@ func TestSettingsMenuNavigation(t *testing.T) {
 		expectedState settingsState
 	}{
 		{"Press 1 for Theme", "1", settingsStateTheme},
-		{"Press 2 for About", "2", settingsStateAbout},
+		{"Press 2 for Updates", "2", settingsStateUpdates},
+		{"Press 3 for About", "3", settingsStateAbout},
 	}
 
 	for _, tt := range tests {
@@ -245,5 +246,157 @@ func TestVersionVariable(t *testing.T) {
 	// Version should be set (at least to "dev" by default)
 	if Version == "" {
 		t.Error("Version should not be empty")
+	}
+}
+
+func TestSettingsUpdatesEscBack(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyEscape}
+	newModel, _ := m.Update(msg)
+	updatedModel := newModel.(SettingsModel)
+
+	if updatedModel.state != settingsStateMenu {
+		t.Errorf("Expected state to be settingsStateMenu, got %v", updatedModel.state)
+	}
+}
+
+func TestSettingsUpdatesRefresh(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.width = 80
+	m.height = 24
+
+	// Press 'r' to refresh
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")}
+	newModel, cmd := m.Update(msg)
+	updatedModel := newModel.(SettingsModel)
+
+	// Should be checking for updates
+	if !updatedModel.updateChecking {
+		t.Error("Expected updateChecking to be true after pressing 'r'")
+	}
+
+	// Should return a command (the version check)
+	if cmd == nil {
+		t.Error("Expected a command to be returned for version check")
+	}
+}
+
+func TestSettingsViewUpdates(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.width = 80
+	m.height = 24
+
+	view := m.View()
+
+	if !strings.Contains(view, "Check for Updates") {
+		t.Error("Expected view to contain 'Check for Updates'")
+	}
+
+	if !strings.Contains(view, "Current version") {
+		t.Error("Expected view to contain 'Current version'")
+	}
+}
+
+func TestSettingsViewUpdatesChecking(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.updateChecking = true
+	m.width = 80
+	m.height = 24
+
+	view := m.View()
+
+	if !strings.Contains(view, "Checking for updates") {
+		t.Error("Expected view to contain 'Checking for updates' when checking")
+	}
+}
+
+func TestSettingsViewUpdatesAvailable(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.updateChecked = true
+	m.updateAvailable = true
+	m.latestVersion = "v2.0.0"
+	m.width = 80
+	m.height = 24
+
+	view := m.View()
+
+	if !strings.Contains(view, "New version available") {
+		t.Error("Expected view to contain 'New version available'")
+	}
+
+	if !strings.Contains(view, "v2.0.0") {
+		t.Error("Expected view to contain the latest version 'v2.0.0'")
+	}
+
+	if !strings.Contains(view, "github.com/shinokada/tera/releases") {
+		t.Error("Expected view to contain release page URL")
+	}
+}
+
+func TestSettingsViewUpdatesUpToDate(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.updateChecked = true
+	m.updateAvailable = false
+	m.latestVersion = "v1.0.0"
+	m.width = 80
+	m.height = 24
+
+	view := m.View()
+
+	if !strings.Contains(view, "up to date") {
+		t.Error("Expected view to contain 'up to date' when on latest version")
+	}
+}
+
+func TestSettingsViewUpdatesError(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.updateChecked = true
+	m.updateError = "network error"
+	m.width = 80
+	m.height = 24
+
+	view := m.View()
+
+	if !strings.Contains(view, "Error") {
+		t.Error("Expected view to contain 'Error' when update check failed")
+	}
+
+	if !strings.Contains(view, "network error") {
+		t.Error("Expected view to contain the error message")
+	}
+}
+
+func TestVersionCheckMsgHandling(t *testing.T) {
+	m := NewSettingsModel()
+	m.state = settingsStateUpdates
+	m.updateChecking = true
+	m.width = 80
+	m.height = 24
+
+	// Simulate receiving version check result
+	msg := versionCheckMsg{latestVersion: "v2.0.0", err: nil}
+	newModel, _ := m.Update(msg)
+	updatedModel := newModel.(SettingsModel)
+
+	if updatedModel.updateChecking {
+		t.Error("Expected updateChecking to be false after receiving result")
+	}
+
+	if !updatedModel.updateChecked {
+		t.Error("Expected updateChecked to be true after receiving result")
+	}
+
+	if updatedModel.latestVersion != "v2.0.0" {
+		t.Errorf("Expected latestVersion to be 'v2.0.0', got '%s'", updatedModel.latestVersion)
 	}
 }

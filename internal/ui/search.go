@@ -759,7 +759,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
 		if m.selectedStation != nil {
-			m.selectedStation.Volume = newVol
+			m.selectedStation.SetVolume(newVol)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
@@ -768,7 +768,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
 		if m.selectedStation != nil {
-			m.selectedStation.Volume = newVol
+			m.selectedStation.SetVolume(newVol)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
@@ -782,7 +782,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 		}
 		if m.selectedStation != nil {
-			m.selectedStation.Volume = vol
+			m.selectedStation.SetVolume(vol)
 		}
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
 		return m, ticksEverySecond()
