@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
+	xdgdirs "github.com/go-music-players/xdg-dirs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,22 +65,13 @@ var (
 	mu      sync.RWMutex
 )
 
-// GetConfigDir returns the theme config directory path
-func GetConfigDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(homeDir, ".config", "tera"), nil
-}
-
 // GetConfigPath returns the theme config file path
 func GetConfigPath() (string, error) {
-	configDir, err := GetConfigDir()
+	dirs, err := xdgdirs.New("tera")
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(configDir, "theme.yaml"), nil
+	return filepath.Join(dirs.Config, "theme.yaml"), nil
 }
 
 // Load loads the theme from config file, or returns default if not found
