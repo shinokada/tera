@@ -196,11 +196,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stationInfoMenu.SetSize(msg.Width-4, infoHeight)
 		}
 
-		if m.helpModel.IsVisible() {
-			m.helpModel.SetSize(msg.Width, msg.Height)
-		} else {
-			m.helpModel.SetSize(msg.Width, msg.Height)
-		}
+		m.helpModel.SetSize(msg.Width, msg.Height)
 
 	case tea.KeyMsg:
 		if m.helpModel.IsVisible() {

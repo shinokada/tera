@@ -127,11 +127,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		if m.helpModel.IsVisible() {
-			m.helpModel.SetSize(msg.Width, msg.Height)
-		} else {
-			m.helpModel.SetSize(msg.Width, msg.Height)
-		}
+		m.helpModel.SetSize(msg.Width, msg.Height)
 
 		return m, nil
 

@@ -194,6 +194,7 @@ padding:
 ## Keyboard Shortcuts
 
 ### Global Navigation
+
 | Key         | Action        |
 | ----------- | ------------- |
 | `↑↓` / `jk` | Navigate      |
@@ -204,12 +205,14 @@ padding:
 | `Ctrl+C`    | Quit          |
 
 ### Main Menu
+
 | Key      | Action                       |
 | -------- | ---------------------------- |
 | `1-6`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
 ### Playback Controls
+
 | Key | Action            |
 | --- | ----------------- |
 | `*` | Volume up (+5%)   |
@@ -217,6 +220,7 @@ padding:
 | `m` | Toggle mute       |
 
 ### Playing/Browsing Stations
+
 | Key | Action               |
 | --- | -------------------- |
 | `f` | Save to My-favorites |
@@ -224,6 +228,7 @@ padding:
 | `v` | Vote for station     |
 
 ### List Management
+
 | Key | Action                |
 | --- | --------------------- |
 | `n` | New list (in dialogs) |

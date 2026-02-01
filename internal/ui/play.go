@@ -233,11 +233,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stationListModel.SetSize(msg.Width, listHeight)
 		}
 
-		if m.helpModel.IsVisible() {
-			m.helpModel.SetSize(msg.Width, msg.Height)
-		} else {
-			m.helpModel.SetSize(msg.Width, msg.Height)
-		}
+		m.helpModel.SetSize(msg.Width, msg.Height)
 
 		return m, nil
 

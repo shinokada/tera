@@ -241,6 +241,9 @@ func (p *MPVPlayer) SetVolume(volume int) {
 	if volume > 100 {
 		volume = 100
 	}
+	if volume > 0 {
+		p.lastVolume = volume
+	}
 	p.volume = volume
 	p.muted = (volume == 0)
 
