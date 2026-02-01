@@ -83,8 +83,10 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 
 	// Update current volume
 	p.volume = volumeToUse
-	p.lastVolume = volumeToUse
-	p.muted = false
+	if volumeToUse > 0 {
+		p.lastVolume = volumeToUse
+	}
+	p.muted = (volumeToUse == 0)
 
 	// Start the process
 	if err := p.cmd.Start(); err != nil {
@@ -124,12 +126,12 @@ func (p *MPVPlayer) connectToSocket() {
 			p.conn = conn
 			currentVol := p.volume
 			muted := p.muted
-			p.mu.Unlock()
 			// Sync volume state to mpv after connection establishes
 			if muted {
 				currentVol = 0
 			}
 			_ = p.sendCommand([]interface{}{"set_property", "volume", float64(currentVol)})
+			p.mu.Unlock()
 			return
 		}
 	}
