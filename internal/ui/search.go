@@ -58,6 +58,7 @@ type SearchModel struct {
 	availableLists  []string
 	listItems       []list.Item
 	listModel       list.Model
+	helpModel       components.HelpModel
 }
 
 // Messages for search screen
@@ -129,6 +130,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		quickFavorites:  []api.Station{},
 		width:           80, // Default width
 		height:          24, // Default height
+		helpModel:       components.NewHelpModel(components.CreatePlayingHelp()),
 	}
 }
 
@@ -194,7 +196,19 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stationInfoMenu.SetSize(msg.Width-4, infoHeight)
 		}
 
+		if m.helpModel.IsVisible() {
+			m.helpModel.SetSize(msg.Width, msg.Height)
+		} else {
+			m.helpModel.SetSize(msg.Width, msg.Height)
+		}
+
 	case tea.KeyMsg:
+		if m.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			m.helpModel, cmd = m.helpModel.Update(msg)
+			return m, cmd
+		}
+
 		switch m.state {
 		case searchStateMenu:
 			return m.handleMenuInput(msg)
@@ -745,6 +759,32 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
+	case "/":
+		// Decrease volume
+		newVol := m.player.DecreaseVolume(5)
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		return m, ticksEverySecond()
+	case "*":
+		// Increase volume
+		newVol := m.player.IncreaseVolume(5)
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		return m, ticksEverySecond()
+	case "m":
+		// Toggle mute
+		muted, vol := m.player.ToggleMute()
+		if muted {
+			m.saveMessage = "Volume: Muted"
+		} else {
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+		}
+		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		return m, ticksEverySecond()
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
 	}
 	return m, nil
 }
@@ -814,6 +854,10 @@ func (m SearchModel) voteForStation() tea.Cmd {
 
 // View renders the search screen
 func (m SearchModel) View() string {
+	if m.helpModel.IsVisible() {
+		return m.helpModel.View()
+	}
+
 	switch m.state {
 	case searchStateMenu:
 		var content strings.Builder
@@ -873,7 +917,7 @@ func (m SearchModel) View() string {
 	case searchStatePlaying:
 		var content strings.Builder
 		if m.selectedStation != nil {
-			content.WriteString(renderStationDetails(*m.selectedStation))
+			content.WriteString(RenderStationDetails(*m.selectedStation))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {
@@ -884,8 +928,12 @@ func (m SearchModel) View() string {
 		}
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
-			if strings.Contains(m.saveMessage, "✓") {
-				content.WriteString(successStyle().Render(m.saveMessage))
+			if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Volume:") {
+				if strings.Contains(m.saveMessage, "Muted") {
+					content.WriteString(infoStyle().Render(m.saveMessage))
+				} else {
+					content.WriteString(successStyle().Render(m.saveMessage))
+				}
 			} else if strings.Contains(m.saveMessage, "Already") {
 				content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
@@ -895,7 +943,7 @@ func (m SearchModel) View() string {
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
-			Help:    "Esc: Back • f: Save to Favorites • s: Save to list • v: Vote • 0: Main Menu • Ctrl+C: Quit",
+			Help:    "f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
 		}, m.height)
 
 	case searchStateSelectList:
@@ -956,7 +1004,7 @@ func (m SearchModel) renderStationInfo() string {
 	var content strings.Builder
 
 	if m.selectedStation != nil {
-		content.WriteString(renderStationDetails(*m.selectedStation))
+		content.WriteString(RenderStationDetails(*m.selectedStation))
 		content.WriteString("\n\n")
 	}
 
@@ -998,41 +1046,6 @@ func (m SearchModel) renderSavePrompt() string {
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2/Esc: No • q: Quit",
 	})
-}
-
-// renderStationDetails renders station details in a formatted way
-func renderStationDetails(station api.Station) string {
-	var s strings.Builder
-
-	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
-
-	if station.Tags != "" {
-		s.WriteString(fmt.Sprintf("Tags:    %s\n", station.Tags))
-	}
-
-	if station.Country != "" {
-		s.WriteString(fmt.Sprintf("Country: %s", station.Country))
-		if station.State != "" {
-			s.WriteString(fmt.Sprintf(", %s", station.State))
-		}
-		s.WriteString("\n")
-	}
-
-	if station.Language != "" {
-		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
-	}
-
-	s.WriteString(fmt.Sprintf("Votes:   %d\n", station.Votes))
-
-	if station.Codec != "" {
-		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))
-		if station.Bitrate > 0 {
-			s.WriteString(fmt.Sprintf(" @ %d kbps", station.Bitrate))
-		}
-		s.WriteString("\n")
-	}
-
-	return s.String()
 }
 
 // viewSelectList renders the list selection view
