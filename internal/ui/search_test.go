@@ -47,11 +47,18 @@ func TestSearchMenuNavigation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset to menu state
 			model.state = searchStateMenu
+			model.numberBuffer = "" // Clear number buffer
 
+			// First send the number key (gets buffered)
 			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
 			updatedModel, _ := model.Update(msg)
-
 			searchModel := updatedModel.(SearchModel)
+
+			// Then send Enter to confirm the selection
+			enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+			updatedModel, _ = searchModel.Update(enterMsg)
+
+			searchModel = updatedModel.(SearchModel)
 			if searchModel.state != tt.expectedState {
 				t.Errorf("Expected state %v, got %v", tt.expectedState, searchModel.state)
 			}
