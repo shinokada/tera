@@ -377,23 +377,30 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key >= "0" && key <= "9" {
 		m.numberBuffer += key
 
-		// Check if we should auto-select
-		if len(m.numberBuffer) >= 2 {
-			var num int
-			_, _ = fmt.Sscanf(m.numberBuffer, "%d", &num)
+		// Parse current buffer
+		var num int
+		_, _ = fmt.Sscanf(m.numberBuffer, "%d", &num)
 
-			// Calculate max valid number (6 for search types + history count)
-			maxNum := 6
-			if m.searchHistory != nil {
-				maxHistoryItems := len(m.searchHistory.SearchItems)
-				if maxHistoryItems > m.searchHistory.MaxSize {
-					maxHistoryItems = m.searchHistory.MaxSize
-				}
-				if maxHistoryItems > 0 {
-					maxNum = 10 + maxHistoryItems - 1 // e.g., 10, 11, 12...
-				}
+		// Calculate max valid number (6 for search types + history count)
+		maxNum := 6
+		if m.searchHistory != nil {
+			maxHistoryItems := len(m.searchHistory.SearchItems)
+			if maxHistoryItems > m.searchHistory.MaxSize {
+				maxHistoryItems = m.searchHistory.MaxSize
 			}
+			if maxHistoryItems > 0 {
+				maxNum = 10 + maxHistoryItems - 1 // e.g., 10, 11, 12...
+			}
+		}
 
+		// Single digit 1-6: immediately execute (search types)
+		if len(m.numberBuffer) == 1 && num >= 1 && num <= 6 {
+			m.numberBuffer = ""
+			return m.selectByNumber(num)
+		}
+
+		// Two or more digits: check if valid and execute
+		if len(m.numberBuffer) >= 2 {
 			// If number is valid, select it
 			if num >= 1 && num <= maxNum {
 				m.numberBuffer = "" // Clear buffer
