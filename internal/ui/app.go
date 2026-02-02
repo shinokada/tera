@@ -244,7 +244,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.gistScreen.Init()
 		case screenSettings:
-			a.settingsScreen = NewSettingsModel()
+			a.settingsScreen = NewSettingsModel(a.favoritePath)
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.settingsScreen.width = a.width

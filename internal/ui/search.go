@@ -12,9 +12,11 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
@@ -49,7 +51,9 @@ type SearchModel struct {
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	favoritePath    string
-	quickFavorites  []api.Station // My-favorites.json for duplicate checking
+	quickFavorites  []api.Station               // My-favorites.json for duplicate checking
+	searchHistory   *storage.SearchHistoryStore // Search history
+	numberBuffer    string                      // Buffer for number input display
 	saveMessage     string
 	saveMessageTime int
 	width           int
@@ -117,7 +121,14 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	// Initial height will be updated on first WindowSizeMsg
 	stationInfoMenu := components.CreateMenu(infoMenuItems, "What would you like to do?", 50, 10)
 
-	return SearchModel{
+	// Load search history (if it fails, just use empty history)
+	store := storage.NewStorage(favoritePath)
+	history, err := store.LoadSearchHistory(context.Background())
+	if err != nil || history == nil {
+		history = storage.NewSearchHistoryStore()
+	}
+
+	model := SearchModel{
 		state:           searchStateMenu,
 		apiClient:       apiClient,
 		menuList:        menuList,
@@ -128,10 +139,16 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		favoritePath:    favoritePath,
 		player:          player.NewMPVPlayer(),
 		quickFavorites:  []api.Station{},
+		searchHistory:   history,
 		width:           80, // Default width
 		height:          24, // Default height
 		helpModel:       components.NewHelpModel(components.CreatePlayingHelp()),
 	}
+
+	// Build menu with history items included
+	model.rebuildMenuWithHistory()
+
+	return model
 }
 
 // Init initializes the search screen
@@ -351,7 +368,57 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
+		m.numberBuffer = "" // Clear buffer on exit
 		return m, func() tea.Msg { return backToMainMsg{} }
+	}
+
+	// Handle number input for multi-digit selection
+	key := msg.String()
+	if key >= "0" && key <= "9" {
+		m.numberBuffer += key
+
+		// Check if we should auto-select
+		if len(m.numberBuffer) >= 2 {
+			var num int
+			_, _ = fmt.Sscanf(m.numberBuffer, "%d", &num)
+
+			// Calculate max valid number (6 for search types + history count)
+			maxNum := 6
+			if m.searchHistory != nil {
+				maxHistoryItems := len(m.searchHistory.SearchItems)
+				if maxHistoryItems > m.searchHistory.MaxSize {
+					maxHistoryItems = m.searchHistory.MaxSize
+				}
+				if maxHistoryItems > 0 {
+					maxNum = 10 + maxHistoryItems - 1 // e.g., 10, 11, 12...
+				}
+			}
+
+			// If number is valid, select it
+			if num >= 1 && num <= maxNum {
+				m.numberBuffer = "" // Clear buffer
+				return m.selectByNumber(num)
+			}
+
+			// If number is too large or 3+ digits, clear buffer
+			if num > maxNum || len(m.numberBuffer) >= 3 {
+				m.numberBuffer = ""
+			}
+		}
+		return m, nil
+	}
+
+	// Handle Enter to submit buffered number
+	if key == "enter" && m.numberBuffer != "" {
+		var num int
+		_, _ = fmt.Sscanf(m.numberBuffer, "%d", &num)
+		m.numberBuffer = ""
+		return m.selectByNumber(num)
+	}
+
+	// Clear buffer on navigation keys
+	if key == "up" || key == "down" || key == "j" || key == "k" {
+		m.numberBuffer = ""
 	}
 
 	// Handle menu navigation and selection
@@ -359,8 +426,42 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.menuList = newList
 
 	if selected >= 0 {
-		// Execute selected search type
-		return m.executeSearchType(selected)
+		// Menu layout: 0-5 = search types, 6 = empty line, 7 = separator, 8+ = history items
+		if selected < 6 {
+			return m.executeSearchType(selected)
+		} else if selected == 6 || selected == 7 {
+			// Empty line or separator selected - ignore
+			return m, nil
+		} else {
+			// History item selected (index 8+ maps to history index 0+)
+			historyIndex := selected - 8
+			if m.searchHistory != nil && historyIndex >= 0 && historyIndex < len(m.searchHistory.SearchItems) {
+				item := m.searchHistory.SearchItems[historyIndex]
+				return m.executeHistorySearch(item.SearchType, item.Query)
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// selectByNumber handles selection by number input (1-6 for search types, 10+ for history)
+func (m SearchModel) selectByNumber(num int) (tea.Model, tea.Cmd) {
+	// 1-6: Search types
+	if num >= 1 && num <= 6 {
+		m.menuList.Select(num - 1)
+		return m.executeSearchType(num - 1)
+	}
+
+	// 10+: History items (10 -> history[0], 11 -> history[1], etc.)
+	if num >= 10 && m.searchHistory != nil {
+		historyIndex := num - 10
+		if historyIndex >= 0 && historyIndex < len(m.searchHistory.SearchItems) {
+			// Select the menu item (8 + historyIndex because: 0-5=search types, 6=empty, 7=separator)
+			m.menuList.Select(8 + historyIndex)
+			item := m.searchHistory.SearchItems[historyIndex]
+			return m.executeHistorySearch(item.SearchType, item.Query)
+		}
 	}
 
 	return m, nil
@@ -512,6 +613,9 @@ func (m SearchModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textInput.SetValue("")
 		m.textInput.Blur()
 		m.state = searchStateMenu
+		// Reload history in case it was updated
+		m.reloadSearchHistory()
+		m.rebuildMenuWithHistory()
 		return m, nil
 	default:
 		// Pass all other keys to text input for normal typing
@@ -523,6 +627,27 @@ func (m SearchModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // performSearch executes the search based on type
 func (m SearchModel) performSearch(query string) tea.Cmd {
+	// Save search to history in background
+	go func() {
+		store := storage.NewStorage(m.favoritePath)
+		var searchTypeStr string
+		switch m.searchType {
+		case api.SearchByTag:
+			searchTypeStr = "tag"
+		case api.SearchByName:
+			searchTypeStr = "name"
+		case api.SearchByLanguage:
+			searchTypeStr = "language"
+		case api.SearchByCountry:
+			searchTypeStr = "country"
+		case api.SearchByState:
+			searchTypeStr = "state"
+		case api.SearchAdvanced:
+			searchTypeStr = "advanced"
+		}
+		_ = store.AddSearchItem(context.Background(), searchTypeStr, query)
+	}()
+
 	return func() tea.Msg {
 		var results []api.Station
 		var err error
@@ -574,6 +699,9 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.selectedStation = nil
 		m.state = searchStateMenu
+		// Reload history from disk so recent search appears
+		m.reloadSearchHistory()
+		m.rebuildMenuWithHistory()
 		return m, nil
 	case "0":
 		// Return to main menu
@@ -902,16 +1030,7 @@ func (m SearchModel) View() string {
 
 	switch m.state {
 	case searchStateMenu:
-		var content strings.Builder
-		content.WriteString(m.menuList.View())
-		if m.err != nil {
-			content.WriteString("\n\n")
-			content.WriteString(errorStyle().Render(fmt.Sprintf("Error: %v", m.err)))
-		}
-		return RenderPageWithBottomHelp(PageLayout{
-			Content: content.String(),
-			Help:    "↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • Ctrl+C: Quit",
-		}, m.height)
+		return m.renderSearchMenu()
 
 	case searchStateInput:
 		var content strings.Builder
@@ -1147,4 +1266,120 @@ func (m SearchModel) viewNewListInput() string {
 		Content: content.String(),
 		Help:    "Enter: Save • Esc: Cancel",
 	})
+}
+
+// executeHistorySearch executes a search from history
+func (m SearchModel) executeHistorySearch(searchType, query string) (tea.Model, tea.Cmd) {
+	// Map string search type to api.SearchType
+	switch searchType {
+	case "tag":
+		m.searchType = api.SearchByTag
+	case "name":
+		m.searchType = api.SearchByName
+	case "language":
+		m.searchType = api.SearchByLanguage
+	case "country":
+		m.searchType = api.SearchByCountry
+	case "state":
+		m.searchType = api.SearchByState
+	case "advanced":
+		m.searchType = api.SearchAdvanced
+	default:
+		// Unknown type, go back to menu
+		return m, nil
+	}
+
+	// Execute search immediately
+	m.state = searchStateLoading
+	return m, m.performSearch(query)
+}
+
+// renderSearchMenu renders the search menu with history
+func (m SearchModel) renderSearchMenu() string {
+	var content strings.Builder
+
+	t := theme.Current()
+	titleStyle := lipgloss.NewStyle().
+		Foreground(t.HighlightColor()).
+		Bold(true).
+		PaddingLeft(t.Padding.ListItemLeft)
+
+	// Render title first
+	content.WriteString(titleStyle.Render("🔍 Search Radio Stations"))
+	content.WriteString("\n\n")
+
+	// Add "Choose an option:" with number buffer display below title
+	content.WriteString(subtitleStyle().Render("Choose an option:"))
+	if m.numberBuffer != "" {
+		content.WriteString(" ")
+		content.WriteString(highlightStyle().Render(m.numberBuffer + "_"))
+	}
+	content.WriteString("\n\n")
+
+	// Show main menu (includes history items if any)
+	content.WriteString(m.menuList.View())
+
+	// Error message if any
+	if m.err != nil {
+		content.WriteString("\n")
+		content.WriteString(errorStyle().Render(fmt.Sprintf("Error: %v", m.err)))
+	}
+
+	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6: Search Type • Esc: Back • Ctrl+C: Quit"
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Content: content.String(),
+		Help:    helpText,
+	}, m.height)
+}
+
+// reloadSearchHistory reloads history from disk
+func (m *SearchModel) reloadSearchHistory() {
+	store := storage.NewStorage(m.favoritePath)
+	history, err := store.LoadSearchHistory(context.Background())
+	if err != nil || history == nil {
+		history = storage.NewSearchHistoryStore()
+	}
+	m.searchHistory = history
+}
+
+// rebuildMenuWithHistory rebuilds the menu list to include history items
+func (m *SearchModel) rebuildMenuWithHistory() {
+	// Base menu items
+	menuItems := []components.MenuItem{
+		components.NewMenuItem("Search by Tag", "(genre, style, etc.)", "1"),
+		components.NewMenuItem("Search by Name", "", "2"),
+		components.NewMenuItem("Search by Language", "", "3"),
+		components.NewMenuItem("Search by Country Code", "", "4"),
+		components.NewMenuItem("Search by State", "", "5"),
+		components.NewMenuItem("Advanced Search", "(multiple criteria)", "6"),
+	}
+
+	// Add history items if available
+	if m.searchHistory != nil && len(m.searchHistory.SearchItems) > 0 {
+		// Add empty lines for spacing
+		menuItems = append(menuItems, components.NewMenuItem("", "", ""))
+		// Add separator-like item
+		menuItems = append(menuItems, components.NewMenuItem("─── Recent Searches ───", "", ""))
+
+		// Add history items with numbers starting from 10
+		for i, item := range m.searchHistory.SearchItems {
+			if i >= m.searchHistory.MaxSize {
+				break
+			}
+			title := fmt.Sprintf("%s: %s", item.SearchType, item.Query)
+			// Shortcut keys: 10, 11, 12, etc.
+			shortcut := fmt.Sprintf("%d", 10+i)
+			menuItems = append(menuItems, components.NewMenuItem(title, "", shortcut))
+		}
+	}
+
+	// Calculate appropriate height
+	height := len(menuItems) + 5
+	if height > 20 {
+		height = 20
+	}
+
+	// Use empty title - we render the title manually in renderSearchMenu
+	m.menuList = components.CreateMenu(menuItems, "", 50, height)
 }

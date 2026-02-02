@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewSettingsModel(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 
 	if m.state != settingsStateMenu {
 		t.Errorf("Expected initial state to be settingsStateMenu, got %v", m.state)
@@ -30,7 +30,7 @@ func TestNewSettingsModel(t *testing.T) {
 }
 
 func TestSettingsModelInit(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	cmd := m.Init()
 
 	if cmd != nil {
@@ -45,13 +45,14 @@ func TestSettingsMenuNavigation(t *testing.T) {
 		expectedState settingsState
 	}{
 		{"Press 1 for Theme", "1", settingsStateTheme},
-		{"Press 2 for Updates", "2", settingsStateUpdates},
-		{"Press 3 for About", "3", settingsStateAbout},
+		{"Press 2 for History", "2", settingsStateHistory},
+		{"Press 3 for Updates", "3", settingsStateUpdates},
+		{"Press 4 for About", "4", settingsStateAbout},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := NewSettingsModel()
+			m := NewSettingsModel(t.TempDir())
 			m.width = 80
 			m.height = 24
 
@@ -77,7 +78,7 @@ func TestSettingsMenuEscNavigation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := NewSettingsModel()
+			m := NewSettingsModel(t.TempDir())
 			m.width = 80
 			m.height = 24
 
@@ -97,7 +98,7 @@ func TestSettingsMenuEscNavigation(t *testing.T) {
 }
 
 func TestSettingsThemeEscBack(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateTheme
 	m.width = 80
 	m.height = 24
@@ -112,7 +113,7 @@ func TestSettingsThemeEscBack(t *testing.T) {
 }
 
 func TestSettingsAboutEscBack(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateAbout
 	m.width = 80
 	m.height = 24
@@ -127,7 +128,7 @@ func TestSettingsAboutEscBack(t *testing.T) {
 }
 
 func TestSettingsWindowSizeUpdate(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
 	newModel, _ := m.Update(msg)
@@ -143,7 +144,7 @@ func TestSettingsWindowSizeUpdate(t *testing.T) {
 }
 
 func TestSettingsViewMenu(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.width = 80
 	m.height = 24
 
@@ -155,7 +156,7 @@ func TestSettingsViewMenu(t *testing.T) {
 }
 
 func TestSettingsViewTheme(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateTheme
 	m.width = 80
 	m.height = 24
@@ -172,7 +173,7 @@ func TestSettingsViewTheme(t *testing.T) {
 }
 
 func TestSettingsViewAbout(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateAbout
 	m.width = 80
 	m.height = 24
@@ -250,7 +251,7 @@ func TestVersionVariable(t *testing.T) {
 }
 
 func TestSettingsUpdatesEscBack(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.width = 80
 	m.height = 24
@@ -265,7 +266,7 @@ func TestSettingsUpdatesEscBack(t *testing.T) {
 }
 
 func TestSettingsUpdatesRefresh(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.width = 80
 	m.height = 24
@@ -287,7 +288,7 @@ func TestSettingsUpdatesRefresh(t *testing.T) {
 }
 
 func TestSettingsViewUpdates(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.width = 80
 	m.height = 24
@@ -304,7 +305,7 @@ func TestSettingsViewUpdates(t *testing.T) {
 }
 
 func TestSettingsViewUpdatesChecking(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.updateChecking = true
 	m.width = 80
@@ -318,7 +319,7 @@ func TestSettingsViewUpdatesChecking(t *testing.T) {
 }
 
 func TestSettingsViewUpdatesAvailable(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.updateChecked = true
 	m.updateAvailable = true
@@ -342,7 +343,7 @@ func TestSettingsViewUpdatesAvailable(t *testing.T) {
 }
 
 func TestSettingsViewUpdatesUpToDate(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.updateChecked = true
 	m.updateAvailable = false
@@ -358,7 +359,7 @@ func TestSettingsViewUpdatesUpToDate(t *testing.T) {
 }
 
 func TestSettingsViewUpdatesError(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.updateChecked = true
 	m.updateError = "network error"
@@ -377,7 +378,7 @@ func TestSettingsViewUpdatesError(t *testing.T) {
 }
 
 func TestVersionCheckMsgHandling(t *testing.T) {
-	m := NewSettingsModel()
+	m := NewSettingsModel(t.TempDir())
 	m.state = settingsStateUpdates
 	m.updateChecking = true
 	m.width = 80

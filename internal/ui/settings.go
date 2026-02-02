@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui/components"
 )
@@ -19,6 +20,7 @@ type settingsState int
 const (
 	settingsStateMenu settingsState = iota
 	settingsStateTheme
+	settingsStateHistory
 	settingsStateUpdates
 	settingsStateAbout
 )
@@ -31,12 +33,15 @@ type SettingsModel struct {
 	state            settingsState
 	menuList         list.Model
 	themeList        list.Model
+	historyMenuList  list.Model
 	width            int
 	height           int
 	message          string
 	messageTime      int
 	messageIsSuccess bool
 	currentTheme     string
+	favoritePath     string
+	searchHistory    *storage.SearchHistoryStore
 	// Update checking
 	latestVersion   string
 	updateAvailable bool
@@ -189,14 +194,15 @@ func checkForUpdates() tea.Cmd {
 }
 
 // NewSettingsModel creates a new settings screen model
-func NewSettingsModel() SettingsModel {
+func NewSettingsModel(favoritePath string) SettingsModel {
 	// Main settings menu
 	menuItems := []components.MenuItem{
 		components.NewMenuItem("Theme / Colors", "Choose a color theme", "1"),
-		components.NewMenuItem("Check for Updates", "Check for new versions", "2"),
-		components.NewMenuItem("About TERA", "Version and information", "3"),
+		components.NewMenuItem("Search History", "Manage search history settings", "2"),
+		components.NewMenuItem("Check for Updates", "Check for new versions", "3"),
+		components.NewMenuItem("About TERA", "Version and information", "4"),
 	}
-	menuList := components.CreateMenu(menuItems, "", 50, 10)
+	menuList := components.CreateMenu(menuItems, "", 50, 12)
 
 	// Theme selection list
 	themeItems := make([]list.Item, len(predefinedThemes))
@@ -214,6 +220,16 @@ func NewSettingsModel() SettingsModel {
 	themeList.SetFilteringEnabled(false)
 	themeList.SetShowHelp(false)
 
+	// History settings menu
+	historyMenuItems := []components.MenuItem{
+		components.NewMenuItem("Increase (+5)", "", "1"),
+		components.NewMenuItem("Decrease (-5)", "", "2"),
+		components.NewMenuItem("Reset to Default", "", "3"),
+		components.NewMenuItem("Clear History", "", "4"),
+		components.NewMenuItem("Back to Settings", "", "5"),
+	}
+	historyMenuList := components.CreateMenu(historyMenuItems, "", 50, 10)
+
 	// Get current theme name - detect from saved theme
 	currentTheme := "Default"
 	if current := theme.Current(); current != nil {
@@ -226,11 +242,21 @@ func NewSettingsModel() SettingsModel {
 		}
 	}
 
+	// Load search history
+	store := storage.NewStorage(favoritePath)
+	history, err := store.LoadSearchHistory(context.Background())
+	if err != nil || history == nil {
+		history = storage.NewSearchHistoryStore()
+	}
+
 	return SettingsModel{
-		state:        settingsStateMenu,
-		menuList:     menuList,
-		themeList:    themeList,
-		currentTheme: currentTheme,
+		state:           settingsStateMenu,
+		menuList:        menuList,
+		themeList:       themeList,
+		historyMenuList: historyMenuList,
+		currentTheme:    currentTheme,
+		favoritePath:    favoritePath,
+		searchHistory:   history,
 		// Update fields initialized to defaults
 		updateChecked:  false,
 		updateChecking: false,
@@ -262,6 +288,8 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMenu(msg)
 		case settingsStateTheme:
 			return m.updateTheme(msg)
+		case settingsStateHistory:
+			return m.updateHistory(msg)
 		case settingsStateUpdates:
 			return m.updateUpdates(msg)
 		case settingsStateAbout:
@@ -301,6 +329,10 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "2":
+		m.state = settingsStateHistory
+		return m, nil
+
+	case "3":
 		m.state = settingsStateUpdates
 		if !m.updateChecked && !m.updateChecking {
 			m.updateChecking = true
@@ -308,7 +340,7 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "3":
+	case "4":
 		m.state = settingsStateAbout
 		return m, nil
 
@@ -318,12 +350,14 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 0:
 			m.state = settingsStateTheme
 		case 1:
+			m.state = settingsStateHistory
+		case 2:
 			m.state = settingsStateUpdates
 			if !m.updateChecked && !m.updateChecking {
 				m.updateChecking = true
 				return m, checkForUpdates()
 			}
-		case 2:
+		case 3:
 			m.state = settingsStateAbout
 		}
 		return m, nil
@@ -410,6 +444,94 @@ func (m SettingsModel) updateAbout(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m SettingsModel) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "5":
+		m.state = settingsStateMenu
+		return m, nil
+	case "0":
+		return m, func() tea.Msg { return backToMainMsg{} }
+	case "1": // Increase
+		newSize := m.searchHistory.MaxSize + 5
+		store := storage.NewStorage(m.favoritePath)
+		if err := store.UpdateHistorySize(context.Background(), newSize); err == nil {
+			m.searchHistory.MaxSize = newSize
+			m.message = fmt.Sprintf("✓ History size increased to %d", newSize)
+			m.messageIsSuccess = true
+			m.messageTime = 3
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+			m.messageTime = 3
+		}
+		return m, tickEverySecond()
+	case "2": // Decrease
+		newSize := m.searchHistory.MaxSize - 5
+		if newSize < 5 {
+			newSize = 5
+		}
+		store := storage.NewStorage(m.favoritePath)
+		if err := store.UpdateHistorySize(context.Background(), newSize); err == nil {
+			m.searchHistory.MaxSize = newSize
+			m.message = fmt.Sprintf("✓ History size decreased to %d", newSize)
+			m.messageIsSuccess = true
+			m.messageTime = 3
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+			m.messageTime = 3
+		}
+		return m, tickEverySecond()
+	case "3": // Reset to default
+		store := storage.NewStorage(m.favoritePath)
+		if err := store.UpdateHistorySize(context.Background(), storage.DefaultMaxHistorySize); err == nil {
+			m.searchHistory.MaxSize = storage.DefaultMaxHistorySize
+			m.message = fmt.Sprintf("✓ History size reset to %d", storage.DefaultMaxHistorySize)
+			m.messageIsSuccess = true
+			m.messageTime = 3
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+			m.messageTime = 3
+		}
+		return m, tickEverySecond()
+	case "4": // Clear history
+		store := storage.NewStorage(m.favoritePath)
+		if err := store.ClearSearchHistory(context.Background()); err == nil {
+			m.searchHistory.SearchItems = []storage.SearchHistoryItem{}
+			m.searchHistory.LuckyQueries = []string{}
+			m.message = "✓ Search history cleared"
+			m.messageIsSuccess = true
+			m.messageTime = 3
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+			m.messageTime = 3
+		}
+		return m, tickEverySecond()
+	case "enter":
+		idx := m.historyMenuList.Index()
+		switch idx {
+		case 0:
+			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+		case 1:
+			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+		case 2:
+			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+		case 3:
+			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+		case 4:
+			m.state = settingsStateMenu
+			return m, nil
+		}
+	}
+
+	// Handle menu navigation
+	var cmd tea.Cmd
+	m.historyMenuList, cmd = m.historyMenuList.Update(msg)
+	return m, cmd
+}
+
 // View renders the settings screen
 func (m SettingsModel) View() string {
 	switch m.state {
@@ -417,6 +539,8 @@ func (m SettingsModel) View() string {
 		return m.viewMenu()
 	case settingsStateTheme:
 		return m.viewTheme()
+	case settingsStateHistory:
+		return m.viewHistory()
 	case settingsStateUpdates:
 		return m.viewUpdates()
 	case settingsStateAbout:
@@ -442,7 +566,7 @@ func (m SettingsModel) viewMenu() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Shortcut • Esc/0: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Shortcut • Esc/0: Back • Ctrl+C: Quit",
 	}, m.height)
 }
 
@@ -468,6 +592,53 @@ func (m SettingsModel) viewTheme() string {
 		Title:   "🎨 Theme / Colors",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Apply Theme • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
+}
+
+func (m SettingsModel) viewHistory() string {
+	var content strings.Builder
+
+	// Current history size
+	content.WriteString(stationFieldStyle().Render("Current History Size: "))
+	content.WriteString(highlightStyle().Render(fmt.Sprintf("%d searches", m.searchHistory.MaxSize)))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render("(Number of recent searches to keep)"))
+	content.WriteString("\n\n")
+
+	// Calculate new sizes for display
+	newSizeInc := m.searchHistory.MaxSize + 5
+	newSizeDec := m.searchHistory.MaxSize - 5
+	if newSizeDec < 5 {
+		newSizeDec = 5
+	}
+
+	// Update menu item descriptions with current calculations
+	content.WriteString(m.historyMenuList.View())
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render(fmt.Sprintf("  1: Will become %d • 2: Will become %d • 3: Will become 10", newSizeInc, newSizeDec)))
+
+	// Stats
+	content.WriteString("\n\n")
+	content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
+	content.WriteString("\n\n")
+	content.WriteString(stationFieldStyle().Render("Current Stats:"))
+	content.WriteString("\n")
+	content.WriteString(fmt.Sprintf("  Search history items: %d\n", len(m.searchHistory.SearchItems)))
+	content.WriteString(fmt.Sprintf("  Lucky history items:  %d\n", len(m.searchHistory.LuckyQueries)))
+
+	if m.message != "" {
+		content.WriteString("\n")
+		if m.messageIsSuccess {
+			content.WriteString(successStyle().Render(m.message))
+		} else {
+			content.WriteString(errorStyle().Render(m.message))
+		}
+	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "⚙️  Settings > Search History",
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter/1-5: Select • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
 }
 
