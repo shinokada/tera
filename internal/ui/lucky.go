@@ -364,6 +364,10 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update text input
+	// Clear number buffer when user types into text input (non-navigation, non-number)
+	if m.numberBuffer != "" {
+		m.numberBuffer = ""
+	}
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd

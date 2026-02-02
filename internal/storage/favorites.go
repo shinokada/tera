@@ -12,7 +12,7 @@ import (
 
 type Storage struct {
 	favoritePath string
-	mu           sync.Mutex // Protects concurrent access to history operations
+	mu           sync.Mutex // Protects concurrent access to favorites operations
 }
 
 func NewStorage(favoritePath string) *Storage {
@@ -52,6 +52,9 @@ func (s *Storage) SaveList(ctx context.Context, list *FavoritesList) error {
 
 // AddStation adds a station to a list, checking for duplicates by UUID
 func (s *Storage) AddStation(ctx context.Context, listName string, station api.Station) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Load existing list
 	list, err := s.LoadList(ctx, listName)
 	if err != nil {
@@ -124,6 +127,9 @@ func (s *Storage) StationExists(ctx context.Context, listName string, stationUUI
 
 // RemoveStation removes a station from a list by UUID
 func (s *Storage) RemoveStation(ctx context.Context, listName string, stationUUID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Load existing list
 	list, err := s.LoadList(ctx, listName)
 	if err != nil {
