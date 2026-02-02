@@ -1,9 +1,9 @@
 # Future Features
 
-## Search page
+## Search page enhancements
 
-- Default of 10 last search history without duplicates in Search Radio Staions page
-- Add a Setting menu to change the number of search history storage
+- Default of 10 last search history without duplicates in Search Radio Stations page
+- Add a Settings menu to change the number of search history storage
 
 ## I feel lucky page
 - I feel lucky page: 10 last history without duplicates

@@ -352,10 +352,11 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	newList, selected := components.HandleMenuKey(msg, m.menuList)
 	m.menuList = newList
 
-	if selected >= 0 {
+	if selected > 0 { // selected > 0 because index 0 is separator
 		// Selected a history item from menu
-		if m.searchHistory != nil && selected >= 0 && selected < len(m.searchHistory.LuckyQueries) {
-			query := m.searchHistory.LuckyQueries[selected]
+		actualIndex := selected - 1 // Adjust for separator at index 0
+		if m.searchHistory != nil && actualIndex >= 0 && actualIndex < len(m.searchHistory.LuckyQueries) {
+			query := m.searchHistory.LuckyQueries[actualIndex]
 			m.state = luckyStateSearching
 			m.err = nil
 			return m, m.searchAndPickRandom(query)
@@ -376,8 +377,8 @@ func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 
 	actualIndex := num - 1 // 1 = index 0, 2 = index 1, etc.
 	if actualIndex >= 0 && actualIndex < len(m.searchHistory.LuckyQueries) {
-		// Update menu selection
-		m.menuList.Select(actualIndex)
+		// Update menu selection (add 1 to account for separator at index 0)
+		m.menuList.Select(actualIndex + 1)
 		query := m.searchHistory.LuckyQueries[actualIndex]
 		m.state = luckyStateSearching
 		m.err = nil
