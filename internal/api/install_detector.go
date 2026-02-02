@@ -229,13 +229,6 @@ func checkWinget() bool {
 	return false
 }
 
-// checkAPT checks if tera was installed via APT/DEB
-func checkAPT() bool {
-	// Check if dpkg info file exists
-	_, err := os.Stat("/var/lib/dpkg/info/tera.list")
-	return err == nil
-}
-
 // checkRPM checks if tera was installed via RPM
 func checkRPM() bool {
 	return runCommandWithTimeout("rpm", "-q", "tera") == nil
