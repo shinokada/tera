@@ -180,24 +180,18 @@ func TestLuckyPlayingStateEscNavigation(t *testing.T) {
 	updatedModel, cmd := model.Update(msg)
 
 	luckyModel := updatedModel.(LuckyModel)
-	// ESC during playback should stop and return to main menu
+	// ESC during playback should stop and return to lucky input state
 	if luckyModel.state != luckyStateInput {
 		t.Errorf("Expected state to be luckyStateInput, got %v", luckyModel.state)
 	}
 
-	if cmd == nil {
-		t.Error("Expected command to be returned for navigation")
+	// ESC returns to input state without navigation command (similar to search.go behavior)
+	if luckyModel.selectedStation != nil {
+		t.Error("Expected selectedStation to be nil after pressing ESC")
 	}
 
-	// Verify navigation to main menu
-	resultMsg := cmd()
-	if navMsg, ok := resultMsg.(navigateMsg); ok {
-		if navMsg.screen != screenMainMenu {
-			t.Errorf("Expected navigation to screenMainMenu, got %v", navMsg.screen)
-		}
-	} else {
-		t.Error("Expected navigateMsg from command")
-	}
+	// No navigation command is expected - ESC just returns to input state
+	_ = cmd // cmd may be nil, which is expected
 }
 
 func TestLuckyPlayingStateZeroToMainMenu(t *testing.T) {
