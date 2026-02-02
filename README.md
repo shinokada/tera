@@ -238,6 +238,9 @@ TERA detects how you installed it and provides the correct update command. For e
 | Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
 | Go install          | `go install github.com/shinokada/tera/cmd/tera@latest`                    |
 | Scoop               | `scoop update tera`                                                       |
+| Winget              | `winget upgrade tera`                                                     |
+| APT/DEB             | `sudo apt update && sudo apt upgrade tera`                                |
+| RPM/DNF             | `sudo dnf upgrade tera`                                                   |
 | Manual              | Download from [releases page](https://github.com/shinokada/tera/releases) |
 
 ## Keyboard Shortcuts
