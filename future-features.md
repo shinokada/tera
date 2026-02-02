@@ -1,11 +1,11 @@
 # Future Features
 
-## Search page enhancements
+## (Done: v1.2.0) Search page enhancements
 
 - Default of 10 last search history without duplicates in Search Radio Stations page
 - Add a Settings menu to change the number of search history storage
 
-## I feel lucky page
+## (Done: v1.2.0) I feel lucky page
 - I feel lucky page: 10 last history without duplicates
 - Add a Setting menu to change the number of I feel lucky history storage
 
@@ -36,7 +36,32 @@ For the best experience while driving, combine these options to maximize stabili
 
 ## Settings
 - Smart Update commands
-In Check for Updates page, if an update is available, add a list to update using the following method.
+Currently Settings > 2. Check for Updates page shows the following:
+
+```
+                                               
+                         TERA
+
+  🔄 Check for Updates
+
+  Current version: 1.1.
+
+  ─────────────────────────────────────────
+
+  ⬆ New version available!
+  Latest version: v1.2.0
+  Release page:
+    https://github.com/shinokada/tera/releases/latest
+  ─────────────────────────────────────────
+  Update instructions:
+    If installed via Go:
+      go install github.com/shinokada/tera/cmd/tera@latest
+ 
+    Or visit the release page to download binaries. 
+```
+
+In the above page, if an update is available, add a list item to select updating the version using the following method.
+
 Can Tera run the command when it is selected? Or should we just show the command?
 
 Detect installation method and show appropriate command:
@@ -49,3 +74,26 @@ Detect installation method and show appropriate command:
 | APT/DEB        | Check /var/lib/dpkg/info/tera.list  | sudo apt update && sudo apt upgrade tera             |
 | RPM            | Check rpm -q tera                   | sudo dnf upgrade tera                                |
 | Manual/Unknown | Fallback                            | Link to releases page                                |
+
+
+New screen:
+
+
+```
+                                               
+                         TERA
+
+  🔄 Check for Updates
+
+  Current version: 1.1.
+
+  ─────────────────────────────────────────
+
+  ⬆ New version available!
+  Latest version: v1.2.0
+
+  UPDATE using xxx (this can be brew/go/sudo apt update/...)
+  (If Manual/Unknown show the following)
+  Release page:
+    https://github.com/shinokada/tera/releases/latest
+```

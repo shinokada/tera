@@ -30,6 +30,11 @@ brew install shinokada/tera/tera
 brew upgrade shinokada/tera/tera
 ```
 
+### Golang
+```sh
+go install github.com/shinokada/tera/cmd/tera@latest
+```
+
 ### Debian/Ubuntu
 ```sh
 sudo dpkg -i tera_1.x.x_linux_amd64.deb
