@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/shinokada/tera/internal/api"
 )
 
 type Storage struct {
 	favoritePath string
+	mu           sync.Mutex // Protects concurrent access to history operations
 }
 
 func NewStorage(favoritePath string) *Storage {
