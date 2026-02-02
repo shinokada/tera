@@ -62,7 +62,12 @@ func (d MenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		return
 	}
 
-	str := fmt.Sprintf("%s. %s", menuItem.Shortcut(), menuItem.Title())
+	var str string
+	if menuItem.Shortcut() == "" {
+		str = menuItem.Title()
+	} else {
+		str = fmt.Sprintf("%s. %s", menuItem.Shortcut(), menuItem.Title())
+	}
 
 	var fn func(s ...string) string
 	if index == m.Index() {

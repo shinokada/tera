@@ -14,6 +14,7 @@ import (
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
@@ -35,9 +36,12 @@ type LuckyModel struct {
 	apiClient       *api.Client
 	textInput       textinput.Model
 	newListInput    textinput.Model
+	menuList        list.Model // Menu for history navigation
+	numberBuffer    string     // Buffer for multi-digit number input
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	favoritePath    string
+	searchHistory   *storage.SearchHistoryStore
 	saveMessage     string
 	saveMessageTime int
 	width           int
@@ -82,17 +86,30 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 	nli.CharLimit = 50
 	nli.Width = 50
 
-	return LuckyModel{
-		state:        luckyStateInput,
-		apiClient:    apiClient,
-		textInput:    ti,
-		newListInput: nli,
-		favoritePath: favoritePath,
-		player:       player.NewMPVPlayer(),
-		width:        80,
-		height:       24,
-		helpModel:    components.NewHelpModel(components.CreatePlayingHelp()),
+	// Load search history (if it fails, just use empty history)
+	store := storage.NewStorage(favoritePath)
+	history, err := store.LoadSearchHistory(context.Background())
+	if err != nil || history == nil {
+		history = storage.NewSearchHistoryStore()
 	}
+
+	m := LuckyModel{
+		state:         luckyStateInput,
+		apiClient:     apiClient,
+		textInput:     ti,
+		newListInput:  nli,
+		favoritePath:  favoritePath,
+		player:        player.NewMPVPlayer(),
+		searchHistory: history,
+		width:         80,
+		height:        24,
+		helpModel:     components.NewHelpModel(components.CreatePlayingHelp()),
+	}
+
+	// Build menu with history items
+	m.rebuildMenuWithHistory()
+
+	return m
 }
 
 // Init initializes the lucky screen
@@ -229,16 +246,93 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateInput handles input during the input state
 func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		// Return to main menu
+	key := msg.String()
+
+	// Handle escape - return to main menu
+	if key == "esc" {
+		m.numberBuffer = "" // Clear buffer
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
-	case "ctrl+c":
+	}
+
+	// Handle ctrl+c
+	if key == "ctrl+c" {
 		return m, tea.Quit
-	case "enter":
-		// Search for stations with the entered keyword
+	}
+
+	// Check if text input is focused (has content being typed)
+	inputFocused := m.textInput.Focused() && m.textInput.Value() != ""
+
+	// If text input has content, handle normally
+	if inputFocused {
+		if key == "enter" {
+			keyword := strings.TrimSpace(m.textInput.Value())
+			if keyword == "" {
+				m.err = fmt.Errorf("please enter a keyword")
+				return m, nil
+			}
+			m.err = nil
+			m.state = luckyStateSearching
+			return m, m.searchAndPickRandom(keyword)
+		}
+		var cmd tea.Cmd
+		m.textInput, cmd = m.textInput.Update(msg)
+		return m, cmd
+	}
+
+	// Handle number input for multi-digit selection (only when not typing in input)
+	if key >= "0" && key <= "9" {
+		m.numberBuffer += key
+
+		// Check if we should auto-select
+		if len(m.numberBuffer) >= 2 {
+			var num int
+			_, _ = fmt.Sscanf(m.numberBuffer, "%d", &num)
+
+			// Calculate max valid number
+			maxNum := 0
+			if m.searchHistory != nil {
+				maxHistoryItems := len(m.searchHistory.LuckyQueries)
+				if maxHistoryItems > m.searchHistory.MaxSize {
+					maxHistoryItems = m.searchHistory.MaxSize
+				}
+				maxNum = maxHistoryItems
+			}
+
+			// If number is valid, select it
+			if num >= 1 && num <= maxNum {
+				m.numberBuffer = "" // Clear buffer
+				return m.selectHistoryByNumber(num)
+			}
+
+			// If number is too large or 3+ digits, clear buffer
+			if num > maxNum || len(m.numberBuffer) >= 3 {
+				m.numberBuffer = ""
+			}
+		}
+		return m, nil
+	}
+
+	// Handle Enter to submit buffered number or search
+	if key == "enter" {
+		if m.numberBuffer != "" {
+			var num int
+			_, _ = fmt.Sscanf(m.numberBuffer, "%d", &num)
+			m.numberBuffer = ""
+			return m.selectHistoryByNumber(num)
+		}
+
+		// Check if a history item is selected in the menu (index 0 is separator, 1+ are history items)
+		selectedIdx := m.menuList.Index()
+		if m.searchHistory != nil && selectedIdx > 0 && selectedIdx <= len(m.searchHistory.LuckyQueries) {
+			query := m.searchHistory.LuckyQueries[selectedIdx-1] // -1 because index 0 is separator
+			m.state = luckyStateSearching
+			m.err = nil
+			return m, m.searchAndPickRandom(query)
+		}
+
+		// Search with text input value
 		keyword := strings.TrimSpace(m.textInput.Value())
 		if keyword == "" {
 			m.err = fmt.Errorf("please enter a keyword")
@@ -249,16 +343,54 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.searchAndPickRandom(keyword)
 	}
 
+	// Clear buffer on navigation keys
+	if key == "up" || key == "down" || key == "j" || key == "k" {
+		m.numberBuffer = ""
+	}
+
+	// Handle menu navigation for history items
+	newList, selected := components.HandleMenuKey(msg, m.menuList)
+	m.menuList = newList
+
+	if selected >= 0 {
+		// Selected a history item from menu
+		if m.searchHistory != nil && selected >= 0 && selected < len(m.searchHistory.LuckyQueries) {
+			query := m.searchHistory.LuckyQueries[selected]
+			m.state = luckyStateSearching
+			m.err = nil
+			return m, m.searchAndPickRandom(query)
+		}
+	}
+
+	// Update text input
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd
+}
+
+// selectHistoryByNumber selects a history item by number (1-based)
+func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
+	if m.searchHistory == nil {
+		return m, nil
+	}
+
+	actualIndex := num - 1 // 1 = index 0, 2 = index 1, etc.
+	if actualIndex >= 0 && actualIndex < len(m.searchHistory.LuckyQueries) {
+		// Update menu selection
+		m.menuList.Select(actualIndex)
+		query := m.searchHistory.LuckyQueries[actualIndex]
+		m.state = luckyStateSearching
+		m.err = nil
+		return m, m.searchAndPickRandom(query)
+	}
+	return m, nil
 }
 
 // updatePlaying handles input during playback
 func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// Stop playback and return to main menu
+		// Stop playback and return to I Feel Lucky input
 		if err := m.player.Stop(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
 			m.saveMessageTime = 150
@@ -266,9 +398,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.state = luckyStateInput
 		m.selectedStation = nil
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
+		return m, nil
 	case "0":
 		// Return to main menu (Level 2+ shortcut)
 		if err := m.player.Stop(); err != nil {
@@ -457,6 +587,12 @@ func (m LuckyModel) updateSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // searchAndPickRandom searches for stations and picks one randomly
 func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 	return func() tea.Msg {
+		// Save to history in background
+		go func() {
+			store := storage.NewStorage(m.favoritePath)
+			_ = store.AddLuckyQuery(context.Background(), keyword)
+		}()
+
 		// Search by tag (genre/keyword)
 		stations, err := m.apiClient.SearchByTag(context.Background(), keyword)
 		if err != nil {
@@ -585,6 +721,24 @@ func (m LuckyModel) View() string {
 func (m LuckyModel) viewInput() string {
 	var content strings.Builder
 
+	t := theme.Current()
+	titleStyle := lipgloss.NewStyle().
+		Foreground(t.HighlightColor()).
+		Bold(true).
+		PaddingLeft(t.Padding.ListItemLeft)
+
+	// Title
+	content.WriteString(titleStyle.Render("🎲 I Feel Lucky"))
+	content.WriteString("\n\n")
+
+	// "Choose an option:" with number buffer
+	content.WriteString(subtitleStyle().Render("Choose an option:"))
+	if m.numberBuffer != "" {
+		content.WriteString(" ")
+		content.WriteString(highlightStyle().Render(m.numberBuffer + "_"))
+	}
+	content.WriteString("\n\n")
+
 	// Instructions
 	content.WriteString("Type a genre of music: rock, classical, jazz, pop, country, hip, heavy, blues, soul.\n")
 	content.WriteString("Or type a keyword like: meditation, relax, mozart, Beatles, etc.\n\n")
@@ -595,16 +749,31 @@ func (m LuckyModel) viewInput() string {
 	content.WriteString("Genre/keyword: ")
 	content.WriteString(m.textInput.View())
 
+	// Show history menu if available
+	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
+		content.WriteString("\n\n")
+		content.WriteString(m.menuList.View())
+	}
+
 	// Error message if any
 	if m.err != nil {
-		content.WriteString("\n\n")
+		content.WriteString("\n")
 		content.WriteString(errorStyle().Render(m.err.Error()))
 	}
 
+	helpText := "↑↓/jk: Navigate • Enter: Search"
+	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
+		maxItems := len(m.searchHistory.LuckyQueries)
+		if maxItems > m.searchHistory.MaxSize {
+			maxItems = m.searchHistory.MaxSize
+		}
+		helpText += fmt.Sprintf(" • 1-%d: Quick search", maxItems)
+	}
+	helpText += " • Esc: Back • Ctrl+C: Quit"
+
 	return RenderPageWithBottomHelp(PageLayout{
-		Title:   "I Feel Lucky",
 		Content: content.String(),
-		Help:    "Enter: Search • Esc: Back • Ctrl+C: Quit",
+		Help:    helpText,
 	}, m.height)
 }
 
@@ -764,4 +933,37 @@ func (m LuckyModel) viewNewListInput() string {
 		Content: content.String(),
 		Help:    "Enter: Save • Esc: Cancel",
 	})
+}
+
+// rebuildMenuWithHistory rebuilds the menu list with history items
+func (m *LuckyModel) rebuildMenuWithHistory() {
+	if m.searchHistory == nil || len(m.searchHistory.LuckyQueries) == 0 {
+		// Create empty menu
+		m.menuList = components.CreateMenu([]components.MenuItem{}, "", 50, 5)
+		return
+	}
+
+	// Build menu items from history
+	menuItems := []components.MenuItem{}
+
+	// Add separator
+	menuItems = append(menuItems, components.NewMenuItem("─── Recent Searches ───", "", ""))
+
+	// Add history items with numbers 1, 2, 3, etc.
+	for i, query := range m.searchHistory.LuckyQueries {
+		if i >= m.searchHistory.MaxSize {
+			break
+		}
+		shortcut := fmt.Sprintf("%d", i+1)
+		menuItems = append(menuItems, components.NewMenuItem(query, "", shortcut))
+	}
+
+	// Calculate appropriate height
+	height := len(menuItems) + 2
+	if height > 15 {
+		height = 15
+	}
+
+	// Use empty title - we render the title manually
+	m.menuList = components.CreateMenu(menuItems, "", 50, height)
 }
