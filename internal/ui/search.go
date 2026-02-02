@@ -393,15 +393,9 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Single digit 1-6: immediately execute (search types)
-		if len(m.numberBuffer) == 1 && num >= 1 && num <= 6 {
-			m.numberBuffer = ""
-			return m.selectByNumber(num)
-		}
-
 		// Two or more digits: check if valid and execute
 		if len(m.numberBuffer) >= 2 {
-			// If number is valid, select it
+			// If number is valid, select it immediately
 			if num >= 1 && num <= maxNum {
 				m.numberBuffer = "" // Clear buffer
 				return m.selectByNumber(num)
@@ -412,6 +406,7 @@ func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.numberBuffer = ""
 			}
 		}
+		// Single digit: just buffer it, don't execute yet (wait for Enter or second digit)
 		return m, nil
 	}
 
@@ -1332,7 +1327,7 @@ func (m SearchModel) renderSearchMenu() string {
 		content.WriteString(errorStyle().Render(fmt.Sprintf("Error: %v", m.err)))
 	}
 
-	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6: Search Type (or 10+ for history + Enter) • Esc: Back • Ctrl+C: Quit"
+	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6+Enter: Search • 10,11,12...: History • Esc: Back • Ctrl+C: Quit"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),

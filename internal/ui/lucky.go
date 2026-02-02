@@ -399,6 +399,9 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.state = luckyStateInput
 		m.selectedStation = nil
+		// Reload history from disk so recent search appears
+		m.reloadSearchHistory()
+		m.rebuildMenuWithHistory()
 		return m, nil
 	case "0":
 		// Return to main menu (Level 2+ shortcut)
@@ -967,4 +970,14 @@ func (m *LuckyModel) rebuildMenuWithHistory() {
 
 	// Use empty title - we render the title manually
 	m.menuList = components.CreateMenu(menuItems, "", 50, height)
+}
+
+// reloadSearchHistory reloads history from disk
+func (m *LuckyModel) reloadSearchHistory() {
+	store := storage.NewStorage(m.favoritePath)
+	history, err := store.LoadSearchHistory(context.Background())
+	if err != nil || history == nil {
+		history = storage.NewSearchHistoryStore()
+	}
+	m.searchHistory = history
 }
