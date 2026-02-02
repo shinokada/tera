@@ -141,8 +141,10 @@ func checkHomebrew() bool {
 
 // checkGoInstallPath checks if a given executable path is in the GOPATH/bin directory
 func checkGoInstallPath(exePath, gopath string) bool {
-	gopathBin := filepath.Join(gopath, "bin")
-	return strings.HasPrefix(exePath, gopathBin)
+	gopathBin := filepath.Clean(filepath.Join(gopath, "bin"))
+	exePath = filepath.Clean(exePath)
+	prefix := gopathBin + string(os.PathSeparator)
+	return exePath == gopathBin || strings.HasPrefix(exePath, prefix)
 }
 
 // checkGoInstall checks if tera was installed via go install

@@ -48,6 +48,24 @@ func TestCheckGoInstall(t *testing.T) {
 			exePath:  "/usr/local/bin/tera",
 			expected: false,
 		},
+		{
+			name:     "false positive - bin2 directory",
+			gopath:   "/home/user/go",
+			exePath:  "/home/user/go/bin2/tera",
+			expected: false,
+		},
+		{
+			name:     "false positive - binary directory",
+			gopath:   "/home/user/go",
+			exePath:  "/home/user/go/binary/tera",
+			expected: false,
+		},
+		{
+			name:     "exact match to bin directory",
+			gopath:   "/home/user/go",
+			exePath:  "/home/user/go/bin",
+			expected: true,
+		},
 	}
 	
 	for _, tt := range tests {
