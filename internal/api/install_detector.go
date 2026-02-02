@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // InstallMethod represents how tera was installed
@@ -16,6 +18,7 @@ const (
 	InstallMethodHomebrew
 	InstallMethodGo
 	InstallMethodScoop
+	InstallMethodWinget
 	InstallMethodAPT
 	InstallMethodRPM
 	InstallMethodManual
@@ -34,7 +37,7 @@ func DetectInstallMethod() InstallInfo {
 	if checkHomebrew() {
 		return InstallInfo{
 			Method:       InstallMethodHomebrew,
-			UpdateCommand: "brew upgrade tera",
+			UpdateCommand: "brew upgrade shinokada/tera/tera",
 			Description:   "Homebrew",
 		}
 	}
@@ -54,6 +57,15 @@ func DetectInstallMethod() InstallInfo {
 			Method:       InstallMethodScoop,
 			UpdateCommand: "scoop update tera",
 			Description:   "Scoop",
+		}
+	}
+
+	// Check Winget (Windows)
+	if runtime.GOOS == "windows" && checkWinget() {
+		return InstallInfo{
+			Method:       InstallMethodWinget,
+			UpdateCommand: "winget upgrade tera",
+			Description:   "Winget",
 		}
 	}
 
@@ -83,11 +95,20 @@ func DetectInstallMethod() InstallInfo {
 	}
 }
 
+// runCommandWithTimeout runs a command with a 2-second timeout
+func runCommandWithTimeout(name string, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = 100 * time.Millisecond // Give process 100ms to exit after context cancel
+	return cmd.Run()
+}
+
 // checkHomebrew checks if tera was installed via Homebrew
 func checkHomebrew() bool {
 	// Try to run brew list tera
-	cmd := exec.Command("brew", "list", "tera")
-	if err := cmd.Run(); err == nil {
+	if err := runCommandWithTimeout("brew", "list", "tera"); err == nil {
 		return true
 	}
 
@@ -118,6 +139,12 @@ func checkHomebrew() bool {
 	return false
 }
 
+// checkGoInstallPath checks if a given executable path is in the GOPATH/bin directory
+func checkGoInstallPath(exePath, gopath string) bool {
+	gopathBin := filepath.Join(gopath, "bin")
+	return strings.HasPrefix(exePath, gopathBin)
+}
+
 // checkGoInstall checks if tera was installed via go install
 func checkGoInstall() bool {
 	gopath := os.Getenv("GOPATH")
@@ -140,14 +167,12 @@ func checkGoInstall() bool {
 	}
 
 	// Check if binary is in GOPATH/bin
-	gopathBin := filepath.Join(gopath, "bin")
-	return strings.HasPrefix(realPath, gopathBin)
+	return checkGoInstallPath(realPath, gopath)
 }
 
 // checkScoop checks if tera was installed via Scoop (Windows)
 func checkScoop() bool {
-	cmd := exec.Command("scoop", "list", "tera")
-	if err := cmd.Run(); err == nil {
+	if err := runCommandWithTimeout("scoop", "list", "tera"); err == nil {
 		return true
 	}
 
@@ -172,8 +197,46 @@ func checkAPT() bool {
 	return err == nil
 }
 
+// checkWinget checks if tera was installed via Winget (Windows)
+func checkWinget() bool {
+	// Check winget list for tera
+	if err := runCommandWithTimeout("winget", "list", "--id", "tera"); err == nil {
+		return true
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return false
+	}
+
+	realPath, err := filepath.EvalSymlinks(exePath)
+	if err != nil {
+		realPath = exePath
+	}
+
+	// Check common Winget install locations
+	wingetPaths := []string{
+		"\\Program Files\\",
+		"\\AppData\\Local\\Microsoft\\WinGet\\Packages\\",
+	}
+
+	for _, path := range wingetPaths {
+		if strings.Contains(realPath, path) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// checkAPT checks if tera was installed via APT/DEB
+func checkAPT() bool {
+	// Check if dpkg info file exists
+	_, err := os.Stat("/var/lib/dpkg/info/tera.list")
+	return err == nil
+}
+
 // checkRPM checks if tera was installed via RPM
 func checkRPM() bool {
-	cmd := exec.Command("rpm", "-q", "tera")
-	return cmd.Run() == nil
+	return runCommandWithTimeout("rpm", "-q", "tera") == nil
 }

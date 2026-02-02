@@ -50,17 +50,18 @@ func TestCheckGoInstall(t *testing.T) {
 		},
 	}
 	
-	// Note: These tests would need mocking of os.Executable()
-	// For now, just test the basic function doesn't crash
-	_ = checkGoInstall()
-	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock test - in real implementation would need to mock os.Executable
-			// For now, just verify the function can be called
-			_ = checkGoInstall()
+			result := checkGoInstallPath(tt.exePath, tt.gopath)
+			if result != tt.expected {
+				t.Errorf("checkGoInstallPath(%q, %q) = %v, want %v",
+					tt.exePath, tt.gopath, result, tt.expected)
+			}
 		})
 	}
+	
+	// Also test the actual function doesn't crash
+	_ = checkGoInstall()
 }
 
 func TestCheckHomebrew(t *testing.T) {
@@ -82,6 +83,15 @@ func TestCheckScoop(t *testing.T) {
 	
 	// Smoke test
 	_ = checkScoop()
+}
+
+func TestCheckWinget(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Winget is Windows-only")
+	}
+	
+	// Smoke test
+	_ = checkWinget()
 }
 
 func TestCheckAPT(t *testing.T) {
@@ -112,6 +122,7 @@ func TestInstallMethodStrings(t *testing.T) {
 		{InstallMethodHomebrew, true},
 		{InstallMethodGo, true},
 		{InstallMethodScoop, true},
+		{InstallMethodWinget, true},
 		{InstallMethodAPT, true},
 		{InstallMethodRPM, true},
 		{InstallMethodManual, false},
@@ -127,7 +138,7 @@ func TestInstallMethodStrings(t *testing.T) {
 			// Set appropriate values based on method
 			switch tt.method {
 			case InstallMethodHomebrew:
-				info.UpdateCommand = "brew upgrade tera"
+				info.UpdateCommand = "brew upgrade shinokada/tera/tera"
 				info.Description = "Homebrew"
 			case InstallMethodGo:
 				info.UpdateCommand = "go install github.com/shinokada/tera/cmd/tera@latest"
@@ -135,6 +146,9 @@ func TestInstallMethodStrings(t *testing.T) {
 			case InstallMethodScoop:
 				info.UpdateCommand = "scoop update tera"
 				info.Description = "Scoop"
+			case InstallMethodWinget:
+				info.UpdateCommand = "winget upgrade tera"
+				info.Description = "Winget"
 			case InstallMethodAPT:
 				info.UpdateCommand = "sudo apt update && sudo apt upgrade tera"
 				info.Description = "APT/DEB"
@@ -179,7 +193,7 @@ func TestDetectInstallMethodRealistic(t *testing.T) {
 	// Verify the update command is reasonable for the method
 	switch info.Method {
 	case InstallMethodHomebrew:
-		if info.UpdateCommand != "brew upgrade tera" {
+		if info.UpdateCommand != "brew upgrade shinokada/tera/tera" {
 			t.Errorf("Unexpected Homebrew command: %s", info.UpdateCommand)
 		}
 	case InstallMethodGo:
@@ -198,6 +212,8 @@ func (i InstallMethod) String() string {
 		return "Go"
 	case InstallMethodScoop:
 		return "Scoop"
+	case InstallMethodWinget:
+		return "Winget"
 	case InstallMethodAPT:
 		return "APT"
 	case InstallMethodRPM:
