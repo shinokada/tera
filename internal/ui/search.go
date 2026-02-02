@@ -1332,7 +1332,7 @@ func (m SearchModel) renderSearchMenu() string {
 		content.WriteString(errorStyle().Render(fmt.Sprintf("Error: %v", m.err)))
 	}
 
-	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6: Search Type • Esc: Back • Ctrl+C: Quit"
+	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6: Search Type (or 10+ for history + Enter) • Esc: Back • Ctrl+C: Quit"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),

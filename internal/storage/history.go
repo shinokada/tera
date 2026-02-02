@@ -94,6 +94,9 @@ func (s *Storage) SaveSearchHistory(ctx context.Context, store *SearchHistorySto
 // If the same type+query exists, it moves to top
 // If history is full, removes oldest
 func (s *Storage) AddSearchItem(ctx context.Context, searchType, query string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	store, err := s.LoadSearchHistory(ctx)
 	if err != nil {
 		return err
@@ -135,6 +138,9 @@ func (s *Storage) AddSearchItem(ctx context.Context, searchType, query string) e
 // If the query exists, it moves to top
 // If history is full, removes oldest
 func (s *Storage) AddLuckyQuery(ctx context.Context, query string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	store, err := s.LoadSearchHistory(ctx)
 	if err != nil {
 		return err
@@ -168,6 +174,9 @@ func (s *Storage) AddLuckyQuery(ctx context.Context, query string) error {
 // UpdateHistorySize updates the max history size
 // If new size is smaller, trims excess from end
 func (s *Storage) UpdateHistorySize(ctx context.Context, newSize int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	if newSize <= 0 {
 		return fmt.Errorf("history size must be positive")
 	}
@@ -192,6 +201,9 @@ func (s *Storage) UpdateHistorySize(ctx context.Context, newSize int) error {
 
 // ClearSearchHistory clears all history but keeps the max size setting
 func (s *Storage) ClearSearchHistory(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	store, err := s.LoadSearchHistory(ctx)
 	if err != nil {
 		return err
