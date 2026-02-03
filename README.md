@@ -30,6 +30,11 @@ brew install shinokada/tera/tera
 brew upgrade shinokada/tera/tera
 ```
 
+### Golang
+```sh
+go install github.com/shinokada/tera/cmd/tera@latest
+```
+
 ### Debian/Ubuntu
 ```sh
 sudo dpkg -i tera_1.x.x_linux_amd64.deb
@@ -124,6 +129,16 @@ Create, rename, and delete your favorite lists. Stations can be:
 
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
 
+### Settings
+
+Access app configuration from the main menu (option 6):
+
+- **Theme / Colors** - Switch between predefined themes or customize colors
+- **Check for Updates** - View current version and check for new releases
+- **Installation Info** - See your installation method and update command
+
+The Settings menu automatically detects how you installed TERA (Homebrew, Go, Scoop, Winget, etc.) and shows the appropriate update command.
+
 ### Quick Play from Main Menu
 
 The main menu shows your "My-favorites" list with shortcuts 10-99+. Type the number to play instantly:
@@ -203,8 +218,18 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 1. Press `6` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
-3. View the latest version and release notes link
-4. Follow the update instructions for your installation method
+3. View:
+   - Your current version
+   - Latest available version
+   - Link to release notes
+   - Installation method (automatically detected)
+   - Specific update command for your installation
+
+TERA detects how you installed it and provides the correct update command. For example:
+- If installed via Homebrew: Shows `brew upgrade shinokada/tera/tera`
+- If installed via Go: Shows `go install github.com/shinokada/tera/cmd/tera@latest`
+- If installed via Scoop: Shows `scoop update tera`
+- If installed via Winget: Shows `winget upgrade tera`
 
 ### Update Commands
 
@@ -213,6 +238,9 @@ TERA automatically checks for new versions on startup. When an update is availab
 | Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
 | Go install          | `go install github.com/shinokada/tera/cmd/tera@latest`                    |
 | Scoop               | `scoop update tera`                                                       |
+| Winget              | `winget upgrade tera`                                                     |
+| APT/DEB             | `sudo apt update && sudo apt install --only-upgrade tera`                |
+| RPM/DNF             | `sudo dnf upgrade tera`                                                   |
 | Manual              | Download from [releases page](https://github.com/shinokada/tera/releases) |
 
 ## Keyboard Shortcuts

@@ -48,6 +48,7 @@ type SettingsModel struct {
 	updateChecked   bool
 	updateChecking  bool
 	updateError     string
+	installInfo     api.InstallInfo
 }
 
 // Predefined themes
@@ -249,6 +250,9 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		history = storage.NewSearchHistoryStore()
 	}
 
+	// Detect installation method
+	installInfo := api.DetectInstallMethod()
+
 	return SettingsModel{
 		state:           settingsStateMenu,
 		menuList:        menuList,
@@ -260,6 +264,7 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		// Update fields initialized to defaults
 		updateChecked:  false,
 		updateChecking: false,
+		installInfo:    installInfo,
 	}
 }
 
@@ -672,24 +677,34 @@ func (m SettingsModel) viewUpdates() string {
 			content.WriteString(stationFieldStyle().Render("Latest version: "))
 			content.WriteString(highlightStyle().Render(m.latestVersion))
 			content.WriteString("\n\n")
-			content.WriteString(stationFieldStyle().Render("Release page:"))
-			content.WriteString("\n")
-			content.WriteString(stationValueStyle().Render("  " + api.ReleasePageURL))
-			content.WriteString("\n\n")
 			content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
 			content.WriteString("\n\n")
-			content.WriteString(helpStyle().Render("Update instructions:"))
+			
+			// Show installation method specific update instructions
+			content.WriteString(stationFieldStyle().Render("Detected installation method: "))
+			content.WriteString(highlightStyle().Render(m.installInfo.Description))
 			content.WriteString("\n\n")
-			content.WriteString(stationValueStyle().Render("  If installed via Go:"))
-			content.WriteString("\n")
-			content.WriteString(highlightStyle().Render("    go install github.com/shinokada/tera/cmd/tera@latest"))
-			content.WriteString("\n\n")
-			content.WriteString(stationValueStyle().Render("  Or visit the release page to download binaries."))
+			
+			if m.installInfo.UpdateCommand != "" {
+				content.WriteString(stationValueStyle().Render("To update, run:"))
+				content.WriteString("\n")
+				content.WriteString(highlightStyle().Render("  " + m.installInfo.UpdateCommand))
+				content.WriteString("\n\n")
+			} else {
+				// Manual/Unknown installation
+				content.WriteString(stationValueStyle().Render("Visit the release page to download the latest version:"))
+				content.WriteString("\n")
+				content.WriteString(highlightStyle().Render("  " + api.ReleasePageURL))
+				content.WriteString("\n\n")
+			}
 		} else {
 			content.WriteString(successStyle().Render("✓ You're up to date!"))
 			content.WriteString("\n\n")
 			content.WriteString(stationFieldStyle().Render("Latest version: "))
 			content.WriteString(highlightStyle().Render(m.latestVersion))
+			content.WriteString("\n\n")
+			content.WriteString(stationFieldStyle().Render("Installation method: "))
+			content.WriteString(stationValueStyle().Render(m.installInfo.Description))
 		}
 	} else {
 		content.WriteString(stationValueStyle().Render("Press Enter or 'r' to check for updates"))
