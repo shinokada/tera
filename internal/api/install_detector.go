@@ -180,8 +180,14 @@ func checkGoInstall() bool {
 		}
 	}
 
-	// Fallback to GOPATH/bin
-	return checkGoInstallPath(realPath, gopath)
+	// Check GOPATH/bin (GOPATH can be a colon/semicolon-separated list)
+	for _, gp := range filepath.SplitList(gopath) {
+		if gp != "" && checkGoInstallPath(realPath, gp) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // checkScoop checks if tera was installed via Scoop (Windows)
