@@ -73,7 +73,7 @@ func DetectInstallMethod() InstallInfo {
 	if checkAPT() {
 		return InstallInfo{
 			Method:       InstallMethodAPT,
-			UpdateCommand: "sudo apt update && sudo apt upgrade tera",
+			UpdateCommand: "sudo apt update && sudo apt install --only-upgrade tera",
 			Description:   "APT/DEB",
 		}
 	}

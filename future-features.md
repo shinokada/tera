@@ -9,6 +9,27 @@
 - I feel lucky page: 10 last history without duplicates
 - Add a Setting menu to change the number of I feel lucky history storage
 
+## Search updates
+### Bitrate
+Select from pre-defined bitrate or input field for a specific bitrate.
+
+### Search by Popularity/Votes
+
+### Search by high-uptime streams
+
+## Advanced Search update
+Combined: Use multiple fields to pinpoint exact vibes
+- Tag + Language: tag:classical, language:italian
+- Country + Tag: country:US, tag:rock
+
+[From Radio Browser API docs](https://github.com/ivandotv/radio-browser-api/blob/master/docs/api/README.md#advancedstationquery)
+
+```
+AdvancedStationQuery
+Ƭ AdvancedStationQuery: { bitrateMax?: string ; bitrateMin?: string ; codec?: string ; country?: string ; countryCode?: string ; countryExact?: boolean ; hasGeoInfo?: boolean ; language?: string ; languageExact?: boolean ; name?: string ; nameExact?: boolean ; state?: string ; stateExact?: boolean ; tag?: string ; tagExact?: boolean ; tagList?: string[] } & StationQuery
+```
+
+
 ## Search page
 - #42: color code for stream speed (e.g., 64 kbps, 128 kbps, 320 kbps)
 - Sort by stream speed
@@ -34,8 +55,7 @@ For the best experience while driving, combine these options to maximize stabili
 - --cache=yes: Increases the buffer to handle minor signal dips before the audio actually stops.
 - --demuxer-max-bytes=50M: Sets a larger cache size (e.g., 50MB) to bridge longer "dead zones" in 4G coverage. 
 
-## Settings
-- Smart Update commands
+## (Done v1.3.0) Settings Smart Update commands
 Currently Settings > 2. Check for Updates page shows the following:
 
 ```
