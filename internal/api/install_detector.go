@@ -139,12 +139,17 @@ func checkHomebrew() bool {
 	return false
 }
 
+// isInDir checks if a given file path is inside a directory
+func isInDir(filePath, dir string) bool {
+	dir = filepath.Clean(dir)
+	filePath = filepath.Clean(filePath)
+	prefix := dir + string(os.PathSeparator)
+	return filePath == dir || strings.HasPrefix(filePath, prefix)
+}
+
 // checkGoInstallPath checks if a given executable path is in the GOPATH/bin directory
 func checkGoInstallPath(exePath, gopath string) bool {
-	gopathBin := filepath.Clean(filepath.Join(gopath, "bin"))
-	exePath = filepath.Clean(exePath)
-	prefix := gopathBin + string(os.PathSeparator)
-	return exePath == gopathBin || strings.HasPrefix(exePath, prefix)
+	return isInDir(exePath, filepath.Join(gopath, "bin"))
 }
 
 // checkGoInstall checks if tera was installed via go install
@@ -168,7 +173,14 @@ func checkGoInstall() bool {
 		realPath = exePath
 	}
 
-	// Check if binary is in GOPATH/bin
+	// Check GOBIN first (takes precedence over GOPATH/bin)
+	if gobin := os.Getenv("GOBIN"); gobin != "" {
+		if isInDir(realPath, gobin) {
+			return true
+		}
+	}
+
+	// Fallback to GOPATH/bin
 	return checkGoInstallPath(realPath, gopath)
 }
 
@@ -200,8 +212,11 @@ func checkAPT() bool {
 }
 
 // checkWinget checks if tera was installed via Winget (Windows)
+// Note: Winget package is pending approval at https://github.com/microsoft/winget-pkgs/pull/335483
+// This detection will work once the package is published to the official repository
 func checkWinget() bool {
 	// Check winget list for tera
+	// TODO: Update to use official package ID once PR #335483 is merged
 	if err := runCommandWithTimeout("winget", "list", "--id", "tera"); err == nil {
 		return true
 	}
