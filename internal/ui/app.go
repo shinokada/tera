@@ -402,7 +402,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						// Resumed - show temporary message
 						a.volumeDisplay = "▶ Resumed"
-						startTick := a.volumeDisplayFrames == 0
+						startTick := a.volumeDisplayFrames <= 0
 						a.volumeDisplayFrames = 2
 						if startTick {
 							return a, tickEverySecond()

@@ -359,11 +359,14 @@ func (p *MPVPlayer) TogglePause() error {
 		return fmt.Errorf("not connected to mpv")
 	}
 
-	// Toggle the pause state
-	p.paused = !p.paused
-
 	// Cycle the pause property (toggles pause/unpause)
-	return p.sendCommand([]interface{}{"cycle", "pause"})
+	if err := p.sendCommand([]interface{}{"cycle", "pause"}); err != nil {
+		return err
+	}
+
+	// Toggle the pause state only after successful command
+	p.paused = !p.paused
+	return nil
 }
 
 // IsPaused returns whether the player is currently paused

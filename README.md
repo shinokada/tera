@@ -319,6 +319,11 @@ Use **Advanced Search** when:
 - You want broader results across multiple fields
 - You're exploring and want maximum discovery
 
+**Features:**
+- **Country**: Enter a 2-letter code (e.g., "US") for Country Code search, or a full name (e.g., "Japan") for Country Name search.
+- **Bitrate**: Press 1, 2, or 3 to filter by quality. Press the same number again to unselect.
+- **Language**: Case-insensitive (e.g., "English" becomes "english").
+
 For example, searching `jazz` in Advanced Search finds:
 - Stations with "jazz" in their name (e.g., "Jazz FM")
 - Stations tagged with "jazz" as a genre

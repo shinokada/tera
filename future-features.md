@@ -1,48 +1,45 @@
 # New Features
 
-## Space keyboard shortcut to pause
-
 ## Search updates
-### Bitrate
+### Bitrate/Speed
 Select from pre-defined bitrate or input field for a specific bitrate.
 
 ### Search by Popularity/Votes
 
-
 ## Advanced Search update
 Combined: Use multiple fields to pinpoint exact vibes
-- Tag + Language: tag:classical, language:italian
-- Country + Tag: country:US, tag:rock
-
-Can we provide the following input field?
-```
-bitrateMax?: string
-bitrateMin?: string 
-codec?: string
-country?: string
-countryCode?: string 
-countryExact?: boolean
-hasGeoInfo?: boolean
-language?: string
-languageExact?: boolean
-name?: string
-nameExact?: boolean
-state?: string
-stateExact?: boolean
-tag?: string
-tagExact?: boolean
-tagList?: string[]
-```
-
-[From Radio Browser API docs](https://github.com/ivandotv/radio-browser-api/blob/master/docs/api/README.md#advancedstationquery)
 
 ```
-AdvancedStationQuery
-Ƭ AdvancedStationQuery: { bitrateMax?: string ; bitrateMin?: string ; codec?: string ; country?: string ; countryCode?: string ; countryExact?: boolean ; hasGeoInfo?: boolean ; language?: string ; languageExact?: boolean ; name?: string ; nameExact?: boolean ; state?: string ; stateExact?: boolean ; tag?: string ; tagExact?: boolean ; tagList?: string[] } & StationQuery
+Advanced Search
+
+Tag (optional):        classical
+Language (optional):   italian
+Country / Country code (optional):
+State (optional):
+Name contains (optional):
+
+Sort by: votes (default) | relevance:
+
+Bitrate (optional):
+1) Low   (≤ 64 kbps)
+2) Medium (96–128 kbps)
+3) High  (≥ 192 kbps)
 ```
 
+The definition of “relevance” internally as: Radio Browser default ordering.
 
-## Search page
+[From Radio Browser API docs](https://github.com/ivandotv/radio-browser-api/blob/master/docs/api/README.md)
+
+
+## Problems
+- Country name seems to be required in capital for the first letter
+- Can't unselect Bitrate. Once selecting 1/2/3, not able to unselect.
+- Country Code is not working. If an input is two letters, it should use country code query. Or should I separate Country and Country Code?
+- Language seems to be required in lower case, so code should convert to lower case.
+- All other playing station pages use a space keyboard shortcut to pause. In the playing station page after advanced search, the space key should pause the station.
+- Add/update README.md for advanced research section.
+
+## (Done) Search page (Added to Advanced Search)
 - #42: color code for stream speed (e.g., 64 kbps, 128 kbps, 320 kbps)
 - Sort by stream speed
 
@@ -66,6 +63,8 @@ For the best experience while driving, combine these options to maximize stabili
 - --loop-playlist=force: Keeps the player open after a drop.
 - --cache=yes: Increases the buffer to handle minor signal dips before the audio actually stops.
 - --demuxer-max-bytes=50M: Sets a larger cache size (e.g., 50MB) to bridge longer "dead zones" in 4G coverage. 
+
+## (planned: v1.4.0) Space keyboard shortcut to pause
 
 ## (Done v1.3.0) Settings Smart Update commands
 Currently Settings > 2. Check for Updates page shows the following:

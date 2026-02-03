@@ -481,7 +481,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				// Resumed - show temporary message
 				m.saveMessage = "▶ Resumed"
-				startTick := m.saveMessageTime == 0
+				startTick := m.saveMessageTime <= 0
 				m.saveMessageTime = 120
 				if startTick {
 					return m, ticksEverySecond()
