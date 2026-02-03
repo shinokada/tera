@@ -131,7 +131,7 @@ func checkHomebrew() bool {
 	}
 
 	for _, path := range homebrewPaths {
-		if strings.HasPrefix(realPath, path) {
+		if isInDir(realPath, path) {
 			return true
 		}
 	}
@@ -206,8 +206,8 @@ func checkScoop() bool {
 		realPath = exePath
 	}
 
-	// Check if in Scoop directory
-	return strings.Contains(realPath, "\\scoop\\")
+	// Check if in Scoop directory (case-insensitive for Windows)
+	return strings.Contains(strings.ToLower(realPath), "\\scoop\\")
 }
 
 // checkAPT checks if tera was installed via APT/DEB
@@ -237,14 +237,15 @@ func checkWinget() bool {
 		realPath = exePath
 	}
 
-	// Check common Winget install locations
+	// Check common Winget install locations (case-insensitive for Windows)
 	wingetPaths := []string{
-		"\\Program Files\\",
-		"\\AppData\\Local\\Microsoft\\WinGet\\Packages\\",
+		"\\program files\\",
+		"\\appdata\\local\\microsoft\\winget\\packages\\",
 	}
 
+	lowerPath := strings.ToLower(realPath)
 	for _, path := range wingetPaths {
-		if strings.Contains(realPath, path) {
+		if strings.Contains(lowerPath, path) {
 			return true
 		}
 	}
