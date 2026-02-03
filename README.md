@@ -8,12 +8,13 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎲 **I Feel Lucky** - Random station discovery by keyword
 - 💾 **Favorites** - Organize stations into custom lists with duplicate detection
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
-- 🔊 **Volume Control** - Adjust volume and mute during playback
+- 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
+- ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
 
 ## Requirements
 
@@ -96,6 +97,8 @@ tera
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
+
+# Need help? Press ? anytime to see keyboard shortcuts!
 ```
 
 ## Main Features
@@ -265,11 +268,12 @@ TERA detects how you installed it and provides the correct update command. For e
 
 ### Playback Controls
 
-| Key | Action            |
-| --- | ----------------- |
-| `*` | Volume up (+5%)   |
-| `/` | Volume down (-5%) |
-| `m` | Toggle mute       |
+| Key     | Action            |
+| ------- | ----------------- |
+| `Space` | Pause / Resume    |
+| `*`     | Volume up (+5%)   |
+| `/`     | Volume down (-5%) |
+| `m`     | Toggle mute       |
 
 ### Playing/Browsing Stations
 

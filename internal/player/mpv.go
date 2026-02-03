@@ -17,6 +17,7 @@ import (
 type MPVPlayer struct {
 	cmd        *exec.Cmd
 	playing    bool
+	paused     bool // Pause state
 	station    *api.Station
 	volume     int // Current volume (0-100)
 	muted      bool
@@ -101,6 +102,7 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	}
 
 	p.playing = true
+	p.paused = false
 	p.station = station
 	p.stopCh = make(chan struct{})
 
@@ -215,6 +217,7 @@ func (p *MPVPlayer) stopInternal() error {
 	close(p.stopCh)
 
 	p.playing = false
+	p.paused = false
 	p.station = nil
 	p.cmd = nil
 
@@ -341,6 +344,33 @@ func (p *MPVPlayer) ToggleMute() (muted bool, volume int) {
 	}
 
 	return p.muted, p.volume
+}
+
+// TogglePause toggles pause/resume state
+func (p *MPVPlayer) TogglePause() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.playing {
+		return fmt.Errorf("not playing")
+	}
+
+	if p.conn == nil {
+		return fmt.Errorf("not connected to mpv")
+	}
+
+	// Toggle the pause state
+	p.paused = !p.paused
+
+	// Cycle the pause property (toggles pause/unpause)
+	return p.sendCommand([]interface{}{"cycle", "pause"})
+}
+
+// IsPaused returns whether the player is currently paused
+func (p *MPVPlayer) IsPaused() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.paused
 }
 
 // monitor watches the mpv process and updates state when it exits

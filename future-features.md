@@ -1,13 +1,6 @@
-# Future Features
+# New Features
 
-## (Done: v1.2.0) Search page enhancements
-
-- Default of 10 last search history without duplicates in Search Radio Stations page
-- Add a Settings menu to change the number of search history storage
-
-## (Done: v1.2.0) I feel lucky page
-- I feel lucky page: 10 last history without duplicates
-- Add a Setting menu to change the number of I feel lucky history storage
+## Space keyboard shortcut to pause
 
 ## Search updates
 ### Bitrate
@@ -15,12 +8,31 @@ Select from pre-defined bitrate or input field for a specific bitrate.
 
 ### Search by Popularity/Votes
 
-### Search by high-uptime streams
 
 ## Advanced Search update
 Combined: Use multiple fields to pinpoint exact vibes
 - Tag + Language: tag:classical, language:italian
 - Country + Tag: country:US, tag:rock
+
+Can we provide the following input field?
+```
+bitrateMax?: string
+bitrateMin?: string 
+codec?: string
+country?: string
+countryCode?: string 
+countryExact?: boolean
+hasGeoInfo?: boolean
+language?: string
+languageExact?: boolean
+name?: string
+nameExact?: boolean
+state?: string
+stateExact?: boolean
+tag?: string
+tagExact?: boolean
+tagList?: string[]
+```
 
 [From Radio Browser API docs](https://github.com/ivandotv/radio-browser-api/blob/master/docs/api/README.md#advancedstationquery)
 
@@ -117,3 +129,12 @@ New screen:
   Release page:
     https://github.com/shinokada/tera/releases/latest
 ```
+
+## (Done: v1.2.0) Search page enhancements
+
+- Default of 10 last search history without duplicates in Search Radio Stations page
+- Add a Settings menu to change the number of search history storage
+
+## (Done: v1.2.0) I feel lucky page
+- I feel lucky page: 10 last history without duplicates
+- Add a Setting menu to change the number of I feel lucky history storage

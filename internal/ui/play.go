@@ -316,7 +316,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		// Countdown save message
+		// Countdown save message (only for positive values, not persistent -1)
 		if m.saveMessageTime > 0 {
 			m.saveMessageTime--
 			if m.saveMessageTime == 0 {
@@ -466,6 +466,29 @@ func (m PlayModel) startPlayback() tea.Cmd {
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "?":
+		// Toggle help overlay
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
+	case " ":
+		// Toggle pause/resume
+		if err := m.player.TogglePause(); err == nil {
+			if m.player.IsPaused() {
+				// Paused - show persistent message
+				m.saveMessage = "⏸ Paused - Press Space to resume"
+				m.saveMessageTime = -1 // Persistent (negative means persistent)
+			} else {
+				// Resumed - show temporary message
+				m.saveMessage = "▶ Resumed"
+				startTick := m.saveMessageTime == 0
+				m.saveMessageTime = 120
+				if startTick {
+					return m, ticksEverySecond()
+				}
+			}
+		}
+		return m, nil
 	case "esc":
 		// Stop playback and go back
 		if err := m.player.Stop(); err != nil {
@@ -542,10 +565,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if startTick {
 			return m, ticksEverySecond()
 		}
-		return m, nil
-	case "?":
-		m.helpModel.SetSize(m.width, m.height)
-		m.helpModel.Toggle()
 		return m, nil
 	}
 	return m, nil

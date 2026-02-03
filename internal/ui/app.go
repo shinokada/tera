@@ -365,7 +365,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
-		// Handle volume display countdown
+		// Handle volume display countdown (only for positive values, not persistent -1)
 		if a.volumeDisplayFrames > 0 {
 			a.volumeDisplayFrames--
 			if a.volumeDisplayFrames == 0 {
@@ -392,6 +392,24 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle volume controls when playing
 		if a.playingFromMain && a.quickFavPlayer != nil {
 			switch msg.String() {
+			case " ":
+				// Toggle pause/resume
+				if err := a.quickFavPlayer.TogglePause(); err == nil {
+					if a.quickFavPlayer.IsPaused() {
+						// Paused - show persistent message
+						a.volumeDisplay = "⏸ Paused - Press Space to resume"
+						a.volumeDisplayFrames = -1 // Persistent (negative means persistent)
+					} else {
+						// Resumed - show temporary message
+						a.volumeDisplay = "▶ Resumed"
+						startTick := a.volumeDisplayFrames == 0
+						a.volumeDisplayFrames = 2
+						if startTick {
+							return a, tickEverySecond()
+						}
+					}
+				}
+				return a, nil
 			case "/":
 				// Decrease volume
 				newVol := a.quickFavPlayer.DecreaseVolume(5)

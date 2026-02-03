@@ -174,6 +174,7 @@ func CreateMainMenuHelp() []HelpSection {
 		{
 			Title: "Playback Controls",
 			Items: []HelpItem{
+				{"Space", "Pause/Resume"},
 				{"/*", "Adjust volume"},
 				{"m", "Toggle mute"},
 			},
@@ -195,6 +196,7 @@ func CreateFavoritesHelp() []HelpSection {
 		{
 			Title: "Playback Controls",
 			Items: []HelpItem{
+				{"Space", "Pause/Resume"},
 				{"/*", "Adjust volume"},
 				{"m", "Toggle mute"},
 			},
@@ -223,6 +225,7 @@ func CreatePlayingHelp() []HelpSection {
 		{
 			Title: "Playback Controls",
 			Items: []HelpItem{
+				{"Space", "Pause/Resume"},
 				{"/*", "Adjust volume"},
 				{"m", "Toggle mute"},
 			},
