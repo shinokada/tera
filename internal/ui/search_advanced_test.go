@@ -38,7 +38,7 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Country:     "",
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "clickcount", // Default false for test helper
+				Order:       "", // Default false for test helper
 			},
 		},
 		{
@@ -49,7 +49,7 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Country:     "Japan", // Title cased
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "clickcount",
+				Order:       "",
 			},
 		},
 		{
@@ -59,7 +59,7 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Language:   "english",
 				Limit:      100,
 				HideBroken: true,
-				Order:      "clickcount",
+				Order:      "",
 			},
 		},
 		{
@@ -74,7 +74,7 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Name:        "Test",
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "clickcount",
+				Order:       "",
 			},
 		},
 		{
@@ -85,7 +85,7 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Country:     "",
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "clickcount",
+				Order:       "",
 			},
 		},
 		{
