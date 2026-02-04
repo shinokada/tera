@@ -53,6 +53,13 @@ scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
 scoop install tera
 ```
 
+### Windows Winget
+```sh
+winget install shinokada.tera
+# Upgrade existing installation
+winget upgrade shinokada.tera
+```
+
 ### Manual Download
 
 Download the latest binary for your platform from the [releases page](https://github.com/shinokada/tera/releases):
