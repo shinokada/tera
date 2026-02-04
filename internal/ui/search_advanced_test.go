@@ -151,6 +151,15 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 			if params.Order != tt.expectedParams.Order {
 				t.Errorf("Order: expected %q, got %q", tt.expectedParams.Order, params.Order)
 			}
+			if params.Reverse != tt.expectedParams.Reverse {
+				t.Errorf("Reverse: expected %v, got %v", tt.expectedParams.Reverse, params.Reverse)
+			}
+			if params.Limit != tt.expectedParams.Limit {
+				t.Errorf("Limit: expected %d, got %d", tt.expectedParams.Limit, params.Limit)
+			}
+			if params.HideBroken != tt.expectedParams.HideBroken {
+				t.Errorf("HideBroken: expected %v, got %v", tt.expectedParams.HideBroken, params.HideBroken)
+			}
 		})
 	}
 }
