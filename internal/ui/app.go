@@ -25,33 +25,35 @@ const (
 	screenLucky
 	screenGist
 	screenSettings
+	screenShuffleSettings
 )
 
 // Main menu configuration
 const mainMenuItemCount = 6
 
 type App struct {
-	screen               Screen
-	width                int
-	height               int
-	mainMenuList         list.Model
-	playScreen           PlayModel
-	searchScreen         SearchModel
-	listManagementScreen ListManagementModel
-	luckyScreen          LuckyModel
-	gistScreen           GistModel
-	settingsScreen       SettingsModel
-	apiClient            *api.Client
-	favoritePath         string
-	quickFavorites       []api.Station
-	quickFavPlayer       *player.MPVPlayer
-	playingFromMain      bool
-	playingStation       *api.Station
-	numberBuffer         string               // Buffer for multi-digit number input
-	unifiedMenuIndex     int                  // Unified index for navigating both menu and favorites
-	helpModel            components.HelpModel // Help overlay
-	volumeDisplay        string               // Temporary volume display message
-	volumeDisplayFrames  int                  // Countdown for volume display
+	screen                Screen
+	width                 int
+	height                int
+	mainMenuList          list.Model
+	playScreen            PlayModel
+	searchScreen          SearchModel
+	listManagementScreen  ListManagementModel
+	luckyScreen           LuckyModel
+	gistScreen            GistModel
+	settingsScreen        SettingsModel
+	shuffleSettingsScreen ShuffleSettingsModel
+	apiClient             *api.Client
+	favoritePath          string
+	quickFavorites        []api.Station
+	quickFavPlayer        *player.MPVPlayer
+	playingFromMain       bool
+	playingStation        *api.Station
+	numberBuffer          string               // Buffer for multi-digit number input
+	unifiedMenuIndex      int                  // Unified index for navigating both menu and favorites
+	helpModel             components.HelpModel // Help overlay
+	volumeDisplay         string               // Temporary volume display message
+	volumeDisplayFrames   int                  // Countdown for volume display
 	// Update checking
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
@@ -257,6 +259,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.settingsScreen.updateAvailable = a.updateAvailable
 			}
 			return a, a.settingsScreen.Init()
+		case screenShuffleSettings:
+			a.shuffleSettingsScreen = NewShuffleSettingsModel()
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.shuffleSettingsScreen.width = a.width
+				a.shuffleSettingsScreen.height = a.height
+			}
+			return a, a.shuffleSettingsScreen.Init()
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
@@ -351,6 +361,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var m tea.Model
 		m, cmd = a.settingsScreen.Update(msg)
 		a.settingsScreen = m.(SettingsModel)
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenShuffleSettings:
+		var m tea.Model
+		m, cmd = a.shuffleSettingsScreen.Update(msg)
+		a.shuffleSettingsScreen = m.(ShuffleSettingsModel)
 
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
@@ -653,6 +673,8 @@ func (a App) View() string {
 		return a.gistScreen.View()
 	case screenSettings:
 		return a.settingsScreen.View()
+	case screenShuffleSettings:
+		return a.shuffleSettingsScreen.View()
 	}
 	return "Unknown screen"
 }

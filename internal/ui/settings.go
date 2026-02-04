@@ -20,6 +20,7 @@ type settingsState int
 const (
 	settingsStateMenu settingsState = iota
 	settingsStateTheme
+
 	settingsStateHistory
 	settingsStateUpdates
 	settingsStateAbout
@@ -199,9 +200,10 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 	// Main settings menu
 	menuItems := []components.MenuItem{
 		components.NewMenuItem("Theme / Colors", "Choose a color theme", "1"),
-		components.NewMenuItem("Search History", "Manage search history settings", "2"),
-		components.NewMenuItem("Check for Updates", "Check for new versions", "3"),
-		components.NewMenuItem("About TERA", "Version and information", "4"),
+		components.NewMenuItem("Shuffle Settings", "Configure shuffle mode behavior", "2"),
+		components.NewMenuItem("Search History", "Manage search history settings", "3"),
+		components.NewMenuItem("Check for Updates", "Check for new versions", "4"),
+		components.NewMenuItem("About TERA", "Version and information", "5"),
 	}
 	menuList := components.CreateMenu(menuItems, "", 50, 12)
 
@@ -293,6 +295,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMenu(msg)
 		case settingsStateTheme:
 			return m.updateTheme(msg)
+
 		case settingsStateHistory:
 			return m.updateHistory(msg)
 		case settingsStateUpdates:
@@ -334,10 +337,16 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "2":
+		// Navigate to shuffle settings
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenShuffleSettings}
+		}
+
+	case "3":
 		m.state = settingsStateHistory
 		return m, nil
 
-	case "3":
+	case "4":
 		m.state = settingsStateUpdates
 		if !m.updateChecked && !m.updateChecking {
 			m.updateChecking = true
@@ -345,7 +354,7 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "4":
+	case "5":
 		m.state = settingsStateAbout
 		return m, nil
 
@@ -355,14 +364,19 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 0:
 			m.state = settingsStateTheme
 		case 1:
-			m.state = settingsStateHistory
+			// Navigate to shuffle settings
+			return m, func() tea.Msg {
+				return navigateMsg{screen: screenShuffleSettings}
+			}
 		case 2:
+			m.state = settingsStateHistory
+		case 3:
 			m.state = settingsStateUpdates
 			if !m.updateChecked && !m.updateChecking {
 				m.updateChecking = true
 				return m, checkForUpdates()
 			}
-		case 3:
+		case 4:
 			m.state = settingsStateAbout
 		}
 		return m, nil
@@ -571,7 +585,7 @@ func (m SettingsModel) viewMenu() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Shortcut • Esc/0: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Shortcut • Esc/0: Back • Ctrl+C: Quit",
 	}, m.height)
 }
 
@@ -679,12 +693,12 @@ func (m SettingsModel) viewUpdates() string {
 			content.WriteString("\n\n")
 			content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
 			content.WriteString("\n\n")
-			
+
 			// Show installation method specific update instructions
 			content.WriteString(stationFieldStyle().Render("Detected installation method: "))
 			content.WriteString(highlightStyle().Render(m.installInfo.Description))
 			content.WriteString("\n\n")
-			
+
 			if m.installInfo.UpdateCommand != "" {
 				content.WriteString(stationValueStyle().Render("To update, run:"))
 				content.WriteString("\n")

@@ -1,5 +1,10 @@
 # New Features
 
+## Shuffle mode
+
+- Add a shuffle mode to I feel lucky page.
+(- Add a shuffle mode to main page Quick play Favorites.)
+
 ## Auto connect
 - #4: Using GPRS/4G, I sometimes lose the signal/connection and then have to reconnect manually to the station I was listening to.
 
