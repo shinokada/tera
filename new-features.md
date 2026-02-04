@@ -1,9 +1,7 @@
 # New Features
 
-## Shuffle mode
-
-- Add a shuffle mode to I feel lucky page.
-(- Add a shuffle mode to main page Quick play Favorites.)
+## Custom header images config in Settings
+Adding a Settings > Appearance > Header Images page to configure header images.
 
 ## Auto connect
 - #4: Using GPRS/4G, I sometimes lose the signal/connection and then have to reconnect manually to the station I was listening to.
@@ -28,6 +26,11 @@ For the best experience while driving, combine these options to maximize stabili
 
 
 ## Completed
+
+## (Done v1.5.0) Shuffle mode
+
+- Add a shuffle mode to I feel lucky page.
+(- Add a shuffle mode to main page Quick play Favorites.)
 
 ### (Done v1.4.0) Search updates (added to advanced search)
 #### Bitrate/Speed

@@ -153,12 +153,23 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 Access app configuration from the main menu (option 6):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
+- **Connection Settings** - Auto-reconnect and buffering for unstable networks (4G/GPRS)
 - **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
 - **Search History** - View and clear your search history
 - **Check for Updates** - View current version and check for new releases
 - **About TERA** - See version, installation method, and update command
 
 The Settings menu automatically detects how you installed TERA (Homebrew, Go, Scoop, Winget, etc.) and shows the appropriate update command.
+
+### Connection Settings
+
+For users on unstable networks (mobile data, GPRS, 4G), configure automatic reconnection:
+
+- **Auto-reconnect** - Automatically retry when stream drops (default: enabled)
+- **Reconnect delay** - Wait time between attempts: 1-30 seconds (default: 5s)
+- **Stream buffer** - Cache size to handle brief signal drops: 10-200 MB (default: 50MB)
+
+Settings stored in `~/.config/tera/connection_config.yaml`.
 
 ### Quick Play from Main Menu
 
@@ -490,6 +501,7 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 ```
 ~/.config/tera/
 ├── theme.yaml              # Color and padding customization
+├── connection_config.yaml  # Auto-reconnect and buffering settings
 ├── shuffle.yaml            # Shuffle mode settings
 ├── gist_metadata.json      # Your gist history
 ├── tokens/

@@ -46,9 +46,9 @@ func TestSettingsMenuNavigation(t *testing.T) {
 		expectedState settingsState
 	}{
 		{"Press 1 for Theme", "1", settingsStateTheme},
-		{"Press 3 for History", "3", settingsStateHistory},
-		{"Press 4 for Updates", "4", settingsStateUpdates},
-		{"Press 5 for About", "5", settingsStateAbout},
+		{"Press 4 for History", "4", settingsStateHistory},
+		{"Press 5 for Updates", "5", settingsStateUpdates},
+		{"Press 6 for About", "6", settingsStateAbout},
 	}
 
 	for _, tt := range tests {
@@ -414,7 +414,7 @@ func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")}
 	_, cmd := m.Update(msg)
 
 	// Should return a command that produces navigateMsg to screenShuffleSettings
