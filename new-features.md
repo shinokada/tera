@@ -3,7 +3,7 @@
 ## Auto connect
 - #4: Using GPRS/4G, I sometimes lose the signal/connection and then have to reconnect manually to the station I was listening to.
 
-### Possilbe solutions (I'm not sure if any of these works)
+### Possible solutions (I'm not sure if any of these works)
 1. The "Force Loop" Method
 The simplest way to keep mpv from quitting when a stream drops is to use the loop-playlist flag with the force parameter. 
 
@@ -21,20 +21,19 @@ For the best experience while driving, combine these options to maximize stabili
 - --cache=yes: Increases the buffer to handle minor signal dips before the audio actually stops.
 - --demuxer-max-bytes=50M: Sets a larger cache size (e.g., 50MB) to bridge longer "dead zones" in 4G coverage. 
 
-===================
-Completed
-===================
 
-## (Done v1.4.0) Search updates (added to advanced search)
-### Bitrate/Speed
+## Completed
+
+### (Done v1.4.0) Search updates (added to advanced search)
+#### Bitrate/Speed
 Select from pre-defined bitrate or input field for a specific bitrate.
 
-### Search by Popularity/Votes 
+#### Search by Popularity/Votes 
 
-## (Done v1.4.0) Advanced Search update 
+### (Done v1.4.0) Advanced Search update 
 Combined: Use multiple fields to pinpoint exact vibes
 
-```
+```text
 Advanced Search
 
 Tag (optional):        classical
@@ -56,7 +55,7 @@ The definition of “relevance” internally as: Radio Browser default ordering.
 [From Radio Browser API docs](https://github.com/ivandotv/radio-browser-api/blob/master/docs/api/README.md)
 
 
-## Problems (Fixed v1.4.0)
+### (Fixed v1.4.0) Problems
 - Country name seems to be required in capital for the first letter
 - Can't unselect Bitrate. Once selecting 1/2/3, not able to unselect.
 - Country Code is not working. If an input is two letters, it should use country code query. Or should I separate Country and Country Code?
@@ -64,13 +63,13 @@ The definition of “relevance” internally as: Radio Browser default ordering.
 - All other playing station pages use a space keyboard shortcut to pause. In the playing station page after advanced search, the space key should pause the station.
 - Add/update README.md for advanced research section.
 
-## (Done v1.4.0) Search page (Added to Advanced Search)
+### (Done v1.4.0) Search page (Added to Advanced Search)
 - #42: color code for stream speed (e.g., 64 kbps, 128 kbps, 320 kbps)
 - Sort by stream speed
 
-## (Done v1.4.0) Space keyboard shortcut to pause
+### (Done v1.4.0) Space keyboard shortcut to pause
 
-## (Done v1.3.0) Settings Smart Update commands
+### (Done v1.3.0) Settings Smart Update commands
 Currently Settings > 2. Check for Updates page shows the following:
 
 ```
@@ -133,11 +132,11 @@ New screen:
     https://github.com/shinokada/tera/releases/latest
 ```
 
-## (Done: v1.2.0) Search page enhancements
+### (Done: v1.2.0) Search page enhancements
 
 - Default of 10 last search history without duplicates in Search Radio Stations page
 - Add a Settings menu to change the number of search history storage
 
-## (Done: v1.2.0) I feel lucky page
+### (Done: v1.2.0) I feel lucky page
 - I feel lucky page: 10 last history without duplicates
 - Add a Setting menu to change the number of I feel lucky history storage
