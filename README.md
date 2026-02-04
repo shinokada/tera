@@ -8,12 +8,13 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎲 **I Feel Lucky** - Random station discovery by keyword
 - 💾 **Favorites** - Organize stations into custom lists with duplicate detection
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
-- 🔊 **Volume Control** - Adjust volume and mute during playback
+- 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
+- ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
 
 ## Requirements
 
@@ -50,6 +51,13 @@ sudo rpm -i tera_1.x.x_linux_amd64.rpm
 ```sh
 scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
 scoop install tera
+```
+
+### Windows Winget
+```sh
+winget install Shinokada.Tera
+# Upgrade existing installation
+winget upgrade Shinokada.Tera
 ```
 
 ### Manual Download
@@ -96,6 +104,8 @@ tera
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
+
+# Need help? Press ? anytime to see keyboard shortcuts!
 ```
 
 ## Main Features
@@ -265,11 +275,12 @@ TERA detects how you installed it and provides the correct update command. For e
 
 ### Playback Controls
 
-| Key | Action            |
-| --- | ----------------- |
-| `*` | Volume up (+5%)   |
-| `/` | Volume down (-5%) |
-| `m` | Toggle mute       |
+| Key     | Action            |
+| ------- | ----------------- |
+| `Space` | Pause / Resume    |
+| `*`     | Volume up (+5%)   |
+| `/`     | Volume down (-5%) |
+| `m`     | Toggle mute       |
 
 ### Playing/Browsing Stations
 
@@ -314,6 +325,11 @@ Use **Advanced Search** when:
 - You're not sure if your term is a station name or a genre tag
 - You want broader results across multiple fields
 - You're exploring and want maximum discovery
+
+**Features:**
+- **Country**: Enter a 2-letter code (e.g., "US") for Country Code search, or a full name (e.g., "Japan") for Country Name search.
+- **Bitrate**: Press 1, 2, or 3 to filter by quality. Press the same number again to unselect.
+- **Language**: Case-insensitive (e.g., "English" becomes "english").
 
 For example, searching `jazz` in Advanced Search finds:
 - Stations with "jazz" in their name (e.g., "Jazz FM")

@@ -40,7 +40,7 @@ func TestSearchMenuNavigation(t *testing.T) {
 		{"Select Language Search", "3", searchStateInput, api.SearchByLanguage},
 		{"Select Country Search", "4", searchStateInput, api.SearchByCountry},
 		{"Select State Search", "5", searchStateInput, api.SearchByState},
-		{"Select Advanced Search", "6", searchStateInput, api.SearchAdvanced},
+		{"Select Advanced Search", "6", searchStateAdvancedForm, api.SearchAdvanced},
 	}
 
 	for _, tt := range tests {

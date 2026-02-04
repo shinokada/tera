@@ -26,7 +26,7 @@ const (
 
 // InstallInfo contains information about the installation
 type InstallInfo struct {
-	Method       InstallMethod
+	Method        InstallMethod
 	UpdateCommand string
 	Description   string
 }
@@ -36,7 +36,7 @@ func DetectInstallMethod() InstallInfo {
 	// Check Homebrew (macOS/Linux)
 	if checkHomebrew() {
 		return InstallInfo{
-			Method:       InstallMethodHomebrew,
+			Method:        InstallMethodHomebrew,
 			UpdateCommand: "brew upgrade shinokada/tera/tera",
 			Description:   "Homebrew",
 		}
@@ -45,7 +45,7 @@ func DetectInstallMethod() InstallInfo {
 	// Check Go install
 	if checkGoInstall() {
 		return InstallInfo{
-			Method:       InstallMethodGo,
+			Method:        InstallMethodGo,
 			UpdateCommand: "go install github.com/shinokada/tera/cmd/tera@latest",
 			Description:   "Go Install",
 		}
@@ -54,7 +54,7 @@ func DetectInstallMethod() InstallInfo {
 	// Check Scoop (Windows)
 	if runtime.GOOS == "windows" && checkScoop() {
 		return InstallInfo{
-			Method:       InstallMethodScoop,
+			Method:        InstallMethodScoop,
 			UpdateCommand: "scoop update tera",
 			Description:   "Scoop",
 		}
@@ -63,8 +63,8 @@ func DetectInstallMethod() InstallInfo {
 	// Check Winget (Windows)
 	if runtime.GOOS == "windows" && checkWinget() {
 		return InstallInfo{
-			Method:       InstallMethodWinget,
-			UpdateCommand: "winget upgrade tera",
+			Method:        InstallMethodWinget,
+			UpdateCommand: "winget upgrade Shinokada.Tera",
 			Description:   "Winget",
 		}
 	}
@@ -72,7 +72,7 @@ func DetectInstallMethod() InstallInfo {
 	// Check APT/DEB (Debian/Ubuntu)
 	if checkAPT() {
 		return InstallInfo{
-			Method:       InstallMethodAPT,
+			Method:        InstallMethodAPT,
 			UpdateCommand: "sudo apt update && sudo apt install --only-upgrade tera",
 			Description:   "APT/DEB",
 		}
@@ -81,7 +81,7 @@ func DetectInstallMethod() InstallInfo {
 	// Check RPM (Fedora/RHEL/CentOS)
 	if checkRPM() {
 		return InstallInfo{
-			Method:       InstallMethodRPM,
+			Method:        InstallMethodRPM,
 			UpdateCommand: "sudo dnf upgrade tera",
 			Description:   "RPM/DNF",
 		}
@@ -89,7 +89,7 @@ func DetectInstallMethod() InstallInfo {
 
 	// Fallback to manual
 	return InstallInfo{
-		Method:       InstallMethodManual,
+		Method:        InstallMethodManual,
 		UpdateCommand: "", // Will show link to releases page
 		Description:   "Manual/Binary",
 	}
@@ -186,7 +186,7 @@ func checkGoInstall() bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -218,12 +218,9 @@ func checkAPT() bool {
 }
 
 // checkWinget checks if tera was installed via Winget (Windows)
-// Note: Winget package is pending approval at https://github.com/microsoft/winget-pkgs/pull/335483
-// This detection will work once the package is published to the official repository
 func checkWinget() bool {
-	// Check winget list for tera
-	// TODO: Update to use official package ID once PR #335483 is merged
-	if err := runCommandWithTimeout("winget", "list", "--id", "tera"); err == nil {
+	// Check winget list for tera using official package ID
+	if err := runCommandWithTimeout("winget", "list", "--id", "Shinokada.Tera"); err == nil {
 		return true
 	}
 

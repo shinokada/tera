@@ -18,6 +18,8 @@ import (
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui/components"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // searchState represents the current state in the search screen
@@ -33,6 +35,7 @@ const (
 	searchStateSavePrompt
 	searchStateSelectList
 	searchStateNewListInput
+	searchStateAdvancedForm
 )
 
 // SearchModel represents the search screen
@@ -63,6 +66,11 @@ type SearchModel struct {
 	listItems       []list.Item
 	listModel       list.Model
 	helpModel       components.HelpModel
+	// Advanced search form fields
+	advancedInputs      [5]textinput.Model // tag, language, country, state, name
+	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
+	advancedBitrate     string             // "1", "2", "3", or ""
+	advancedSortByVotes bool               // true = votes, false = relevance
 }
 
 // Messages for search screen
@@ -94,6 +102,22 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	nli.Placeholder = "Enter new list name..."
 	nli.CharLimit = 50
 	nli.Width = 50
+
+	// Advanced search inputs
+	var advInputs [5]textinput.Model
+	placeholders := []string{
+		"classical",
+		"italian",
+		"US",
+		"California",
+		"BBC Radio",
+	}
+	for i := 0; i < 5; i++ {
+		advInputs[i] = textinput.New()
+		advInputs[i].Placeholder = placeholders[i]
+		advInputs[i].CharLimit = 100
+		advInputs[i].Width = 40
+	}
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -129,20 +153,24 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	}
 
 	model := SearchModel{
-		state:           searchStateMenu,
-		apiClient:       apiClient,
-		menuList:        menuList,
-		stationInfoMenu: stationInfoMenu,
-		textInput:       ti,
-		newListInput:    nli,
-		spinner:         sp,
-		favoritePath:    favoritePath,
-		player:          player.NewMPVPlayer(),
-		quickFavorites:  []api.Station{},
-		searchHistory:   history,
-		width:           80, // Default width
-		height:          24, // Default height
-		helpModel:       components.NewHelpModel(components.CreatePlayingHelp()),
+		state:               searchStateMenu,
+		apiClient:           apiClient,
+		menuList:            menuList,
+		stationInfoMenu:     stationInfoMenu,
+		textInput:           ti,
+		newListInput:        nli,
+		spinner:             sp,
+		favoritePath:        favoritePath,
+		player:              player.NewMPVPlayer(),
+		quickFavorites:      []api.Station{},
+		searchHistory:       history,
+		width:               80, // Default width
+		height:              24, // Default height
+		helpModel:           components.NewHelpModel(components.CreatePlayingHelp()),
+		advancedInputs:      advInputs,
+		advancedFocusIdx:    0,
+		advancedBitrate:     "",
+		advancedSortByVotes: true, // Default to sorting by votes
 	}
 
 	// Build menu with history items included
@@ -239,6 +267,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSelectList(msg)
 		case searchStateNewListInput:
 			return m.handleNewListInput(msg)
+		case searchStateAdvancedForm:
+			return m.handleAdvancedForm(msg)
 		}
 
 	case quickFavoritesLoadedMsg:
@@ -591,7 +621,16 @@ func (m SearchModel) executeSearchType(index int) (tea.Model, tea.Cmd) {
 		m.textInput.Placeholder = "Enter state (e.g., California, Texas)..."
 	case 5: // Advanced Search
 		m.searchType = api.SearchAdvanced
-		m.textInput.Placeholder = "Enter search query..."
+		// Reset advanced form
+		for i := range m.advancedInputs {
+			m.advancedInputs[i].SetValue("")
+		}
+		m.advancedFocusIdx = 0
+		m.advancedBitrate = ""
+		m.advancedSortByVotes = true
+		m.advancedInputs[0].Focus()
+		m.state = searchStateAdvancedForm
+		return m, textinput.Blink
 	}
 
 	m.state = searchStateInput
@@ -700,6 +739,17 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
+		// If we came from advanced search, go back to the form
+		if m.searchType == api.SearchAdvanced {
+			m.state = searchStateAdvancedForm
+			// Only focus text input if we're on a text field (0-4), not Sort (5) or Bitrate (6)
+			if m.advancedFocusIdx < 5 {
+				m.advancedInputs[m.advancedFocusIdx].Focus()
+				return m, textinput.Blink
+			}
+			return m, nil
+		}
+		// Otherwise go back to search menu
 		m.state = searchStateMenu
 		// Reload history from disk so recent search appears
 		m.reloadSearchHistory()
@@ -935,6 +985,26 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Toggle()
 		return m, nil
+	case " ":
+		// Toggle pause/resume
+		if m.player != nil {
+			if err := m.player.TogglePause(); err == nil {
+				if m.player.IsPaused() {
+					// Paused - show persistent message
+					m.saveMessage = "⏸ Paused - Press Space to resume"
+					m.saveMessageTime = -1 // Persistent
+				} else {
+					// Resumed - show temporary message
+					m.saveMessage = "▶ Resumed"
+					startTick := m.saveMessageTime <= 0
+					m.saveMessageTime = 120
+					if startTick {
+						return m, ticksEverySecond()
+					}
+				}
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -1060,9 +1130,40 @@ func (m SearchModel) View() string {
 
 	case searchStateResults:
 		if len(m.results) == 0 {
+			// Build search criteria display for no results
+			var criteria strings.Builder
+			criteria.WriteString("No stations found matching your search.\n\n")
+
+			if m.searchType == api.SearchAdvanced {
+				criteria.WriteString("Search criteria:\n")
+				if tag := strings.TrimSpace(m.advancedInputs[0].Value()); tag != "" {
+					criteria.WriteString(fmt.Sprintf("  Tag: %s\n", tag))
+				}
+				if lang := strings.TrimSpace(m.advancedInputs[1].Value()); lang != "" {
+					criteria.WriteString(fmt.Sprintf("  Language: %s\n", lang))
+				}
+				if country := strings.TrimSpace(m.advancedInputs[2].Value()); country != "" {
+					criteria.WriteString(fmt.Sprintf("  Country: %s\n", country))
+				}
+				if state := strings.TrimSpace(m.advancedInputs[3].Value()); state != "" {
+					criteria.WriteString(fmt.Sprintf("  State: %s\n", state))
+				}
+				if name := strings.TrimSpace(m.advancedInputs[4].Value()); name != "" {
+					criteria.WriteString(fmt.Sprintf("  Name: %s\n", name))
+				}
+				if m.advancedBitrate != "" {
+					bitrateText := map[string]string{
+						"1": "Low (≤ 64 kbps)",
+						"2": "Medium (96-128 kbps)",
+						"3": "High (≥ 192 kbps)",
+					}
+					criteria.WriteString(fmt.Sprintf("  Bitrate: %s\n", bitrateText[m.advancedBitrate]))
+				}
+			}
+
 			return RenderPage(PageLayout{
 				Title:   "🔍 No Results",
-				Content: "No stations found matching your search.",
+				Content: criteria.String(),
 				Help:    "Esc: Back to search menu",
 			})
 		}
@@ -1114,6 +1215,9 @@ func (m SearchModel) View() string {
 
 	case searchStateNewListInput:
 		return m.viewNewListInput()
+
+	case searchStateAdvancedForm:
+		return m.viewAdvancedForm()
 	}
 
 	return RenderPage(PageLayout{
@@ -1384,4 +1488,310 @@ func (m *SearchModel) rebuildMenuWithHistory() {
 
 	// Use empty title - we render the title manually in renderSearchMenu
 	m.menuList = components.CreateMenu(menuItems, "", 50, height)
+}
+
+// handleAdvancedForm handles input in the advanced search form
+func (m SearchModel) handleAdvancedForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel and go back to menu
+		m.err = nil
+		m.state = searchStateMenu
+		for i := range m.advancedInputs {
+			m.advancedInputs[i].Blur()
+		}
+		return m, nil
+
+	case "enter":
+		// Execute search if at least one field is filled
+		if m.hasAtLeastOneField() {
+			m.err = nil
+			m.state = searchStateLoading
+			for i := range m.advancedInputs {
+				m.advancedInputs[i].Blur()
+			}
+			return m, m.performAdvancedSearch()
+		}
+		// Show error if no fields filled
+		m.err = fmt.Errorf("at least one field is required")
+		return m, nil
+
+	case "tab", "down":
+		// Clear error on navigation
+		m.err = nil
+		// Blur current text input if on text field
+		if m.advancedFocusIdx < 5 {
+			m.advancedInputs[m.advancedFocusIdx].Blur()
+		}
+		// Move to next field (0-6: 5 text fields + sort + bitrate)
+		m.advancedFocusIdx = (m.advancedFocusIdx + 1) % 7
+		// Focus new text input if on text field
+		if m.advancedFocusIdx < 5 {
+			m.advancedInputs[m.advancedFocusIdx].Focus()
+			return m, textinput.Blink
+		}
+		return m, nil
+
+	case "shift+tab", "up":
+		// Clear error on navigation
+		m.err = nil
+		// Blur current text input if on text field
+		if m.advancedFocusIdx < 5 {
+			m.advancedInputs[m.advancedFocusIdx].Blur()
+		}
+		// Move to previous field (0-6: 5 text fields + sort + bitrate)
+		m.advancedFocusIdx = (m.advancedFocusIdx - 1 + 7) % 7
+		// Focus new text input if on text field
+		if m.advancedFocusIdx < 5 {
+			m.advancedInputs[m.advancedFocusIdx].Focus()
+			return m, textinput.Blink
+		}
+		return m, nil
+
+	case "left", "right", " ":
+		// Clear error when user takes action
+		m.err = nil
+		// Handle actions based on focused section
+		if m.advancedFocusIdx == 5 {
+			// Sort section: left/right/space toggles sort
+			m.advancedSortByVotes = !m.advancedSortByVotes
+			return m, nil
+		}
+		// For other sections (like text fields), pass to default handler
+		// Fall through to default
+
+	case "1", "2", "3":
+		// Clear error when user takes action
+		m.err = nil
+		// If focused on bitrate section or always allow number input
+		if m.advancedFocusIdx == 6 || m.advancedBitrate != "" {
+			// Toggle bitrate: if selecting same value, unset it
+			if m.advancedBitrate == msg.String() {
+				m.advancedBitrate = ""
+			} else {
+				m.advancedBitrate = msg.String()
+			}
+			return m, nil
+		}
+		// Otherwise pass to text input handler
+		// Fall through to default
+	}
+
+	// Default handler for all other keys
+	// Clear error when user starts typing
+	m.err = nil
+	// Only update text input if we're on a text field (0-4)
+	if m.advancedFocusIdx < 5 {
+		var cmd tea.Cmd
+		m.advancedInputs[m.advancedFocusIdx], cmd = m.advancedInputs[m.advancedFocusIdx].Update(msg)
+		return m, cmd
+	}
+	// If on Sort or Bitrate sections, ignore other keys
+	return m, nil
+}
+
+// hasAtLeastOneField checks if at least one search field is filled
+func (m SearchModel) hasAtLeastOneField() bool {
+	for i := range m.advancedInputs {
+		if strings.TrimSpace(m.advancedInputs[i].Value()) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// performAdvancedSearch executes the advanced search with multiple criteria
+func (m SearchModel) performAdvancedSearch() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		params := m.buildAdvancedSearchParams()
+
+		// Execute search
+		results, err := m.apiClient.SearchAdvanced(ctx, params)
+		if err != nil {
+			return searchErrorMsg{err: err}
+		}
+
+		// Apply bitrate filter if specified
+		if m.advancedBitrate != "" {
+			results = m.filterByBitrate(results, m.advancedBitrate)
+		}
+
+		// Sort results if needed (votes sorting)
+		if m.advancedSortByVotes {
+			sort.Slice(results, func(i, j int) bool {
+				return results[i].Votes > results[j].Votes
+			})
+		}
+
+		return searchResultsMsg{results: results}
+	}
+}
+
+// buildAdvancedSearchParams constructs search parameters from the form
+func (m SearchModel) buildAdvancedSearchParams() api.SearchParams {
+	// Build search params from form
+	countryInput := strings.TrimSpace(m.advancedInputs[2].Value())
+	var country, countryCode string
+
+	// Uppercase country code if it looks like a 2-letter code
+	if len(countryInput) == 2 {
+		countryCode = strings.ToUpper(countryInput)
+	} else if len(countryInput) > 2 {
+		// Title case for full country name
+		country = cases.Title(language.English).String(strings.ToLower(countryInput))
+	}
+
+	params := api.SearchParams{
+		Tag:         strings.TrimSpace(m.advancedInputs[0].Value()),
+		Language:    strings.ToLower(strings.TrimSpace(m.advancedInputs[1].Value())),
+		Country:     country,
+		CountryCode: countryCode,
+		State:       strings.TrimSpace(m.advancedInputs[3].Value()),
+		Name:        strings.TrimSpace(m.advancedInputs[4].Value()),
+		Limit:       100,
+		HideBroken:  true,
+	}
+
+	// Set sort order
+	if m.advancedSortByVotes {
+		params.Order = "votes"
+		params.Reverse = true
+	} else {
+		// Relevance = Radio Browser default (no order specified)
+		params.Order = ""
+		params.Reverse = false
+	}
+
+	return params
+}
+
+// filterByBitrate filters stations by bitrate range
+func (m SearchModel) filterByBitrate(stations []api.Station, bitrateOption string) []api.Station {
+	var filtered []api.Station
+	for _, station := range stations {
+		switch bitrateOption {
+		case "1": // Low (≤ 64 kbps)
+			if station.Bitrate <= 64 {
+				filtered = append(filtered, station)
+			}
+		case "2": // Medium (96-128 kbps)
+			if station.Bitrate >= 96 && station.Bitrate <= 128 {
+				filtered = append(filtered, station)
+			}
+		case "3": // High (≥ 192 kbps)
+			if station.Bitrate >= 192 {
+				filtered = append(filtered, station)
+			}
+		}
+	}
+	return filtered
+}
+
+// viewAdvancedForm renders the advanced search form
+func (m SearchModel) viewAdvancedForm() string {
+	var content strings.Builder
+
+	t := theme.Current()
+	labelStyle := lipgloss.NewStyle().
+		Foreground(t.TextColor()).
+		Width(30)
+
+	focusedLabelStyle := lipgloss.NewStyle().
+		Foreground(t.HighlightColor()).
+		Bold(true).
+		Width(30)
+
+	// Title
+	content.WriteString(boldStyle().Render("🔍 Advanced Search"))
+	content.WriteString("\n\n")
+
+	// Field labels and inputs
+	labels := []string{
+		"Tag (optional):",
+		"Language (optional):",
+		"Country / Country code (optional):",
+		"State (optional):",
+		"Name contains (optional):",
+	}
+
+	for i, label := range labels {
+		if i == m.advancedFocusIdx {
+			content.WriteString(focusedLabelStyle.Render(label))
+		} else {
+			content.WriteString(labelStyle.Render(label))
+		}
+		content.WriteString("  ")
+		content.WriteString(m.advancedInputs[i].View())
+		content.WriteString("\n")
+	}
+
+	content.WriteString("\n")
+
+	// Sort by option (focus index 5)
+	sortLabel := "Sort by: "
+	isSortFocused := m.advancedFocusIdx == 5
+	if isSortFocused {
+		// Focused: show as highlighted with arrow
+		if m.advancedSortByVotes {
+			sortLabel = focusedLabelStyle.Render("▶ Sort by: ") + highlightStyle().Render("votes") + " (default) | relevance"
+		} else {
+			sortLabel = focusedLabelStyle.Render("▶ Sort by: ") + "votes (default) | " + highlightStyle().Render("relevance")
+		}
+	} else {
+		// Not focused: show normally
+		if m.advancedSortByVotes {
+			sortLabel += boldStyle().Render("votes") + " (default) | relevance"
+		} else {
+			sortLabel += "votes (default) | " + boldStyle().Render("relevance")
+		}
+	}
+	content.WriteString(sortLabel)
+	content.WriteString("\n\n")
+
+	// Bitrate filter (focus index 6)
+	isBitrateFocused := m.advancedFocusIdx == 6
+	if isBitrateFocused {
+		content.WriteString(focusedLabelStyle.Render("▶ Bitrate (optional):"))
+	} else {
+		content.WriteString("Bitrate (optional):")
+	}
+	content.WriteString("\n")
+
+	bitrateOptions := []string{
+		"1) Low   (≤ 64 kbps)",
+		"2) Medium (96–128 kbps)",
+		"3) High  (≥ 192 kbps)",
+	}
+	for i, option := range bitrateOptions {
+		optionNum := fmt.Sprintf("%d", i+1)
+		if m.advancedBitrate == optionNum {
+			if isBitrateFocused {
+				content.WriteString(highlightStyle().Render("✓ " + option))
+			} else {
+				content.WriteString("✓ " + option)
+			}
+		} else {
+			if isBitrateFocused {
+				content.WriteString(labelStyle.Render("  " + option))
+			} else {
+				content.WriteString("  " + option)
+			}
+		}
+		content.WriteString("\n")
+	}
+
+	// Error message if any
+	if m.err != nil {
+		content.WriteString("\n")
+		content.WriteString(errorStyle().Render(fmt.Sprintf("✗ %v", m.err)))
+	}
+
+	helpText := "Tab/↑↓: Navigate all fields • Space/←→: Toggle sort • 1/2/3: Select bitrate • Enter: Search • Esc: Cancel"
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Content: content.String(),
+		Help:    helpText,
+	}, m.height)
 }

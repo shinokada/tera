@@ -21,11 +21,12 @@ const (
 
 // SearchParams holds parameters for search requests
 type SearchParams struct {
-	Tag      string
-	Name     string
-	Language string
-	Country  string
-	State    string
+	Tag         string
+	Name        string
+	Language    string
+	Country     string
+	CountryCode string
+	State       string
 	// Advanced search can combine multiple parameters
 	TagExact   bool
 	NameExact  bool
@@ -64,6 +65,9 @@ func (c *Client) buildFormValues(params SearchParams) url.Values {
 	}
 	if params.Country != "" {
 		form.Add("country", strings.TrimSpace(params.Country))
+	}
+	if params.CountryCode != "" {
+		form.Add("countrycode", strings.TrimSpace(params.CountryCode))
 	}
 	if params.State != "" {
 		form.Add("state", strings.TrimSpace(params.State))
