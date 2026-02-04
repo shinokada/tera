@@ -133,6 +133,8 @@ func (m ConnectionSettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 			m.config = storage.DefaultConnectionConfig()
 			m.saveConfig()
 			m.rebuildMenuList()
+			m.buildDelayList()
+			m.buildBufferList()
 			m.message = "✓ Reset to default settings"
 			m.messageIsSuccess = true
 			m.messageTime = 180
@@ -233,14 +235,18 @@ func (m ConnectionSettingsModel) updateBuffer(msg tea.KeyMsg) (tea.Model, tea.Cm
 	m.bufferList = newList
 
 	if selected >= 0 {
-		buffers := []int{10, 25, 50, 100, 150, 200}
+		buffers := []int{0, 10, 25, 50, 100, 150, 200}
 		if selected < len(buffers) {
 			m.config.StreamBufferMB = buffers[selected]
 			m.saveConfig()
 			m.rebuildMenuList()
 			m.buildBufferList()
 			m.state = connectionSettingsMenu
-			m.message = fmt.Sprintf("✓ Stream buffer set to %d MB", m.config.StreamBufferMB)
+			if m.config.StreamBufferMB == 0 {
+				m.message = "✓ Stream buffering disabled"
+			} else {
+				m.message = fmt.Sprintf("✓ Stream buffer set to %d MB", m.config.StreamBufferMB)
+			}
 			m.messageIsSuccess = true
 			m.messageTime = 180
 		} else if selected == len(buffers) {
@@ -250,7 +256,7 @@ func (m ConnectionSettingsModel) updateBuffer(msg tea.KeyMsg) (tea.Model, tea.Cm
 	}
 
 	// Handle number shortcuts
-	if key >= "1" && key <= "7" {
+	if key >= "1" && key <= "8" {
 		num := int(key[0] - '0')
 		m.bufferList.Select(num - 1)
 		newModel, cmd := m.updateBuffer(tea.KeyMsg{Type: tea.KeyEnter})
@@ -271,6 +277,11 @@ func (m *ConnectionSettingsModel) saveConfig() {
 
 // rebuildMenuList rebuilds the main menu list
 func (m *ConnectionSettingsModel) rebuildMenuList() {
+	bufferLabel := fmt.Sprintf("Set Stream Buffer (%d MB)", m.config.StreamBufferMB)
+	if m.config.StreamBufferMB == 0 {
+		bufferLabel = "Set Stream Buffer (Disabled)"
+	}
+	
 	menuItems := []components.MenuItem{
 		components.NewMenuItem(
 			fmt.Sprintf("Toggle Auto-reconnect (%s)", boolToOnOff(m.config.AutoReconnect)),
@@ -283,7 +294,7 @@ func (m *ConnectionSettingsModel) rebuildMenuList() {
 			"2",
 		),
 		components.NewMenuItem(
-			fmt.Sprintf("Set Stream Buffer (%d MB)", m.config.StreamBufferMB),
+			bufferLabel,
 			"Buffer size to handle brief signal drops",
 			"3",
 		),
@@ -336,6 +347,7 @@ func (m *ConnectionSettingsModel) buildBufferList() {
 		mb    int
 		label string
 	}{
+		{0, "No buffering (Original behavior)"},
 		{10, "10 MB (Minimal)"},
 		{25, "25 MB (Light)"},
 		{50, "50 MB (Default)"},
@@ -353,7 +365,7 @@ func (m *ConnectionSettingsModel) buildBufferList() {
 		}
 		menuItems = append(menuItems, components.NewMenuItem(buffer.label, desc, shortcut))
 	}
-	menuItems = append(menuItems, components.NewMenuItem("Back", "", "7"))
+	menuItems = append(menuItems, components.NewMenuItem("Back", "", "8"))
 
 	m.bufferList = components.CreateMenu(menuItems, "", 50, len(menuItems)+2)
 }
@@ -390,7 +402,11 @@ func (m ConnectionSettingsModel) viewMenu() string {
 	content.WriteString("\n\n")
 	content.WriteString(fmt.Sprintf("  Auto-reconnect:         %s\n", boolToEnabledDisabled(m.config.AutoReconnect)))
 	content.WriteString(fmt.Sprintf("  Reconnect delay:        %d seconds\n", m.config.ReconnectDelay))
-	content.WriteString(fmt.Sprintf("  Stream buffer:          %d MB\n", m.config.StreamBufferMB))
+	if m.config.StreamBufferMB == 0 {
+		content.WriteString("  Stream buffer:          Disabled\n")
+	} else {
+		content.WriteString(fmt.Sprintf("  Stream buffer:          %d MB\n", m.config.StreamBufferMB))
+	}
 	content.WriteString("\n")
 
 	// Menu
@@ -442,7 +458,7 @@ func (m ConnectionSettingsModel) viewDelay() string {
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-7: Shortcut • Esc: Back • 0: Main Menu",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-8: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
 }
 
@@ -473,6 +489,6 @@ func (m ConnectionSettingsModel) viewBuffer() string {
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-7: Shortcut • Esc: Back • 0: Main Menu",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-8: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
 }

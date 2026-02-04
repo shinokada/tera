@@ -409,6 +409,20 @@ func TestVersionCheckMsgHandling(t *testing.T) {
 	}
 }
 
+func TestSettingsMenuNavigateToConnectionSettings(t *testing.T) {
+	m := NewSettingsModel(t.TempDir())
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")}
+	_, cmd := m.Update(msg)
+
+	// Should return a command that produces navigateMsg to screenConnectionSettings
+	if cmd == nil {
+		t.Error("Expected a command to be returned for connection settings navigation")
+	}
+}
+
 func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 	m := NewSettingsModel(t.TempDir())
 	m.width = 80

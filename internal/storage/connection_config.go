@@ -85,8 +85,8 @@ func validateConnectionConfig(config ConnectionConfig) ConnectionConfig {
 		config.ReconnectDelay = 30
 	}
 
-	// Stream buffer: 10-200 MB
-	if config.StreamBufferMB < 10 {
+	// Stream buffer: 0 (no buffering) or 10-200 MB
+	if config.StreamBufferMB != 0 && config.StreamBufferMB < 10 {
 		config.StreamBufferMB = 10
 	}
 	if config.StreamBufferMB > 200 {
