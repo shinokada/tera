@@ -55,9 +55,9 @@ scoop install tera
 
 ### Windows Winget
 ```sh
-winget install shinokada.tera
+winget install Shinokada.Tera
 # Upgrade existing installation
-winget upgrade shinokada.tera
+winget upgrade Shinokada.Tera
 ```
 
 ### Manual Download

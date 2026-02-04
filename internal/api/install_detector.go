@@ -64,7 +64,7 @@ func DetectInstallMethod() InstallInfo {
 	if runtime.GOOS == "windows" && checkWinget() {
 		return InstallInfo{
 			Method:        InstallMethodWinget,
-			UpdateCommand: "winget upgrade shinokada.tera",
+			UpdateCommand: "winget upgrade Shinokada.Tera",
 			Description:   "Winget",
 		}
 	}
