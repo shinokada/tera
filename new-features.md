@@ -1,12 +1,37 @@
 # New Features
 
-## Search updates
+## Auto connect
+- #4: Using GPRS/4G, I sometimes lose the signal/connection and then have to reconnect manually to the station I was listening to.
+
+### Possilbe solutions (I'm not sure if any of these works)
+1. The "Force Loop" Method
+The simplest way to keep mpv from quitting when a stream drops is to use the loop-playlist flag with the force parameter. 
+
+- Command: mpv --loop-playlist=force <URL>
+- Why it works: Unlike standard looping, force tells mpv not to skip entries that have failed. If the connection drops and the "file" (stream) ends, mpv will immediately try to start it again. 
+
+2. FFmpeg Reconnect Flags
+Since mpv uses FFmpeg for networking, you can pass specific reconnection instructions directly to the underlying stream layer. 
+- Command: mpv --stream-lavf-o=reconnect_streamed=1,reconnect_delay_max=5 <URL>
+- Why it works: This tells the FFmpeg backend to attempt to reconnect if the TCP/HTTP connection is severed. 
+
+3. Recommended "Driver" Configuration
+For the best experience while driving, combine these options to maximize stability and minimize manual interaction:
+- --loop-playlist=force: Keeps the player open after a drop.
+- --cache=yes: Increases the buffer to handle minor signal dips before the audio actually stops.
+- --demuxer-max-bytes=50M: Sets a larger cache size (e.g., 50MB) to bridge longer "dead zones" in 4G coverage. 
+
+===================
+Completed
+===================
+
+## (Done v1.4.0) Search updates (added to advanced search)
 ### Bitrate/Speed
 Select from pre-defined bitrate or input field for a specific bitrate.
 
-### Search by Popularity/Votes
+### Search by Popularity/Votes 
 
-## Advanced Search update
+## (Done v1.4.0) Advanced Search update 
 Combined: Use multiple fields to pinpoint exact vibes
 
 ```
@@ -31,7 +56,7 @@ The definition of “relevance” internally as: Radio Browser default ordering.
 [From Radio Browser API docs](https://github.com/ivandotv/radio-browser-api/blob/master/docs/api/README.md)
 
 
-## Problems
+## Problems (Fixed v1.4.0)
 - Country name seems to be required in capital for the first letter
 - Can't unselect Bitrate. Once selecting 1/2/3, not able to unselect.
 - Country Code is not working. If an input is two letters, it should use country code query. Or should I separate Country and Country Code?
@@ -39,32 +64,11 @@ The definition of “relevance” internally as: Radio Browser default ordering.
 - All other playing station pages use a space keyboard shortcut to pause. In the playing station page after advanced search, the space key should pause the station.
 - Add/update README.md for advanced research section.
 
-## (Done) Search page (Added to Advanced Search)
+## (Done v1.4.0) Search page (Added to Advanced Search)
 - #42: color code for stream speed (e.g., 64 kbps, 128 kbps, 320 kbps)
 - Sort by stream speed
 
-## Auto connect
-- #4: Using GPRS/4G, I sometimes lose the signal/connection and then have to reconnect manually to the station I was listening to.
-
-### Possilbe solutions (I'm not sure if any of these works)
-1. The "Force Loop" Method
-The simplest way to keep mpv from quitting when a stream drops is to use the loop-playlist flag with the force parameter. 
-
-- Command: mpv --loop-playlist=force <URL>
-- Why it works: Unlike standard looping, force tells mpv not to skip entries that have failed. If the connection drops and the "file" (stream) ends, mpv will immediately try to start it again. 
-
-2. FFmpeg Reconnect Flags
-Since mpv uses FFmpeg for networking, you can pass specific reconnection instructions directly to the underlying stream layer. 
-- Command: mpv --stream-lavf-o=reconnect_streamed=1,reconnect_delay_max=5 <URL>
-- Why it works: This tells the FFmpeg backend to attempt to reconnect if the TCP/HTTP connection is severed. 
-
-3. Recommended "Driver" Configuration
-For the best experience while driving, combine these options to maximize stability and minimize manual interaction:
-- --loop-playlist=force: Keeps the player open after a drop.
-- --cache=yes: Increases the buffer to handle minor signal dips before the audio actually stops.
-- --demuxer-max-bytes=50M: Sets a larger cache size (e.g., 50MB) to bridge longer "dead zones" in 4G coverage. 
-
-## (planned: v1.4.0) Space keyboard shortcut to pause
+## (Done v1.4.0) Space keyboard shortcut to pause
 
 ## (Done v1.3.0) Settings Smart Update commands
 Currently Settings > 2. Check for Updates page shows the following:
