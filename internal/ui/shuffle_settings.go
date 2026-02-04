@@ -99,9 +99,14 @@ func (m ShuffleSettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
 	// Handle escape/back
-	if key == "esc" || key == "0" {
+	if key == "esc" {
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenSettings}
+		}
+	}
+	if key == "0" {
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenMainMenu}
 		}
 	}
 

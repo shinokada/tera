@@ -1315,21 +1315,25 @@ func (m LuckyModel) viewShufflePlaying() string {
 	// Station counter
 	content.WriteString(fmt.Sprintf("\n   Station %d of session", shuffleInfo.SessionCount+1))
 
-	// Shuffle history
-	if len(shuffleInfo.History) > 0 {
+	// Shuffle history (append current station for display)
+	history := shuffleInfo.History
+	if m.selectedStation != nil {
+		history = append(history, *m.selectedStation)
+	}
+	if len(history) > 0 {
 		content.WriteString("\n\n")
 		content.WriteString(subtitleStyle().Render("─── Shuffle History ───"))
 		content.WriteString("\n")
 
 		// Show up to 3 most recent stations
 		startIdx := 0
-		if len(shuffleInfo.History) > 3 {
-			startIdx = len(shuffleInfo.History) - 3
+		if len(history) > 3 {
+			startIdx = len(history) - 3
 		}
 
-		for i := startIdx; i < len(shuffleInfo.History); i++ {
-			station := shuffleInfo.History[i]
-			if i == len(shuffleInfo.History)-1 {
+		for i := startIdx; i < len(history); i++ {
+			station := history[i]
+			if i == len(history)-1 {
 				// Current station
 				content.WriteString("  → ")
 				content.WriteString(highlightStyle().Render(station.TrimName()))

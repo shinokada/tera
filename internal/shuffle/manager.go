@@ -262,6 +262,8 @@ func (m *Manager) IsAutoAdvanceEnabled() bool {
 // UpdateConfig updates the shuffle configuration
 func (m *Manager) UpdateConfig(config storage.ShuffleConfig) {
 	oldAutoAdvance := m.config.AutoAdvance
+	oldInterval := m.config.IntervalMinutes
+	oldRememberHistory := m.config.RememberHistory
 	m.config = config
 
 	// If auto-advance was toggled on, start timer
@@ -272,6 +274,16 @@ func (m *Manager) UpdateConfig(config storage.ShuffleConfig) {
 	// If auto-advance was toggled off, stop timer
 	if !config.AutoAdvance && oldAutoAdvance {
 		m.StopTimer()
+	}
+
+	// If interval changed while auto-advance stays enabled, restart timer
+	if config.AutoAdvance && oldAutoAdvance && config.IntervalMinutes != oldInterval {
+		m.startTimer()
+	}
+
+	// If history was disabled, clear existing history
+	if oldRememberHistory && !config.RememberHistory {
+		m.history = nil
 	}
 
 	// Trim history if max size decreased
