@@ -31,40 +31,47 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 		expectedParams api.SearchParams
 	}{
 		{
-			name:   "Country Code Logic (2 letters)",
-			inputs: []string{"", "", "jp", "", ""},
+			name:        "Country Code Logic (2 letters)",
+			inputs:      []string{"", "", "jp", "", ""},
+			sortByVotes: true, // Match model default
 			expectedParams: api.SearchParams{
 				CountryCode: "JP",
 				Country:     "",
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "", // Default false for test helper
+				Order:       "votes",
+				Reverse:     true,
 			},
 		},
 		{
-			name:   "Country Name Logic (>2 letters)",
-			inputs: []string{"", "", "japan", "", ""},
+			name:        "Country Name Logic (>2 letters)",
+			inputs:      []string{"", "", "japan", "", ""},
+			sortByVotes: true, // Match model default
 			expectedParams: api.SearchParams{
 				CountryCode: "",
 				Country:     "Japan", // Title cased
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "",
+				Order:       "votes",
+				Reverse:     true,
 			},
 		},
 		{
-			name:   "Language Lowercase Logic",
-			inputs: []string{"", "English", "", "", ""},
+			name:        "Language Lowercase Logic",
+			inputs:      []string{"", "English", "", "", ""},
+			sortByVotes: true, // Match model default
 			expectedParams: api.SearchParams{
 				Language:   "english",
 				Limit:      100,
 				HideBroken: true,
-				Order:      "",
+				Order:      "votes",
+				Reverse:    true,
 			},
 		},
 		{
-			name:   "Mixed Logic",
-			inputs: []string{"Jazz", "English", "usa", "California", "Test"},
+			name:        "Mixed Logic",
+			inputs:      []string{"Jazz", "English", "usa", "California", "Test"},
+			sortByVotes: true, // Match model default
 			expectedParams: api.SearchParams{
 				Tag:         "Jazz",
 				Language:    "english",
@@ -74,22 +81,25 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Name:        "Test",
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "",
+				Order:       "votes",
+				Reverse:     true,
 			},
 		},
 		{
-			name:   "Mixed Logic with Country Code",
-			inputs: []string{"", "", "us", "", ""},
+			name:        "Mixed Logic with Country Code",
+			inputs:      []string{"", "", "us", "", ""},
+			sortByVotes: true, // Match model default
 			expectedParams: api.SearchParams{
 				CountryCode: "US", // Uppercased because 2 letters
 				Country:     "",
 				Limit:       100,
 				HideBroken:  true,
-				Order:       "",
+				Order:       "votes",
+				Reverse:     true,
 			},
 		},
 		{
-			name:        "Sort by Votes",
+			name:        "Sort by Votes (explicit true)",
 			inputs:      []string{"", "", "", "", ""},
 			sortByVotes: true,
 			expectedParams: api.SearchParams{
@@ -99,10 +109,24 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 				Reverse:    true,
 			},
 		},
+		{
+			name:        "Sort by Relevance (explicit false)",
+			inputs:      []string{"Jazz", "", "", "", ""},
+			sortByVotes: false,
+			expectedParams: api.SearchParams{
+				Tag:        "Jazz",
+				Limit:      100,
+				HideBroken: true,
+				Order:      "",
+				Reverse:    false,
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// sortByVotes defaults to false in Go, but the helper defaults to true
+			// So we need to be explicit about which tests set it
 			model := createModelWithInputs(tt.inputs[0], tt.inputs[1], tt.inputs[2], tt.inputs[3], tt.inputs[4], tt.sortByVotes)
 			params := model.buildAdvancedSearchParams()
 

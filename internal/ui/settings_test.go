@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/internal/api"
 )
 
 func TestNewSettingsModel(t *testing.T) {
@@ -324,6 +325,12 @@ func TestSettingsViewUpdatesAvailable(t *testing.T) {
 	m.updateChecked = true
 	m.updateAvailable = true
 	m.latestVersion = "v2.0.0"
+	// Set installInfo to Manual so UpdateCommand is empty and URL is shown
+	m.installInfo = api.InstallInfo{
+		Method:        api.InstallMethodManual,
+		UpdateCommand: "",
+		Description:   "Manual/Binary",
+	}
 	m.width = 80
 	m.height = 24
 
@@ -337,7 +344,7 @@ func TestSettingsViewUpdatesAvailable(t *testing.T) {
 		t.Error("Expected view to contain the latest version 'v2.0.0'")
 	}
 
-	if !strings.Contains(view, "github.com/shinokada/tera/releases") {
+	if !strings.Contains(view, "github.com/shinokada/tera/releases/latest") {
 		t.Error("Expected view to contain release page URL")
 	}
 }
