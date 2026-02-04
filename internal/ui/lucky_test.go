@@ -557,3 +557,208 @@ func TestLuckyViewStates(t *testing.T) {
 		})
 	}
 }
+
+// Shuffle mode tests
+
+func TestLuckyShuffleToggle(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateInput
+	model.textInput.SetValue("") // Empty input
+
+	// Initially shuffle should be disabled
+	if model.shuffleEnabled {
+		t.Error("Expected shuffle to be disabled initially")
+	}
+
+	// Toggle shuffle on
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	updatedModel, _ := model.Update(msg)
+	luckyModel := updatedModel.(LuckyModel)
+
+	if !luckyModel.shuffleEnabled {
+		t.Error("Expected shuffle to be enabled after pressing 't'")
+	}
+
+	// Toggle shuffle off
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	updatedModel, _ = luckyModel.Update(msg)
+	luckyModel = updatedModel.(LuckyModel)
+
+	if luckyModel.shuffleEnabled {
+		t.Error("Expected shuffle to be disabled after pressing 't' again")
+	}
+}
+
+func TestLuckyShuffleSearchTrigger(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateInput
+	model.textInput.SetValue("jazz")
+	model.shuffleEnabled = true
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, cmd := model.Update(msg)
+
+	luckyModel := updatedModel.(LuckyModel)
+	if luckyModel.state != luckyStateSearching {
+		t.Errorf("Expected state to be luckyStateSearching, got %v", luckyModel.state)
+	}
+
+	if cmd == nil {
+		t.Error("Expected shuffle search command to be returned")
+	}
+}
+
+func TestLuckyShufflePlayingStateStopShuffle(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station"}
+	model.shuffleEnabled = true
+	// Mock shuffle manager would be set here in real scenario
+
+	// Press 'h' to stop shuffle but keep playing
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")}
+	updatedModel, _ := model.Update(msg)
+
+	luckyModel := updatedModel.(LuckyModel)
+	if luckyModel.state != luckyStatePlaying {
+		t.Errorf("Expected state to be luckyStatePlaying, got %v", luckyModel.state)
+	}
+
+	if luckyModel.shuffleEnabled {
+		t.Error("Expected shuffle to be disabled after stopping")
+	}
+
+	if luckyModel.shuffleManager != nil {
+		t.Error("Expected shuffleManager to be nil after stopping")
+	}
+}
+
+func TestLuckyShufflePlayingStateEscNavigation(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station"}
+	model.shuffleEnabled = true
+
+	// Press Esc to stop shuffle and return to input
+	msg := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedModel, _ := model.Update(msg)
+
+	luckyModel := updatedModel.(LuckyModel)
+	if luckyModel.state != luckyStateInput {
+		t.Errorf("Expected state to be luckyStateInput, got %v", luckyModel.state)
+	}
+
+	if luckyModel.selectedStation != nil {
+		t.Error("Expected selectedStation to be nil after Esc")
+	}
+
+	if luckyModel.shuffleEnabled {
+		t.Error("Expected shuffle to be disabled after Esc")
+	}
+
+	if luckyModel.shuffleManager != nil {
+		t.Error("Expected shuffleManager to be nil after Esc")
+	}
+}
+
+func TestLuckyShufflePlayingStateZeroToMainMenu(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station"}
+	model.shuffleEnabled = true
+
+	// Press '0' to return to main menu
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}
+	updatedModel, cmd := model.Update(msg)
+
+	luckyModel := updatedModel.(LuckyModel)
+	if luckyModel.selectedStation != nil {
+		t.Error("Expected selectedStation to be nil after pressing 0")
+	}
+
+	if luckyModel.shuffleEnabled {
+		t.Error("Expected shuffle to be disabled after pressing 0")
+	}
+
+	if cmd == nil {
+		t.Error("Expected command to be returned for navigation")
+	}
+
+	// Verify navigation to main menu
+	resultMsg := cmd()
+	if navMsg, ok := resultMsg.(navigateMsg); ok {
+		if navMsg.screen != screenMainMenu {
+			t.Errorf("Expected navigation to screenMainMenu, got %v", navMsg.screen)
+		}
+	} else {
+		t.Error("Expected navigateMsg from command")
+	}
+}
+
+func TestLuckyShufflePlayingStateFavoriteShortcut(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station"}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")}
+	_, cmd := model.Update(msg)
+
+	if cmd == nil {
+		t.Error("Expected save command to be returned")
+	}
+}
+
+func TestLuckyShufflePlayingStateSaveToListShortcut(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station"}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}
+	updatedModel, cmd := model.Update(msg)
+
+	luckyModel := updatedModel.(LuckyModel)
+	if luckyModel.state != luckyStateSelectList {
+		t.Errorf("Expected state to be luckyStateSelectList, got %v", luckyModel.state)
+	}
+
+	if cmd == nil {
+		t.Error("Expected load lists command to be returned")
+	}
+}
+
+func TestLuckyShufflePlayingStateVoteShortcut(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station", StationUUID: "test-uuid"}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}
+	_, cmd := model.Update(msg)
+
+	if cmd == nil {
+		t.Error("Expected vote command to be returned")
+	}
+}
+
+func TestLuckyShuffleViewShufflePlaying(t *testing.T) {
+	client := api.NewClient()
+	model := NewLuckyModel(client, "/tmp/test")
+	model.state = luckyStateShufflePlaying
+	model.selectedStation = &api.Station{Name: "Test Station", URLResolved: "http://example.com"}
+	// In real scenario, shuffleManager would be initialized
+	// For this test, we just check it doesn't crash
+
+	view := model.View()
+	if view == "" {
+		t.Error("Expected non-empty view")
+	}
+	// Without a proper shuffleManager, we expect a fallback message
+	// We expect a fallback message like "No shuffle session active", but any non-empty view is acceptable here.
+}

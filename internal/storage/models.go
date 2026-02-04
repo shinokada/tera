@@ -24,3 +24,21 @@ type Config struct {
 	CachePath    string       `json:"cache_path"`
 	LastPlayed   *api.Station `json:"last_played,omitempty"`
 }
+
+// ShuffleConfig represents shuffle mode configuration
+type ShuffleConfig struct {
+	AutoAdvance     bool `yaml:"auto_advance"`
+	IntervalMinutes int  `yaml:"interval_minutes"`
+	RememberHistory bool `yaml:"remember_history"`
+	MaxHistory      int  `yaml:"max_history"`
+}
+
+// DefaultShuffleConfig returns default shuffle configuration
+func DefaultShuffleConfig() ShuffleConfig {
+	return ShuffleConfig{
+		AutoAdvance:     false,
+		IntervalMinutes: 5,
+		RememberHistory: true,
+		MaxHistory:      5,
+	}
+}

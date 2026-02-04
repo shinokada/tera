@@ -46,9 +46,9 @@ func TestSettingsMenuNavigation(t *testing.T) {
 		expectedState settingsState
 	}{
 		{"Press 1 for Theme", "1", settingsStateTheme},
-		{"Press 2 for History", "2", settingsStateHistory},
-		{"Press 3 for Updates", "3", settingsStateUpdates},
-		{"Press 4 for About", "4", settingsStateAbout},
+		{"Press 3 for History", "3", settingsStateHistory},
+		{"Press 4 for Updates", "4", settingsStateUpdates},
+		{"Press 5 for About", "5", settingsStateAbout},
 	}
 
 	for _, tt := range tests {

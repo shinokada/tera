@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/player"
+	"github.com/shinokada/tera/internal/shuffle"
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/theme"
 	"github.com/shinokada/tera/internal/ui/components"
@@ -25,6 +26,7 @@ const (
 	luckyStateInput luckyState = iota
 	luckyStateSearching
 	luckyStatePlaying
+	luckyStateShufflePlaying
 	luckyStateSavePrompt
 	luckyStateSelectList
 	luckyStateNewListInput
@@ -32,25 +34,31 @@ const (
 
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
-	state           luckyState
-	apiClient       *api.Client
-	textInput       textinput.Model
-	newListInput    textinput.Model
-	menuList        list.Model // Menu for history navigation
-	numberBuffer    string     // Buffer for multi-digit number input
-	selectedStation *api.Station
-	player          *player.MPVPlayer
-	favoritePath    string
-	searchHistory   *storage.SearchHistoryStore
-	saveMessage     string
-	saveMessageTime int
-	width           int
-	height          int
-	err             error
-	availableLists  []string
-	listItems       []list.Item
-	listModel       list.Model
-	helpModel       components.HelpModel
+	state            luckyState
+	apiClient        *api.Client
+	textInput        textinput.Model
+	newListInput     textinput.Model
+	menuList         list.Model // Menu for history navigation
+	numberBuffer     string     // Buffer for multi-digit number input
+	selectedStation  *api.Station
+	player           *player.MPVPlayer
+	favoritePath     string
+	searchHistory    *storage.SearchHistoryStore
+	saveMessage      string
+	saveMessageTime  int
+	width            int
+	height           int
+	err              error
+	availableLists   []string
+	listItems        []list.Item
+	listModel        list.Model
+	helpModel        components.HelpModel
+	// Shuffle mode fields
+	shuffleEnabled   bool
+	shuffleManager   *shuffle.Manager
+	shuffleConfig    storage.ShuffleConfig
+	allStations      []api.Station // All stations from search for shuffle
+	lastSearchKeyword string       // Keyword used for current shuffle session
 }
 
 // Messages for lucky screen
@@ -58,9 +66,18 @@ type luckySearchResultsMsg struct {
 	station *api.Station
 }
 
+type luckyShuffleSearchResultsMsg struct {
+	stations []api.Station
+	keyword  string
+}
+
 type luckySearchErrorMsg struct {
 	err error
 }
+
+type shuffleTimerTickMsg struct{}
+
+type shuffleAdvanceMsg struct{}
 
 type saveToListSuccessMsg struct {
 	listName    string
@@ -93,17 +110,25 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 		history = storage.NewSearchHistoryStore()
 	}
 
+	// Load shuffle config
+	shuffleConfig, err := storage.LoadShuffleConfig()
+	if err != nil {
+		shuffleConfig = storage.DefaultShuffleConfig()
+	}
+
 	m := LuckyModel{
-		state:         luckyStateInput,
-		apiClient:     apiClient,
-		textInput:     ti,
-		newListInput:  nli,
-		favoritePath:  favoritePath,
-		player:        player.NewMPVPlayer(),
-		searchHistory: history,
-		width:         80,
-		height:        24,
-		helpModel:     components.NewHelpModel(components.CreatePlayingHelp()),
+		state:          luckyStateInput,
+		apiClient:      apiClient,
+		textInput:      ti,
+		newListInput:   nli,
+		favoritePath:   favoritePath,
+		player:         player.NewMPVPlayer(),
+		searchHistory:  history,
+		width:          80,
+		height:         24,
+		helpModel:      components.NewHelpModel(components.CreatePlayingHelp()),
+		shuffleEnabled: false,
+		shuffleConfig:  shuffleConfig,
 	}
 
 	// Build menu with history items
@@ -132,6 +157,8 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateInput(msg)
 		case luckyStatePlaying:
 			return m.updatePlaying(msg)
+		case luckyStateShufflePlaying:
+			return m.updateShufflePlaying(msg)
 		case luckyStateSavePrompt:
 			return m.updateSavePrompt(msg)
 		case luckyStateSelectList:
@@ -153,6 +180,42 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = luckyStatePlaying
 		// Start playback immediately
 		return m, m.startPlayback()
+
+	case luckyShuffleSearchResultsMsg:
+		// Shuffle mode - initialize shuffle manager with all stations
+		m.allStations = msg.stations
+		m.lastSearchKeyword = msg.keyword
+		
+		// Reload config in case it was updated
+		config, err := storage.LoadShuffleConfig()
+		if err == nil {
+			m.shuffleConfig = config
+		}
+		
+		// Create shuffle manager
+		m.shuffleManager = shuffle.NewManager(m.shuffleConfig)
+		if err := m.shuffleManager.Initialize(msg.keyword, msg.stations); err != nil {
+			m.err = err
+			m.state = luckyStateInput
+			return m, nil
+		}
+		
+		// Get first station
+		station, err := m.shuffleManager.GetCurrentStation()
+		if err != nil {
+			m.err = err
+			m.state = luckyStateInput
+			return m, nil
+		}
+		
+		m.selectedStation = station
+		m.state = luckyStateShufflePlaying
+		
+		// Start playback and timer
+		return m, tea.Batch(
+			m.startPlayback(),
+			m.shuffleTimerTick(),
+		)
 
 	case luckySearchErrorMsg:
 		m.err = msg.err
@@ -226,6 +289,41 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = luckyStatePlaying
 		return m, nil
 
+	case shuffleTimerTickMsg:
+		// Handle shuffle timer tick
+		if m.shuffleManager != nil && m.state == luckyStateShufflePlaying {
+			if m.shuffleManager.UpdateTimer() {
+				// Timer expired, advance to next station
+				return m, func() tea.Msg {
+					return shuffleAdvanceMsg{}
+				}
+			}
+			// Continue timer
+			return m, m.shuffleTimerTick()
+		}
+		return m, nil
+
+	case shuffleAdvanceMsg:
+		// Auto-advance to next shuffle station
+		if m.shuffleManager != nil && m.state == luckyStateShufflePlaying {
+			nextStation, err := m.shuffleManager.Next()
+			if err != nil {
+				m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
+				m.saveMessageTime = 150
+				return m, m.shuffleTimerTick()
+			}
+			
+			m.selectedStation = nextStation
+			// Stop current playback and start new station
+			_ = m.player.Stop() // Ignore error, we're starting new playback anyway
+			
+			return m, tea.Batch(
+				m.startPlayback(),
+				m.shuffleTimerTick(),
+			)
+		}
+		return m, nil
+
 	case tickMsg:
 		// Countdown save message
 		if m.saveMessageTime > 0 {
@@ -261,6 +359,12 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
+	// Handle 't' key to toggle shuffle mode (when not typing in input)
+	if key == "t" && (m.textInput.Value() == "" || !m.textInput.Focused()) {
+		m.shuffleEnabled = !m.shuffleEnabled
+		return m, nil
+	}
+
 	// Check if text input is focused (has content being typed)
 	inputFocused := m.textInput.Focused() && m.textInput.Value() != ""
 
@@ -274,6 +378,11 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.err = nil
 			m.state = luckyStateSearching
+			
+			// Use shuffle search if enabled
+			if m.shuffleEnabled {
+				return m, m.searchForShuffle(keyword)
+			}
 			return m, m.searchAndPickRandom(keyword)
 		}
 		var cmd tea.Cmd
@@ -329,6 +438,9 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			query := m.searchHistory.LuckyQueries[selectedIdx-1] // -1 because index 0 is separator
 			m.state = luckyStateSearching
 			m.err = nil
+			if m.shuffleEnabled {
+				return m, m.searchForShuffle(query)
+			}
 			return m, m.searchAndPickRandom(query)
 		}
 
@@ -340,6 +452,9 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.err = nil
 		m.state = luckyStateSearching
+		if m.shuffleEnabled {
+			return m, m.searchForShuffle(keyword)
+		}
 		return m, m.searchAndPickRandom(keyword)
 	}
 
@@ -386,6 +501,9 @@ func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 		query := m.searchHistory.LuckyQueries[actualIndex]
 		m.state = luckyStateSearching
 		m.err = nil
+		if m.shuffleEnabled {
+			return m, m.searchForShuffle(query)
+		}
 		return m, m.searchAndPickRandom(query)
 	}
 	return m, nil
@@ -715,6 +833,8 @@ func (m LuckyModel) View() string {
 		return m.viewSearching()
 	case luckyStatePlaying:
 		return m.viewPlaying()
+	case luckyStateShufflePlaying:
+		return m.viewShufflePlaying()
 	case luckyStateSavePrompt:
 		return m.viewSavePrompt()
 	case luckyStateSelectList:
@@ -756,6 +876,22 @@ func (m LuckyModel) viewInput() string {
 	// Input field
 	content.WriteString("Genre/keyword: ")
 	content.WriteString(m.textInput.View())
+	content.WriteString("\n\n")
+
+	// Shuffle mode toggle
+	if m.shuffleEnabled {
+		content.WriteString("Shuffle mode: ")
+		content.WriteString(highlightStyle().Render("[✓] On"))
+		content.WriteString("  (press 't' to disable)")
+		if m.shuffleConfig.AutoAdvance {
+			content.WriteString(fmt.Sprintf("\n              Auto-advance in %d min • History: %d stations",
+				m.shuffleConfig.IntervalMinutes, m.shuffleConfig.MaxHistory))
+		}
+	} else {
+		content.WriteString("Shuffle mode: ")
+		content.WriteString(infoStyle().Render("[ ] Off"))
+		content.WriteString(" (press 't' to enable)")
+	}
 
 	// Show history menu if available
 	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
@@ -769,7 +905,7 @@ func (m LuckyModel) viewInput() string {
 		content.WriteString(errorStyle().Render(m.err.Error()))
 	}
 
-	helpText := "↑↓/jk: Navigate • Enter: Search"
+	helpText := "↑↓/jk: Navigate • Enter: Search • t: Toggle shuffle"
 	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
 		maxItems := len(m.searchHistory.LuckyQueries)
 		if maxItems > m.searchHistory.MaxSize {
@@ -777,7 +913,7 @@ func (m LuckyModel) viewInput() string {
 		}
 		helpText += fmt.Sprintf(" • 1-%d: Quick search", maxItems)
 	}
-	helpText += " • Esc: Back • Ctrl+C: Quit"
+	helpText += " • Esc: Back"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
@@ -974,6 +1110,287 @@ func (m *LuckyModel) rebuildMenuWithHistory() {
 
 	// Use empty title - we render the title manually
 	m.menuList = components.CreateMenu(menuItems, "", 50, height)
+}
+
+// updateShufflePlaying handles input during shuffle playback
+func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Stop shuffle and playback, return to I Feel Lucky input
+		if m.shuffleManager != nil {
+			m.shuffleManager.Stop()
+		}
+		if err := m.player.Stop(); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
+			m.saveMessageTime = 150
+			return m, nil
+		}
+		m.state = luckyStateInput
+		m.selectedStation = nil
+		m.shuffleEnabled = false
+		m.shuffleManager = nil
+		// Reload history from disk
+		m.reloadSearchHistory()
+		m.rebuildMenuWithHistory()
+		return m, nil
+	case "0":
+		// Return to main menu
+		if m.shuffleManager != nil {
+			m.shuffleManager.Stop()
+		}
+		if err := m.player.Stop(); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
+			m.saveMessageTime = 150
+			return m, nil
+		}
+		m.selectedStation = nil
+		m.state = luckyStateInput
+		m.shuffleEnabled = false
+		m.shuffleManager = nil
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenMainMenu}
+		}
+	case "h":
+		// Stop shuffle but keep playing current station
+		if m.shuffleManager != nil {
+			m.shuffleManager.Stop()
+		}
+		m.shuffleEnabled = false
+		m.shuffleManager = nil
+		m.state = luckyStatePlaying
+		m.saveMessage = "Shuffle stopped - continuing with current station"
+		m.saveMessageTime = 150
+		return m, nil
+	case "n":
+		// Next shuffle station (manual advance)
+		if m.shuffleManager == nil {
+			return m, nil
+		}
+		nextStation, err := m.shuffleManager.Next()
+		if err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
+			m.saveMessageTime = 150
+			return m, nil
+		}
+		m.selectedStation = nextStation
+		// Stop current playback and start new station
+		_ = m.player.Stop() // Ignore error, we're starting new playback anyway
+		return m, tea.Batch(
+			m.startPlayback(),
+			m.shuffleTimerTick(),
+		)
+	case "b":
+		// Previous shuffle station (from history)
+		if m.shuffleManager == nil {
+			return m, nil
+		}
+		prevStation, err := m.shuffleManager.Previous()
+		if err != nil {
+			m.saveMessage = fmt.Sprintf("✗ %v", err)
+			m.saveMessageTime = 150
+			return m, nil
+		}
+		m.selectedStation = prevStation
+		// Stop current playback and start new station
+		_ = m.player.Stop() // Ignore error, we're starting new playback anyway
+		return m, tea.Batch(
+			m.startPlayback(),
+			m.shuffleTimerTick(),
+		)
+	case "p":
+		// Pause/resume auto-advance timer
+		if m.shuffleManager == nil {
+			return m, nil
+		}
+		paused := m.shuffleManager.TogglePause()
+		if paused {
+			m.saveMessage = "⏸ Auto-advance paused"
+		} else {
+			m.saveMessage = "▶ Auto-advance resumed"
+		}
+		m.saveMessageTime = 150
+		return m, nil
+	case "f":
+		// Save to Quick Favorites during shuffle
+		return m, m.saveToQuickFavorites()
+	case "s":
+		// Save to a list - show list selection
+		m.state = luckyStateSelectList
+		return m, m.loadAvailableLists()
+	case "v":
+		// Vote for this station
+		return m, m.voteForStation()
+	case "/":
+		// Decrease volume
+		newVol := m.player.DecreaseVolume(5)
+		if m.selectedStation != nil && newVol >= 0 {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		m.saveMessageTime = 120
+		return m, nil
+	case "*":
+		// Increase volume
+		newVol := m.player.IncreaseVolume(5)
+		if m.selectedStation != nil {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
+		m.saveMessageTime = 120
+		return m, nil
+	case "m":
+		// Toggle mute
+		muted, vol := m.player.ToggleMute()
+		if muted {
+			m.saveMessage = "Volume: Muted"
+		} else {
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+		}
+		if m.selectedStation != nil && !muted && vol >= 0 {
+			m.selectedStation.SetVolume(vol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		m.saveMessageTime = 120
+		return m, nil
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
+	}
+	return m, nil
+}
+
+// searchForShuffle searches and returns all stations for shuffle mode
+func (m LuckyModel) searchForShuffle(keyword string) tea.Cmd {
+	return func() tea.Msg {
+		// Save to history in background
+		go func() {
+			store := storage.NewStorage(m.favoritePath)
+			_ = store.AddLuckyQuery(context.Background(), keyword)
+		}()
+
+		// Search by tag (genre/keyword)
+		stations, err := m.apiClient.SearchByTag(context.Background(), keyword)
+		if err != nil {
+			return luckySearchErrorMsg{err: fmt.Errorf("search failed: %w", err)}
+		}
+
+		if len(stations) == 0 {
+			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
+		}
+
+		return luckyShuffleSearchResultsMsg{
+			stations: stations,
+			keyword:  keyword,
+		}
+	}
+}
+
+// shuffleTimerTick sends a timer tick message for shuffle mode
+func (m LuckyModel) shuffleTimerTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return shuffleTimerTickMsg{}
+	})
+}
+
+// viewShufflePlaying renders the shuffle playback view
+func (m LuckyModel) viewShufflePlaying() string {
+	if m.selectedStation == nil || m.shuffleManager == nil {
+		return "No shuffle session active"
+	}
+
+	var content strings.Builder
+
+	// Station info
+	content.WriteString(RenderStationDetails(*m.selectedStation))
+
+	// Playback status
+	content.WriteString("\n")
+	if m.player.IsPlaying() {
+		content.WriteString(successStyle().Render("▶ Playing..."))
+	} else {
+		content.WriteString(infoStyle().Render("⏸ Stopped"))
+	}
+
+	// Shuffle info
+	content.WriteString("\n\n")
+	shuffleInfo := m.shuffleManager.GetStatus()
+	content.WriteString(highlightStyle().Render("🔀 Shuffle Active"))
+
+	// Auto-advance timer (if enabled)
+	if m.shuffleConfig.AutoAdvance {
+		if shuffleInfo.TimerPaused {
+			content.WriteString(" • ")
+			content.WriteString(infoStyle().Render("⏸ Timer paused"))
+		} else if shuffleInfo.TimeRemaining > 0 {
+			minutes := int(shuffleInfo.TimeRemaining.Minutes())
+			seconds := int(shuffleInfo.TimeRemaining.Seconds()) % 60
+			content.WriteString(fmt.Sprintf(" • Next in: %d:%02d", minutes, seconds))
+		}
+	} else {
+		content.WriteString(" • ")
+		content.WriteString(infoStyle().Render("Manual mode"))
+	}
+
+	// Station counter
+	content.WriteString(fmt.Sprintf("\n   Station %d of session", shuffleInfo.CurrentIndex+1))
+
+	// Shuffle history
+	if len(shuffleInfo.History) > 0 {
+		content.WriteString("\n\n")
+		content.WriteString(subtitleStyle().Render("─── Shuffle History ───"))
+		content.WriteString("\n")
+
+		// Show up to 3 most recent stations
+		startIdx := 0
+		if len(shuffleInfo.History) > 3 {
+			startIdx = len(shuffleInfo.History) - 3
+		}
+
+		for i := startIdx; i < len(shuffleInfo.History); i++ {
+			station := shuffleInfo.History[i]
+			if i == len(shuffleInfo.History)-1 {
+				// Current station
+				content.WriteString("  → ")
+				content.WriteString(highlightStyle().Render(station.TrimName()))
+				content.WriteString(" ← Current")
+			} else {
+				// Previous station
+				content.WriteString("  ← ")
+				content.WriteString(station.TrimName())
+			}
+			content.WriteString("\n")
+		}
+	}
+
+	// Save message (if any)
+	if m.saveMessage != "" {
+		content.WriteString("\n")
+		var msgStyle lipgloss.Style
+		if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Volume:") {
+			if strings.Contains(m.saveMessage, "Muted") {
+				msgStyle = infoStyle()
+			} else {
+				msgStyle = successStyle()
+			}
+		} else if strings.Contains(m.saveMessage, "Already") || strings.Contains(m.saveMessage, "paused") || strings.Contains(m.saveMessage, "resumed") || strings.Contains(m.saveMessage, "stopped") {
+			msgStyle = infoStyle()
+		} else {
+			msgStyle = errorStyle()
+		}
+		content.WriteString(msgStyle.Render(m.saveMessage))
+	}
+
+	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
+	help := "f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   title,
+		Content: content.String(),
+		Help:    help,
+	}, m.height)
 }
 
 // reloadSearchHistory reloads history from disk

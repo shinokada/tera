@@ -139,13 +139,24 @@ Create, rename, and delete your favorite lists. Stations can be:
 
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
 
+**Shuffle Mode**: Enable shuffle mode to automatically cycle through multiple stations matching your keyword:
+- Press `t` to toggle shuffle on/off
+- Stations play in random order without repeats
+- Optional auto-advance timer (configurable)
+- Navigate backward through recently played stations
+- Configure shuffle behavior in Settings → Shuffle Settings
+
+See [Shuffle Mode](#shuffle-mode) for detailed features.
+
 ### Settings
 
 Access app configuration from the main menu (option 6):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
+- **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
+- **Search History** - View and clear your search history
 - **Check for Updates** - View current version and check for new releases
-- **Installation Info** - See your installation method and update command
+- **About TERA** - See version, installation method, and update command
 
 The Settings menu automatically detects how you installed TERA (Homebrew, Go, Scoop, Winget, etc.) and shows the appropriate update command.
 
@@ -252,6 +263,113 @@ TERA detects how you installed it and provides the correct update command. For e
 | APT/DEB             | `sudo apt update && sudo apt install --only-upgrade tera`                |
 | RPM/DNF             | `sudo dnf upgrade tera`                                                   |
 | Manual              | Download from [releases page](https://github.com/shinokada/tera/releases) |
+
+## Shuffle Mode
+
+Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore multiple stations matching your search keyword without manually searching each time.
+
+### How It Works
+
+1. Navigate to **I Feel Lucky** from the main menu (option 4)
+2. Press `t` to toggle shuffle mode on
+3. Enter your keyword (e.g., "jazz", "rock", "meditation")
+4. Press Enter to start shuffle mode
+
+### Features
+
+**Automatic Station Discovery**
+- TERA finds all stations matching your keyword
+- Plays them in random order without repeats
+- No duplicates until all stations have been played
+
+**Auto-Advance Timer** (Optional)
+- Automatically skip to the next station after a set interval
+- Configurable intervals: 1, 3, 5, 10, or 15 minutes
+- Pause/resume timer with `p` key
+- Disable for manual control
+
+**Station History**
+- Keep track of recently played stations
+- Navigate backward with `b` key
+- Configurable history size: 3, 5, 7, or 10 stations
+- See last few stations in the shuffle history display
+
+**Seamless Playback**
+- All standard playback controls work (volume, mute, favorites, voting)
+- Save any station to your favorites while shuffling
+- Stop shuffle but keep playing current station with `h`
+
+### Shuffle Keyboard Shortcuts
+
+| Key   | Action                                |
+| ----- | ------------------------------------- |
+| `t`   | Toggle shuffle mode (in input screen) |
+| `n`   | Next shuffle station (manual skip)    |
+| `b`   | Previous station (from history)       |
+| `p`   | Pause/resume auto-advance timer       |
+| `h`   | Stop shuffle, keep playing current    |
+| `f`   | Save to My-favorites                  |
+| `s`   | Save to another list                  |
+| `v`   | Vote for station                      |
+| `Esc` | Stop shuffle and return to input      |
+
+### Shuffle Settings
+
+Configure shuffle behavior in **Settings → Shuffle Settings**:
+
+**Auto-advance**
+- Enable/disable automatic station switching
+- When disabled, you manually control station changes with `n`/`b`
+
+**Auto-advance Interval**
+- Set how long each station plays before auto-advancing
+- Options: 1, 3, 5, 10, or 15 minutes
+- Default: 5 minutes
+
+**Remember History**
+- Enable/disable station history tracking
+- When disabled, you cannot go back to previous stations
+
+**History Size**
+- Number of previous stations to remember
+- Options: 3, 5, 7, or 10 stations
+- Default: 5 stations
+
+### Example Shuffle Session
+
+```
+🎵 Now Playing (🔀 Shuffle: jazz)
+
+Station: Smooth Jazz 24/7
+Country: United States
+Codec: AAC • Bitrate: 128 kbps
+
+▶ Playing...
+
+🔀 Shuffle Active • Next in: 4:23
+   Station 3 of session
+   
+─── Shuffle History ───
+  ← Jazz FM London
+  ← WBGO Jazz 88.3
+  → Smooth Jazz 24/7  ← Current
+
+f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h: Stop shuffle
+```
+
+### Configuration File
+
+Shuffle settings are stored in `~/.config/tera/shuffle.yaml`:
+
+```yaml
+shuffle:
+  auto_advance: true           # Auto-advance enabled
+  interval_minutes: 5          # 5 minutes per station
+  remember_history: true       # Track history
+  max_history: 5               # Remember last 5 stations
+```
+
+You can edit this file directly or use the Settings menu.
 
 ## Keyboard Shortcuts
 
@@ -372,6 +490,7 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 ```
 ~/.config/tera/
 ├── theme.yaml              # Color and padding customization
+├── shuffle.yaml            # Shuffle mode settings
 ├── gist_metadata.json      # Your gist history
 ├── tokens/
 │   └── github_token        # GitHub Personal Access Token

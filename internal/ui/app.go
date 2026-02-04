@@ -25,6 +25,7 @@ const (
 	screenLucky
 	screenGist
 	screenSettings
+	screenShuffleSettings
 )
 
 // Main menu configuration
@@ -41,6 +42,7 @@ type App struct {
 	luckyScreen          LuckyModel
 	gistScreen           GistModel
 	settingsScreen       SettingsModel
+	shuffleSettingsScreen ShuffleSettingsModel
 	apiClient            *api.Client
 	favoritePath         string
 	quickFavorites       []api.Station
@@ -257,6 +259,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.settingsScreen.updateAvailable = a.updateAvailable
 			}
 			return a, a.settingsScreen.Init()
+		case screenShuffleSettings:
+			a.shuffleSettingsScreen = NewShuffleSettingsModel()
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.shuffleSettingsScreen.width = a.width
+				a.shuffleSettingsScreen.height = a.height
+			}
+			return a, a.shuffleSettingsScreen.Init()
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
@@ -352,6 +362,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = a.settingsScreen.Update(msg)
 		a.settingsScreen = m.(SettingsModel)
 
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenShuffleSettings:
+		var m tea.Model
+		m, cmd = a.shuffleSettingsScreen.Update(msg)
+		a.shuffleSettingsScreen = m.(ShuffleSettingsModel)
+
+		// Check for navigation messages
+		if navMsg, ok := msg.(navigateMsg); ok {
+			if navMsg.screen == screenSettings {
+				a.screen = screenSettings
+			}
+		}
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
@@ -653,6 +679,8 @@ func (a App) View() string {
 		return a.gistScreen.View()
 	case screenSettings:
 		return a.settingsScreen.View()
+	case screenShuffleSettings:
+		return a.shuffleSettingsScreen.View()
 	}
 	return "Unknown screen"
 }
