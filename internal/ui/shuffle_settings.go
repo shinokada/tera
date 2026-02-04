@@ -184,6 +184,7 @@ func (m ShuffleSettingsModel) updateInterval(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.config.IntervalMinutes = intervals[selected]
 			m.saveConfig()
 			m.rebuildMenuList()
+			m.buildIntervalList()
 			m.state = shuffleSettingsMenu
 			m.message = fmt.Sprintf("✓ Auto-advance interval set to %d minutes", m.config.IntervalMinutes)
 			m.messageIsSuccess = true
@@ -236,6 +237,7 @@ func (m ShuffleSettingsModel) updateHistorySize(msg tea.KeyMsg) (tea.Model, tea.
 			m.config.MaxHistory = historySizes[selected]
 			m.saveConfig()
 			m.rebuildMenuList()
+			m.buildHistoryList()
 			m.state = shuffleSettingsMenu
 			m.message = fmt.Sprintf("✓ Shuffle history size set to %d stations", m.config.MaxHistory)
 			m.messageIsSuccess = true

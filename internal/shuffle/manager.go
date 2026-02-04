@@ -308,11 +308,13 @@ type ShuffleStatus struct {
 
 // GetStatus returns the current shuffle status
 func (m *Manager) GetStatus() ShuffleStatus {
+	historyCopy := make([]api.Station, len(m.history))
+	copy(historyCopy, m.history)
 	return ShuffleStatus{
 		Keyword:       m.keyword,
 		CurrentIndex:  m.currentIndex,
 		SessionCount:  m.sessionCount,
-		History:       m.history,
+		History:       historyCopy,
 		TimeRemaining: m.timeRemaining,
 		TimerPaused:   m.timerPaused,
 		AutoAdvance:   m.config.AutoAdvance,

@@ -1313,7 +1313,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	// Station counter
-	content.WriteString(fmt.Sprintf("\n   Station %d of session", shuffleInfo.CurrentIndex+1))
+	content.WriteString(fmt.Sprintf("\n   Station %d of session", shuffleInfo.SessionCount+1))
 
 	// Shuffle history
 	if len(shuffleInfo.History) > 0 {

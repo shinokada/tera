@@ -32,28 +32,28 @@ const (
 const mainMenuItemCount = 6
 
 type App struct {
-	screen               Screen
-	width                int
-	height               int
-	mainMenuList         list.Model
-	playScreen           PlayModel
-	searchScreen         SearchModel
-	listManagementScreen ListManagementModel
-	luckyScreen          LuckyModel
-	gistScreen           GistModel
-	settingsScreen       SettingsModel
+	screen                Screen
+	width                 int
+	height                int
+	mainMenuList          list.Model
+	playScreen            PlayModel
+	searchScreen          SearchModel
+	listManagementScreen  ListManagementModel
+	luckyScreen           LuckyModel
+	gistScreen            GistModel
+	settingsScreen        SettingsModel
 	shuffleSettingsScreen ShuffleSettingsModel
-	apiClient            *api.Client
-	favoritePath         string
-	quickFavorites       []api.Station
-	quickFavPlayer       *player.MPVPlayer
-	playingFromMain      bool
-	playingStation       *api.Station
-	numberBuffer         string               // Buffer for multi-digit number input
-	unifiedMenuIndex     int                  // Unified index for navigating both menu and favorites
-	helpModel            components.HelpModel // Help overlay
-	volumeDisplay        string               // Temporary volume display message
-	volumeDisplayFrames  int                  // Countdown for volume display
+	apiClient             *api.Client
+	favoritePath          string
+	quickFavorites        []api.Station
+	quickFavPlayer        *player.MPVPlayer
+	playingFromMain       bool
+	playingStation        *api.Station
+	numberBuffer          string               // Buffer for multi-digit number input
+	unifiedMenuIndex      int                  // Unified index for navigating both menu and favorites
+	helpModel             components.HelpModel // Help overlay
+	volumeDisplay         string               // Temporary volume display message
+	volumeDisplayFrames   int                  // Countdown for volume display
 	// Update checking
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
@@ -372,12 +372,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = a.shuffleSettingsScreen.Update(msg)
 		a.shuffleSettingsScreen = m.(ShuffleSettingsModel)
 
-		// Check for navigation messages
-		if navMsg, ok := msg.(navigateMsg); ok {
-			if navMsg.screen == screenSettings {
-				a.screen = screenSettings
-			}
-		}
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
