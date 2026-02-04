@@ -20,7 +20,7 @@ type settingsState int
 const (
 	settingsStateMenu settingsState = iota
 	settingsStateTheme
-	settingsStateShuffle
+
 	settingsStateHistory
 	settingsStateUpdates
 	settingsStateAbout
@@ -295,11 +295,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMenu(msg)
 		case settingsStateTheme:
 			return m.updateTheme(msg)
-		case settingsStateShuffle:
-			// Navigate to shuffle settings screen
-			return m, func() tea.Msg {
-				return navigateMsg{screen: screenShuffleSettings}
-			}
+
 		case settingsStateHistory:
 			return m.updateHistory(msg)
 		case settingsStateUpdates:
@@ -587,9 +583,9 @@ func (m SettingsModel) viewMenu() string {
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
-	Title:   "⚙️  Settings",
-	Content: content.String(),
-	Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Shortcut • Esc/0: Back • Ctrl+C: Quit",
+		Title:   "⚙️  Settings",
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Shortcut • Esc/0: Back • Ctrl+C: Quit",
 	}, m.height)
 }
 
@@ -697,12 +693,12 @@ func (m SettingsModel) viewUpdates() string {
 			content.WriteString("\n\n")
 			content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
 			content.WriteString("\n\n")
-			
+
 			// Show installation method specific update instructions
 			content.WriteString(stationFieldStyle().Render("Detected installation method: "))
 			content.WriteString(highlightStyle().Render(m.installInfo.Description))
 			content.WriteString("\n\n")
-			
+
 			if m.installInfo.UpdateCommand != "" {
 				content.WriteString(stationValueStyle().Render("To update, run:"))
 				content.WriteString("\n")

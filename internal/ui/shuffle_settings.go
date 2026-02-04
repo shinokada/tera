@@ -23,15 +23,16 @@ const (
 
 // ShuffleSettingsModel represents the shuffle settings page
 type ShuffleSettingsModel struct {
-	state        shuffleSettingsState
-	config       storage.ShuffleConfig
-	menuList     list.Model
-	intervalList list.Model
-	historyList  list.Model
-	width        int
-	height       int
-	message      string
-	messageTime  int
+	state            shuffleSettingsState
+	config           storage.ShuffleConfig
+	menuList         list.Model
+	intervalList     list.Model
+	historyList      list.Model
+	width            int
+	height           int
+	message          string
+	messageIsSuccess bool
+	messageTime      int
 }
 
 // NewShuffleSettingsModel creates a new shuffle settings model
@@ -132,6 +133,7 @@ func (m ShuffleSettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveConfig()
 			m.rebuildMenuList()
 			m.message = "✓ Reset to default settings"
+			m.messageIsSuccess = true
 			m.messageTime = 180
 		case 5: // Back to Settings
 			return m, func() tea.Msg {
@@ -184,6 +186,7 @@ func (m ShuffleSettingsModel) updateInterval(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.rebuildMenuList()
 			m.state = shuffleSettingsMenu
 			m.message = fmt.Sprintf("✓ Auto-advance interval set to %d minutes", m.config.IntervalMinutes)
+			m.messageIsSuccess = true
 			m.messageTime = 180
 		} else if selected == len(intervals) {
 			// Back option
@@ -235,6 +238,7 @@ func (m ShuffleSettingsModel) updateHistorySize(msg tea.KeyMsg) (tea.Model, tea.
 			m.rebuildMenuList()
 			m.state = shuffleSettingsMenu
 			m.message = fmt.Sprintf("✓ Shuffle history size set to %d stations", m.config.MaxHistory)
+			m.messageIsSuccess = true
 			m.messageTime = 180
 		} else if selected == len(historySizes) {
 			// Back option
@@ -257,6 +261,7 @@ func (m ShuffleSettingsModel) updateHistorySize(msg tea.KeyMsg) (tea.Model, tea.
 func (m *ShuffleSettingsModel) saveConfig() {
 	if err := storage.SaveShuffleConfig(m.config); err != nil {
 		m.message = fmt.Sprintf("✗ Failed to save: %v", err)
+		m.messageIsSuccess = false
 		m.messageTime = 180
 	}
 }
@@ -393,7 +398,11 @@ func (m ShuffleSettingsModel) viewMenu() string {
 	// Success message
 	if m.message != "" {
 		content.WriteString("\n\n")
-		content.WriteString(successStyle().Render(m.message))
+		if m.messageIsSuccess {
+			content.WriteString(successStyle().Render(m.message))
+		} else {
+			content.WriteString(errorStyle().Render(m.message))
+		}
 	} else {
 		content.WriteString("\n\n")
 		content.WriteString(infoStyle().Render("✓ Shuffle settings saved automatically"))

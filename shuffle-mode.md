@@ -269,11 +269,11 @@ const (
 
 ---
 
-Does this integration into the Settings page work better for you? Should I adjust:
-- The number of interval options?
-- History size limits?
-- Default settings?
-- The layout of any screens?
+Adjust:
+- The number of interval options
+- History size limits
+- Default settings
+- The layout of any screens
 
 ## Progress
 

@@ -34,31 +34,31 @@ const (
 
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
-	state            luckyState
-	apiClient        *api.Client
-	textInput        textinput.Model
-	newListInput     textinput.Model
-	menuList         list.Model // Menu for history navigation
-	numberBuffer     string     // Buffer for multi-digit number input
-	selectedStation  *api.Station
-	player           *player.MPVPlayer
-	favoritePath     string
-	searchHistory    *storage.SearchHistoryStore
-	saveMessage      string
-	saveMessageTime  int
-	width            int
-	height           int
-	err              error
-	availableLists   []string
-	listItems        []list.Item
-	listModel        list.Model
-	helpModel        components.HelpModel
+	state           luckyState
+	apiClient       *api.Client
+	textInput       textinput.Model
+	newListInput    textinput.Model
+	menuList        list.Model // Menu for history navigation
+	numberBuffer    string     // Buffer for multi-digit number input
+	selectedStation *api.Station
+	player          *player.MPVPlayer
+	favoritePath    string
+	searchHistory   *storage.SearchHistoryStore
+	saveMessage     string
+	saveMessageTime int
+	width           int
+	height          int
+	err             error
+	availableLists  []string
+	listItems       []list.Item
+	listModel       list.Model
+	helpModel       components.HelpModel
 	// Shuffle mode fields
-	shuffleEnabled   bool
-	shuffleManager   *shuffle.Manager
-	shuffleConfig    storage.ShuffleConfig
-	allStations      []api.Station // All stations from search for shuffle
-	lastSearchKeyword string       // Keyword used for current shuffle session
+	shuffleEnabled    bool
+	shuffleManager    *shuffle.Manager
+	shuffleConfig     storage.ShuffleConfig
+	allStations       []api.Station // All stations from search for shuffle
+	lastSearchKeyword string        // Keyword used for current shuffle session
 }
 
 // Messages for lucky screen
@@ -185,13 +185,13 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Shuffle mode - initialize shuffle manager with all stations
 		m.allStations = msg.stations
 		m.lastSearchKeyword = msg.keyword
-		
+
 		// Reload config in case it was updated
 		config, err := storage.LoadShuffleConfig()
 		if err == nil {
 			m.shuffleConfig = config
 		}
-		
+
 		// Create shuffle manager
 		m.shuffleManager = shuffle.NewManager(m.shuffleConfig)
 		if err := m.shuffleManager.Initialize(msg.keyword, msg.stations); err != nil {
@@ -199,7 +199,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = luckyStateInput
 			return m, nil
 		}
-		
+
 		// Get first station
 		station, err := m.shuffleManager.GetCurrentStation()
 		if err != nil {
@@ -207,10 +207,10 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = luckyStateInput
 			return m, nil
 		}
-		
+
 		m.selectedStation = station
 		m.state = luckyStateShufflePlaying
-		
+
 		// Start playback and timer
 		return m, tea.Batch(
 			m.startPlayback(),
@@ -312,11 +312,11 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessageTime = 150
 				return m, m.shuffleTimerTick()
 			}
-			
+
 			m.selectedStation = nextStation
 			// Stop current playback and start new station
 			_ = m.player.Stop() // Ignore error, we're starting new playback anyway
-			
+
 			return m, tea.Batch(
 				m.startPlayback(),
 				m.shuffleTimerTick(),
@@ -360,7 +360,7 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle 't' key to toggle shuffle mode (when not typing in input)
-	if key == "t" && (m.textInput.Value() == "" || !m.textInput.Focused()) {
+	if key == "t" && m.textInput.Value() == "" {
 		m.shuffleEnabled = !m.shuffleEnabled
 		return m, nil
 	}
@@ -378,7 +378,7 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.err = nil
 			m.state = luckyStateSearching
-			
+
 			// Use shuffle search if enabled
 			if m.shuffleEnabled {
 				return m, m.searchForShuffle(keyword)
@@ -488,6 +488,40 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// handleVolumeControl handles volume-related key presses
+func (m *LuckyModel) handleVolumeControl(key string) (bool, string) {
+	switch key {
+	case "/":
+		// Decrease volume
+		newVol := m.player.DecreaseVolume(5)
+		if m.selectedStation != nil && newVol >= 0 {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		return true, fmt.Sprintf("Volume: %d%%", newVol)
+	case "*":
+		// Increase volume
+		newVol := m.player.IncreaseVolume(5)
+		if m.selectedStation != nil {
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		return true, fmt.Sprintf("Volume: %d%%", newVol)
+	case "m":
+		// Toggle mute
+		muted, vol := m.player.ToggleMute()
+		if m.selectedStation != nil && !muted && vol >= 0 {
+			m.selectedStation.SetVolume(vol)
+			m.saveStationVolume(m.selectedStation)
+		}
+		if muted {
+			return true, "Volume: Muted"
+		}
+		return true, fmt.Sprintf("Volume: %d%%", vol)
+	}
+	return false, ""
+}
+
 // selectHistoryByNumber selects a history item by number (1-based)
 func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 	if m.searchHistory == nil {
@@ -547,40 +581,12 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
-	case "/":
-		// Decrease volume
-		newVol := m.player.DecreaseVolume(5)
-		if m.selectedStation != nil && newVol >= 0 {
-			m.selectedStation.SetVolume(newVol)
-			m.saveStationVolume(m.selectedStation)
+	case "/", "*", "m":
+		if handled, msg := m.handleVolumeControl(msg.String()); handled {
+			m.saveMessage = msg
+			m.saveMessageTime = 120
+			return m, nil
 		}
-		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, nil
-	case "*":
-		// Increase volume
-		newVol := m.player.IncreaseVolume(5)
-		if m.selectedStation != nil {
-			m.selectedStation.SetVolume(newVol)
-			m.saveStationVolume(m.selectedStation)
-		}
-		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, nil
-	case "m":
-		// Toggle mute
-		muted, vol := m.player.ToggleMute()
-		if muted {
-			m.saveMessage = "Volume: Muted"
-		} else {
-			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
-		}
-		if m.selectedStation != nil && !muted && vol >= 0 {
-			m.selectedStation.SetVolume(vol)
-			m.saveStationVolume(m.selectedStation)
-		}
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
-		return m, nil
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Toggle()
@@ -1220,40 +1226,12 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
-	case "/":
-		// Decrease volume
-		newVol := m.player.DecreaseVolume(5)
-		if m.selectedStation != nil && newVol >= 0 {
-			m.selectedStation.SetVolume(newVol)
-			m.saveStationVolume(m.selectedStation)
+	case "/", "*", "m":
+		if handled, msg := m.handleVolumeControl(msg.String()); handled {
+			m.saveMessage = msg
+			m.saveMessageTime = 120
+			return m, nil
 		}
-		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		m.saveMessageTime = 120
-		return m, nil
-	case "*":
-		// Increase volume
-		newVol := m.player.IncreaseVolume(5)
-		if m.selectedStation != nil {
-			m.selectedStation.SetVolume(newVol)
-			m.saveStationVolume(m.selectedStation)
-		}
-		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		m.saveMessageTime = 120
-		return m, nil
-	case "m":
-		// Toggle mute
-		muted, vol := m.player.ToggleMute()
-		if muted {
-			m.saveMessage = "Volume: Muted"
-		} else {
-			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
-		}
-		if m.selectedStation != nil && !muted && vol >= 0 {
-			m.selectedStation.SetVolume(vol)
-			m.saveStationVolume(m.selectedStation)
-		}
-		m.saveMessageTime = 120
-		return m, nil
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Toggle()

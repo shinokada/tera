@@ -337,7 +337,7 @@ Configure shuffle behavior in **Settings → Shuffle Settings**:
 
 ### Example Shuffle Session
 
-```
+```text
 🎵 Now Playing (🔀 Shuffle: jazz)
 
 Station: Smooth Jazz 24/7

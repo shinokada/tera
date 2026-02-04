@@ -12,16 +12,16 @@ import (
 // Manager handles shuffle mode logic
 type Manager struct {
 	config          storage.ShuffleConfig
-	stations        []api.Station      // All available stations from search
-	shuffledIndices []int              // Shuffled order of indices
-	currentIndex    int                // Current position in shuffled list
-	history         []api.Station      // History of played stations
-	keyword         string             // Original search keyword
-	sessionCount    int                // Number of stations played in this session
-	ticker          *time.Ticker       // Auto-advance ticker
-	timerPaused     bool               // Whether timer is paused
-	timeRemaining   time.Duration      // Time remaining on current timer
-	lastTickTime    time.Time          // Last time we updated the timer
+	stations        []api.Station // All available stations from search
+	shuffledIndices []int         // Shuffled order of indices
+	currentIndex    int           // Current position in shuffled list
+	history         []api.Station // History of played stations
+	keyword         string        // Original search keyword
+	sessionCount    int           // Number of stations played in this session
+	ticker          *time.Ticker  // Auto-advance ticker
+	timerPaused     bool          // Whether timer is paused
+	timeRemaining   time.Duration // Time remaining on current timer
+	lastTickTime    time.Time     // Last time we updated the timer
 }
 
 // NewManager creates a new shuffle manager
@@ -110,11 +110,6 @@ func (m *Manager) Previous() (*api.Station, error) {
 	station := m.history[len(m.history)-1]
 	m.history = m.history[:len(m.history)-1]
 
-	// Move current index back (but don't go negative)
-	if m.currentIndex > 0 {
-		m.currentIndex--
-	}
-
 	// Pause timer when going back in history
 	m.PauseTimer()
 
@@ -137,7 +132,9 @@ func (m *Manager) addToHistory(station api.Station) {
 
 // GetHistory returns the current history
 func (m *Manager) GetHistory() []api.Station {
-	return m.history
+	historyCopy := make([]api.Station, len(m.history))
+	copy(historyCopy, m.history)
+	return historyCopy
 }
 
 // GetSessionCount returns the number of stations played in this session
