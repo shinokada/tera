@@ -985,7 +985,9 @@ func (m LuckyModel) viewPlaying() string {
 			} else {
 				msgStyle = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") {
+		} else if strings.Contains(m.saveMessage, "Already") ||
+			strings.Contains(m.saveMessage, "Paused") ||
+			strings.Contains(m.saveMessage, "Resumed") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -1385,7 +1387,12 @@ func (m LuckyModel) viewShufflePlaying() string {
 			} else {
 				msgStyle = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") || strings.Contains(m.saveMessage, "paused") || strings.Contains(m.saveMessage, "resumed") || strings.Contains(m.saveMessage, "stopped") {
+		} else if strings.Contains(m.saveMessage, "Already") ||
+			strings.Contains(m.saveMessage, "Paused") ||
+			strings.Contains(m.saveMessage, "Resumed") ||
+			strings.Contains(m.saveMessage, "paused") ||
+			strings.Contains(m.saveMessage, "resumed") ||
+			strings.Contains(m.saveMessage, "stopped") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
