@@ -10,6 +10,14 @@ import (
 	"github.com/shinokada/tera/internal/theme"
 )
 
+// Global header renderer instance (initialized in app.go)
+var globalHeaderRenderer *HeaderRenderer
+
+// InitializeHeaderRenderer initializes the global header renderer
+func InitializeHeaderRenderer() {
+	globalHeaderRenderer = NewHeaderRenderer()
+}
+
 // Color accessors - these call theme.Current() to get current theme values
 func colorCyan() lipgloss.Color   { t := theme.Current(); return t.PrimaryColor() }
 func colorBlue() lipgloss.Color   { t := theme.Current(); return t.SecondaryColor() }
@@ -141,19 +149,30 @@ func createStyledDelegate() list.DefaultDelegate {
 	return delegate
 }
 
-// wrapPageWithHeader wraps content with TERA header at the top and applies consistent padding
+// wrapPageWithHeader wraps content with header at the top and applies consistent padding
 func wrapPageWithHeader(content string) string {
 	var b strings.Builder
-	// Center TERA header with proper width - add top padding here
-	header := lipgloss.NewStyle().
-		Width(50).
-		Align(lipgloss.Center).
-		Foreground(colorBlue()). // Use blue color for TERA
-		Bold(true).
-		PaddingTop(1).
-		Render("TERA")
-	b.WriteString(header)
-	b.WriteString("\n")
+
+	// Render header using configuration
+	if globalHeaderRenderer != nil {
+		header := globalHeaderRenderer.Render()
+		if header != "" {
+			b.WriteString(header)
+			// Header should already have proper spacing/newlines from renderer
+		}
+	} else {
+		// Fallback to default if renderer not initialized
+		header := lipgloss.NewStyle().
+			Width(50).
+			Align(lipgloss.Center).
+			Foreground(colorBlue()).
+			Bold(true).
+			PaddingTop(1).
+			Render("TERA")
+		b.WriteString(header)
+		b.WriteString("\n")
+	}
+
 	b.WriteString(content)
 	// Use style without top padding since header already has it
 	return docStyleNoTopPadding().Render(b.String())
@@ -228,9 +247,17 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	}
 
 	// Calculate how many lines we've used so far
-	// TERA header (3 lines) + blank line (1) + title (1) + subtitle (1) + content lines + padding (2)
+	// First, count actual header lines from the renderer
+	var teraHeaderLines int
+	if globalHeaderRenderer != nil {
+		header := globalHeaderRenderer.Render()
+		teraHeaderLines = strings.Count(header, "\n")
+	} else {
+		teraHeaderLines = 3 // Default fallback
+	}
+	
+	// Count content lines
 	contentLines := strings.Count(b.String(), "\n")
-	teraHeaderLines := 3
 	totalUsed := teraHeaderLines + contentLines + 2 // +2 for padding
 
 	// Calculate remaining space for help text to be at bottom

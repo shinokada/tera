@@ -1,0 +1,83 @@
+# Sample TERA Appearance Configuration
+# Copy this to ~/.config/tera/appearance_config.yaml to test different header modes
+
+# Example 1: Default mode (shows "TERA")
+appearance:
+  header:
+    mode: "default"
+    custom_text: ""
+    ascii_art: ""
+    alignment: "center"
+    width: 50
+    color: "auto"
+    bold: true
+    padding_top: 1
+    padding_bottom: 0
+
+# Example 2: Custom text mode
+# appearance:
+#   header:
+#     mode: "text"
+#     custom_text: "🎵 My Radio Station 🎵"
+#     ascii_art: ""
+#     alignment: "center"
+#     width: 50
+#     color: "auto"
+#     bold: true
+#     padding_top: 1
+#     padding_bottom: 0
+
+# Example 3: ASCII art mode
+# appearance:
+#   header:
+#     mode: "ascii"
+#     custom_text: ""
+#     ascii_art: |
+#       ╔══════════════════════╗
+#       ║  🎵  MY STATION  🎵  ║
+#       ╚══════════════════════╝
+#     alignment: "center"
+#     width: 50
+#     color: "99"
+#     bold: false
+#     padding_top: 1
+#     padding_bottom: 0
+
+# Example 4: ASCII art mode with larger banner
+# appearance:
+#   header:
+#     mode: "ascii"
+#     custom_text: ""
+#     ascii_art: |
+#        ____      _    ____ ___ ___  
+#       |  _ \    / \  |  _ \_ _/ _ \ 
+#       | |_) |  / _ \ | | | | | | | |
+#       |  _ <  / ___ \| |_| | | |_| |
+#       |_| \_\/_/   \_\____/___\___/ 
+#     alignment: "center"
+#     width: 60
+#     color: "auto"
+#     bold: false
+#     padding_top: 0
+#     padding_bottom: 1
+
+# Example 5: No header mode (more screen space)
+# appearance:
+#   header:
+#     mode: "none"
+#     custom_text: ""
+#     ascii_art: ""
+#     alignment: "center"
+#     width: 50
+#     color: "auto"
+#     bold: true
+#     padding_top: 1
+#     padding_bottom: 0
+
+# Notes:
+# - mode: "default", "text", "ascii", or "none"
+# - alignment: "left", "center", or "right"
+# - color: "auto" (uses theme color) or any lipgloss color code (e.g., "99", "196")
+# - width: 10-120 characters
+# - custom_text: max 100 characters
+# - ascii_art: max 15 lines

@@ -49,6 +49,7 @@ type PlayModel struct {
 	listsNeedInit    bool                 // Flag to trigger list model initialization
 	stationsNeedInit bool                 // Flag to trigger station model initialization
 	helpModel        components.HelpModel // Help overlay
+	votedStations    *storage.VotedStations // Track voted stations
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -92,13 +93,22 @@ func (i stationListItem) Description() string {
 func NewPlayModel(favoritePath string) PlayModel {
 	// Note: favorites directory and My-favorites.json are created at app startup
 	// in app.go's NewApp() function, so no need to check here
+	
+	// Load voted stations
+	votedStations, err := storage.LoadVotedStations()
+	if err != nil {
+		// If we can't load, just create empty list
+		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+	}
+	
 	return PlayModel{
-		state:        playStateListSelection,
-		favoritePath: favoritePath,
-		lists:        []string{},
-		listItems:    []list.Item{},
-		player:       player.NewMPVPlayer(),
-		helpModel:    components.NewHelpModel(components.CreateFavoritesHelp()),
+		state:         playStateListSelection,
+		favoritePath:  favoritePath,
+		lists:         []string{},
+		listItems:     []list.Item{},
+		player:        player.NewMPVPlayer(),
+		helpModel:     components.NewHelpModel(components.CreateFavoritesHelp()),
+		votedStations: votedStations,
 	}
 }
 
@@ -669,10 +679,15 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 }
 
 // voteForStation votes for the currently playing station
-func (m PlayModel) voteForStation() tea.Cmd {
+func (m *PlayModel) voteForStation() tea.Cmd {
 	return func() tea.Msg {
 		if m.selectedStation == nil {
 			return voteFailedMsg{err: fmt.Errorf("no station selected")}
+		}
+
+		// Check if already voted
+		if m.votedStations.HasVoted(m.selectedStation.StationUUID) {
+			return voteFailedMsg{err: fmt.Errorf("already voted for this station (wait 10 minutes)")}
 		}
 
 		client := api.NewClient()
@@ -685,7 +700,11 @@ func (m PlayModel) voteForStation() tea.Cmd {
 			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
 		}
 
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
+		// Mark as voted
+		m.votedStations.AddVote(m.selectedStation.StationUUID)
+		_ = m.votedStations.Save()
+
+		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName(), stationUUID: m.selectedStation.StationUUID}
 	}
 }
 
@@ -752,6 +771,12 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(successStyle().Render("▶ Playing..."))
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
+	}
+
+	// Show voted status
+	if m.votedStations.HasVoted(m.selectedStation.StationUUID) {
+		content.WriteString("  ")
+		content.WriteString(successStyle().Render("✓ Voted"))
 	}
 
 	// Save message (if any)
@@ -935,7 +960,8 @@ type deleteFailedMsg struct {
 }
 
 type voteSuccessMsg struct {
-	message string
+	message     string
+	stationUUID string
 }
 
 type voteFailedMsg struct {
