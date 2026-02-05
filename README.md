@@ -153,6 +153,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 Access app configuration from the main menu (option 6):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
+- **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
 - **Connection Settings** - Auto-reconnect and buffering for unstable networks (4G/GPRS)
 - **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
 - **Search History** - View and clear your search history
@@ -160,6 +161,28 @@ Access app configuration from the main menu (option 6):
 - **About TERA** - See version, installation method, and update command
 
 The Settings menu automatically detects how you installed TERA (Homebrew, Go, Scoop, Winget, etc.) and shows the appropriate update command.
+
+### Appearance Settings
+
+Customize how the TERA header appears at the top of the application:
+
+**Header Modes:**
+- **Default** - Show "TERA" text (default)
+- **Text** - Display custom text
+- **ASCII** - Show custom ASCII art (max 15 lines)
+- **None** - Hide header completely
+
+**Customization Options:**
+- **Alignment** - Left, center, or right
+- **Width** - Header width (10-120 characters)
+- **Color** - Auto, hex code (#FF0000), or ANSI code (0-255)
+- **Bold** - Enable/disable bold text
+- **Padding** - Top and bottom spacing (0-5 lines)
+
+**Tips:**
+- Preview changes before saving
+- Use [TAAG](https://patorjk.com/software/taag/) or `figlet` to generate ASCII art
+- Settings stored in `~/.config/tera/appearance_config.yaml`
 
 ### Connection Settings
 
@@ -501,6 +524,7 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 ```
 ~/.config/tera/
 ├── theme.yaml              # Color and padding customization
+├── appearance_config.yaml  # Header customization (text, ASCII art, etc.)
 ├── connection_config.yaml  # Auto-reconnect and buffering settings
 ├── shuffle.yaml            # Shuffle mode settings
 ├── gist_metadata.json      # Your gist history
