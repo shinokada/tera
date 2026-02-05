@@ -27,14 +27,16 @@ builds:
 
 archives:
   - id: tera-archive
-    builds:
+    ids:
       - tera
-    format: tar.gz
+    formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     # Use zip for Windows
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - README.md
       - LICENSE
@@ -46,7 +48,7 @@ checksum:
 nfpms:
   - id: tera-nfpm
     package_name: tera
-    builds:
+    ids:
       - tera
     vendor: shinokada
     homepage: https://github.com/shinokada/tera
