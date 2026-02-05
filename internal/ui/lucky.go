@@ -581,6 +581,20 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
+	case " ":
+		// Toggle pause/play with space bar
+		if err := m.player.TogglePause(); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Pause failed: %v", err)
+			m.saveMessageTime = 150
+		} else {
+			if m.player.IsPaused() {
+				m.saveMessage = "⏸ Paused"
+			} else {
+				m.saveMessage = "▶ Resumed"
+			}
+			m.saveMessageTime = 120
+		}
+		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
@@ -971,7 +985,9 @@ func (m LuckyModel) viewPlaying() string {
 			} else {
 				msgStyle = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") {
+		} else if strings.Contains(m.saveMessage, "Already") ||
+			strings.Contains(m.saveMessage, "Paused") ||
+			strings.Contains(m.saveMessage, "Resumed") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -982,7 +998,7 @@ func (m LuckyModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
+		Help:    "Space: Pause/Play • f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
 	}, m.height)
 }
 
@@ -1226,6 +1242,20 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		// Vote for this station
 		return m, m.voteForStation()
+	case " ":
+		// Toggle pause/play with space bar
+		if err := m.player.TogglePause(); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Pause failed: %v", err)
+			m.saveMessageTime = 150
+		} else {
+			if m.player.IsPaused() {
+				m.saveMessage = "⏸ Paused"
+			} else {
+				m.saveMessage = "▶ Resumed"
+			}
+			m.saveMessageTime = 120
+		}
+		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
@@ -1357,7 +1387,12 @@ func (m LuckyModel) viewShufflePlaying() string {
 			} else {
 				msgStyle = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") || strings.Contains(m.saveMessage, "paused") || strings.Contains(m.saveMessage, "resumed") || strings.Contains(m.saveMessage, "stopped") {
+		} else if strings.Contains(m.saveMessage, "Already") ||
+			strings.Contains(m.saveMessage, "Paused") ||
+			strings.Contains(m.saveMessage, "Resumed") ||
+			strings.Contains(m.saveMessage, "paused") ||
+			strings.Contains(m.saveMessage, "resumed") ||
+			strings.Contains(m.saveMessage, "stopped") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -1366,7 +1401,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
+	help := "Space: Pause/Play • f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,

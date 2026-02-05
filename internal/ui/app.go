@@ -26,24 +26,26 @@ const (
 	screenGist
 	screenSettings
 	screenShuffleSettings
+	screenConnectionSettings
 )
 
 // Main menu configuration
 const mainMenuItemCount = 6
 
 type App struct {
-	screen                Screen
-	width                 int
-	height                int
-	mainMenuList          list.Model
-	playScreen            PlayModel
-	searchScreen          SearchModel
-	listManagementScreen  ListManagementModel
-	luckyScreen           LuckyModel
-	gistScreen            GistModel
-	settingsScreen        SettingsModel
-	shuffleSettingsScreen ShuffleSettingsModel
-	apiClient             *api.Client
+	screen                   Screen
+	width                    int
+	height                   int
+	mainMenuList             list.Model
+	playScreen               PlayModel
+	searchScreen             SearchModel
+	listManagementScreen     ListManagementModel
+	luckyScreen              LuckyModel
+	gistScreen               GistModel
+	settingsScreen           SettingsModel
+	shuffleSettingsScreen    ShuffleSettingsModel
+	connectionSettingsScreen ConnectionSettingsModel
+	apiClient                *api.Client
 	favoritePath          string
 	quickFavorites        []api.Station
 	quickFavPlayer        *player.MPVPlayer
@@ -267,6 +269,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.shuffleSettingsScreen.height = a.height
 			}
 			return a, a.shuffleSettingsScreen.Init()
+		case screenConnectionSettings:
+			a.connectionSettingsScreen = NewConnectionSettingsModel()
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.connectionSettingsScreen.width = a.width
+				a.connectionSettingsScreen.height = a.height
+			}
+			return a, a.connectionSettingsScreen.Init()
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
@@ -371,6 +381,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var m tea.Model
 		m, cmd = a.shuffleSettingsScreen.Update(msg)
 		a.shuffleSettingsScreen = m.(ShuffleSettingsModel)
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenConnectionSettings:
+		var m tea.Model
+		m, cmd = a.connectionSettingsScreen.Update(msg)
+		a.connectionSettingsScreen = m.(ConnectionSettingsModel)
 
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
@@ -675,6 +695,8 @@ func (a App) View() string {
 		return a.settingsScreen.View()
 	case screenShuffleSettings:
 		return a.shuffleSettingsScreen.View()
+	case screenConnectionSettings:
+		return a.connectionSettingsScreen.View()
 	}
 	return "Unknown screen"
 }

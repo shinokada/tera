@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/storage"
 )
 
 // MPVPlayer manages the MPV process for playing radio streams
@@ -72,22 +73,49 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	// Remove any existing socket file
 	_ = os.Remove(p.socketPath)
 
-	// Create mpv command with appropriate flags
-	// --no-video: audio only
-	// --no-terminal: don't take over terminal
-	// --really-quiet: minimal output
-	// --no-cache: no buffering for live streams
-	// --volume: set initial volume
-	// --input-ipc-server: enable IPC for runtime control
-	p.cmd = exec.Command("mpv",
+	// Load connection configuration
+	connConfig, err := storage.LoadConnectionConfig()
+	if err != nil {
+		// Fall back to defaults on error
+		connConfig = storage.DefaultConnectionConfig()
+	}
+
+	// Build mpv arguments
+	args := []string{
 		"--no-video",
 		"--no-terminal",
 		"--really-quiet",
-		"--no-cache",
 		fmt.Sprintf("--volume=%d", volumeToUse),
 		fmt.Sprintf("--input-ipc-server=%s", p.socketPath),
-		station.URLResolved,
-	)
+	}
+
+	// Add connection-related flags based on config
+	if connConfig.AutoReconnect {
+		// Enable force loop to retry after stream drops
+		args = append(args, "--loop-playlist=force")
+
+		// FFmpeg reconnect flags for network-level reconnection
+		args = append(args,
+			fmt.Sprintf("--stream-lavf-o=reconnect_streamed=1,reconnect_delay_max=%d", connConfig.ReconnectDelay),
+		)
+	}
+
+	// Add caching/buffering based on config
+	if connConfig.StreamBufferMB > 0 {
+		args = append(args,
+			"--cache=yes",
+			fmt.Sprintf("--demuxer-max-bytes=%dM", connConfig.StreamBufferMB),
+		)
+	} else {
+		// No buffering (original behavior)
+		args = append(args, "--no-cache")
+	}
+
+	// Add URL as final argument
+	args = append(args, station.URLResolved)
+
+	// Create mpv command
+	p.cmd = exec.Command("mpv", args...)
 
 	// Update current volume
 	p.volume = volumeToUse

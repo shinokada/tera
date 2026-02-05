@@ -42,3 +42,19 @@ func DefaultShuffleConfig() ShuffleConfig {
 		MaxHistory:      5,
 	}
 }
+
+// ConnectionConfig represents connection/streaming configuration
+type ConnectionConfig struct {
+	AutoReconnect  bool `yaml:"auto_reconnect"`
+	ReconnectDelay int  `yaml:"reconnect_delay"`  // in seconds
+	StreamBufferMB int  `yaml:"stream_buffer_mb"` // in megabytes
+}
+
+// DefaultConnectionConfig returns default connection configuration
+func DefaultConnectionConfig() ConnectionConfig {
+	return ConnectionConfig{
+		AutoReconnect:  true, // Enable by default for better UX
+		ReconnectDelay: 5,    // 5 seconds between retries
+		StreamBufferMB: 50,   // 50MB buffer
+	}
+}

@@ -46,9 +46,9 @@ func TestSettingsMenuNavigation(t *testing.T) {
 		expectedState settingsState
 	}{
 		{"Press 1 for Theme", "1", settingsStateTheme},
-		{"Press 3 for History", "3", settingsStateHistory},
-		{"Press 4 for Updates", "4", settingsStateUpdates},
-		{"Press 5 for About", "5", settingsStateAbout},
+		{"Press 4 for History", "4", settingsStateHistory},
+		{"Press 5 for Updates", "5", settingsStateUpdates},
+		{"Press 6 for About", "6", settingsStateAbout},
 	}
 
 	for _, tt := range tests {
@@ -409,7 +409,7 @@ func TestVersionCheckMsgHandling(t *testing.T) {
 	}
 }
 
-func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
+func TestSettingsMenuNavigateToConnectionSettings(t *testing.T) {
 	m := NewSettingsModel(t.TempDir())
 	m.width = 80
 	m.height = 24
@@ -417,8 +417,42 @@ func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")}
 	_, cmd := m.Update(msg)
 
+	// Should return a command that produces navigateMsg to screenConnectionSettings
+	if cmd == nil {
+		t.Fatal("Expected a command to be returned for connection settings navigation")
+	}
+
+	// Execute the command and verify the message
+	resultMsg := cmd()
+	navMsg, ok := resultMsg.(navigateMsg)
+	if !ok {
+		t.Fatalf("Expected navigateMsg, got %T", resultMsg)
+	}
+	if navMsg.screen != screenConnectionSettings {
+		t.Errorf("Expected navigation to screenConnectionSettings, got %v", navMsg.screen)
+	}
+}
+
+func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
+	m := NewSettingsModel(t.TempDir())
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")}
+	_, cmd := m.Update(msg)
+
 	// Should return a command that produces navigateMsg to screenShuffleSettings
 	if cmd == nil {
-		t.Error("Expected a command to be returned for shuffle settings navigation")
+		t.Fatal("Expected a command to be returned for shuffle settings navigation")
+	}
+
+	// Execute the command and verify the message
+	resultMsg := cmd()
+	navMsg, ok := resultMsg.(navigateMsg)
+	if !ok {
+		t.Fatalf("Expected navigateMsg, got %T", resultMsg)
+	}
+	if navMsg.screen != screenShuffleSettings {
+		t.Errorf("Expected navigation to screenShuffleSettings, got %v", navMsg.screen)
 	}
 }
