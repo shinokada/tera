@@ -12,6 +12,33 @@ import (
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
+// Shared configuration for reconnect delay options
+var reconnectDelayOptions = []struct {
+	seconds int
+	label   string
+}{
+	{1, "1 second (Fastest)"},
+	{3, "3 seconds"},
+	{5, "5 seconds (Default)"},
+	{10, "10 seconds"},
+	{15, "15 seconds"},
+	{30, "30 seconds (Slowest)"},
+}
+
+// Shared configuration for stream buffer options
+var streamBufferOptions = []struct {
+	mb    int
+	label string
+}{
+	{0, "No buffering (Original behavior)"},
+	{10, "10 MB (Minimal)"},
+	{25, "25 MB (Light)"},
+	{50, "50 MB (Default)"},
+	{100, "100 MB (Heavy)"},
+	{150, "150 MB (Maximum)"},
+	{200, "200 MB (Extreme)"},
+}
+
 // connectionSettingsState represents the current state in connection settings
 type connectionSettingsState int
 
@@ -182,9 +209,8 @@ func (m ConnectionSettingsModel) updateDelay(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	m.delayList = newList
 
 	if selected >= 0 {
-		delays := []int{1, 3, 5, 10, 15, 30}
-		if selected < len(delays) {
-			m.config.ReconnectDelay = delays[selected]
+		if selected < len(reconnectDelayOptions) {
+			m.config.ReconnectDelay = reconnectDelayOptions[selected].seconds
 			m.saveConfig()
 			m.rebuildMenuList()
 			m.buildDelayList()
@@ -192,7 +218,7 @@ func (m ConnectionSettingsModel) updateDelay(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.message = fmt.Sprintf("✓ Reconnect delay set to %d seconds", m.config.ReconnectDelay)
 			m.messageIsSuccess = true
 			m.messageTime = 180
-		} else if selected == len(delays) {
+		} else if selected == len(reconnectDelayOptions) {
 			// Back option
 			m.state = connectionSettingsMenu
 		}
@@ -235,9 +261,8 @@ func (m ConnectionSettingsModel) updateBuffer(msg tea.KeyMsg) (tea.Model, tea.Cm
 	m.bufferList = newList
 
 	if selected >= 0 {
-		buffers := []int{0, 10, 25, 50, 100, 150, 200}
-		if selected < len(buffers) {
-			m.config.StreamBufferMB = buffers[selected]
+		if selected < len(streamBufferOptions) {
+			m.config.StreamBufferMB = streamBufferOptions[selected].mb
 			m.saveConfig()
 			m.rebuildMenuList()
 			m.buildBufferList()
@@ -249,7 +274,7 @@ func (m ConnectionSettingsModel) updateBuffer(msg tea.KeyMsg) (tea.Model, tea.Cm
 			}
 			m.messageIsSuccess = true
 			m.messageTime = 180
-		} else if selected == len(buffers) {
+		} else if selected == len(streamBufferOptions) {
 			// Back option
 			m.state = connectionSettingsMenu
 		}
@@ -315,20 +340,8 @@ func (m *ConnectionSettingsModel) rebuildMenuList() {
 
 // buildDelayList builds the reconnect delay selection list
 func (m *ConnectionSettingsModel) buildDelayList() {
-	delays := []struct {
-		seconds int
-		label   string
-	}{
-		{1, "1 second (Fastest)"},
-		{3, "3 seconds"},
-		{5, "5 seconds (Default)"},
-		{10, "10 seconds"},
-		{15, "15 seconds"},
-		{30, "30 seconds (Slowest)"},
-	}
-
 	menuItems := []components.MenuItem{}
-	for i, delay := range delays {
+	for i, delay := range reconnectDelayOptions {
 		shortcut := fmt.Sprintf("%d", i+1)
 		desc := ""
 		if delay.seconds == m.config.ReconnectDelay {
@@ -336,28 +349,15 @@ func (m *ConnectionSettingsModel) buildDelayList() {
 		}
 		menuItems = append(menuItems, components.NewMenuItem(delay.label, desc, shortcut))
 	}
-	menuItems = append(menuItems, components.NewMenuItem("Back", "", "7"))
+	menuItems = append(menuItems, components.NewMenuItem("Back", "", fmt.Sprintf("%d", len(reconnectDelayOptions)+1)))
 
 	m.delayList = components.CreateMenu(menuItems, "", 50, len(menuItems)+2)
 }
 
 // buildBufferList builds the stream buffer selection list
 func (m *ConnectionSettingsModel) buildBufferList() {
-	buffers := []struct {
-		mb    int
-		label string
-	}{
-		{0, "No buffering (Original behavior)"},
-		{10, "10 MB (Minimal)"},
-		{25, "25 MB (Light)"},
-		{50, "50 MB (Default)"},
-		{100, "100 MB (Heavy)"},
-		{150, "150 MB (Maximum)"},
-		{200, "200 MB (Extreme)"},
-	}
-
 	menuItems := []components.MenuItem{}
-	for i, buffer := range buffers {
+	for i, buffer := range streamBufferOptions {
 		shortcut := fmt.Sprintf("%d", i+1)
 		desc := ""
 		if buffer.mb == m.config.StreamBufferMB {
@@ -365,7 +365,7 @@ func (m *ConnectionSettingsModel) buildBufferList() {
 		}
 		menuItems = append(menuItems, components.NewMenuItem(buffer.label, desc, shortcut))
 	}
-	menuItems = append(menuItems, components.NewMenuItem("Back", "", "8"))
+	menuItems = append(menuItems, components.NewMenuItem("Back", "", fmt.Sprintf("%d", len(streamBufferOptions)+1)))
 
 	m.bufferList = components.CreateMenu(menuItems, "", 50, len(menuItems)+2)
 }
@@ -458,7 +458,7 @@ func (m ConnectionSettingsModel) viewDelay() string {
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-8: Shortcut • Esc: Back • 0: Main Menu",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-7: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
 }
 
@@ -478,7 +478,11 @@ func (m ConnectionSettingsModel) viewBuffer() string {
 
 	content.WriteString(subtitleStyle().Render("Select stream buffer size:"))
 	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("  Current: %d MB\n", m.config.StreamBufferMB))
+	if m.config.StreamBufferMB == 0 {
+		content.WriteString("  Current: Disabled\n")
+	} else {
+		content.WriteString(fmt.Sprintf("  Current: %d MB\n", m.config.StreamBufferMB))
+	}
 	content.WriteString("\n")
 
 	// Buffer list

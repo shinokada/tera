@@ -419,7 +419,17 @@ func TestSettingsMenuNavigateToConnectionSettings(t *testing.T) {
 
 	// Should return a command that produces navigateMsg to screenConnectionSettings
 	if cmd == nil {
-		t.Error("Expected a command to be returned for connection settings navigation")
+		t.Fatal("Expected a command to be returned for connection settings navigation")
+	}
+
+	// Execute the command and verify the message
+	resultMsg := cmd()
+	navMsg, ok := resultMsg.(navigateMsg)
+	if !ok {
+		t.Fatalf("Expected navigateMsg, got %T", resultMsg)
+	}
+	if navMsg.screen != screenConnectionSettings {
+		t.Errorf("Expected navigation to screenConnectionSettings, got %v", navMsg.screen)
 	}
 }
 
@@ -433,6 +443,16 @@ func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 
 	// Should return a command that produces navigateMsg to screenShuffleSettings
 	if cmd == nil {
-		t.Error("Expected a command to be returned for shuffle settings navigation")
+		t.Fatal("Expected a command to be returned for shuffle settings navigation")
+	}
+
+	// Execute the command and verify the message
+	resultMsg := cmd()
+	navMsg, ok := resultMsg.(navigateMsg)
+	if !ok {
+		t.Fatalf("Expected navigateMsg, got %T", resultMsg)
+	}
+	if navMsg.screen != screenShuffleSettings {
+		t.Errorf("Expected navigation to screenShuffleSettings, got %v", navMsg.screen)
 	}
 }
