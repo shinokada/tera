@@ -66,6 +66,26 @@ func (h *HeaderRenderer) renderASCII() string {
 	return h.styleASCII(h.config.Header.AsciiArt)
 }
 
+// applyAlignment sets the alignment on a style based on config
+func (h *HeaderRenderer) applyAlignment(style lipgloss.Style) lipgloss.Style {
+	switch h.config.Header.Alignment {
+	case "left":
+		return style.Align(lipgloss.Left)
+	case "right":
+		return style.Align(lipgloss.Right)
+	default:
+		return style.Align(lipgloss.Center)
+	}
+}
+
+// applyColor sets the foreground color on a style based on config
+func (h *HeaderRenderer) applyColor(style lipgloss.Style) lipgloss.Style {
+	if h.config.Header.Color == "auto" {
+		return style.Foreground(colorBlue())
+	}
+	return style.Foreground(lipgloss.Color(h.config.Header.Color))
+}
+
 // createBaseStyle creates the base style for text headers
 func (h *HeaderRenderer) createBaseStyle() lipgloss.Style {
 	style := lipgloss.NewStyle().
@@ -73,22 +93,8 @@ func (h *HeaderRenderer) createBaseStyle() lipgloss.Style {
 		PaddingTop(h.config.Header.PaddingTop).
 		PaddingBottom(h.config.Header.PaddingBottom)
 
-	// Alignment
-	switch h.config.Header.Alignment {
-	case "left":
-		style = style.Align(lipgloss.Left)
-	case "right":
-		style = style.Align(lipgloss.Right)
-	default:
-		style = style.Align(lipgloss.Center)
-	}
-
-	// Color
-	if h.config.Header.Color == "auto" {
-		style = style.Foreground(colorBlue())
-	} else {
-		style = style.Foreground(lipgloss.Color(h.config.Header.Color))
-	}
+	style = h.applyAlignment(style)
+	style = h.applyColor(style)
 
 	// Bold
 	if h.config.Header.Bold {
@@ -104,25 +110,9 @@ func (h *HeaderRenderer) styleASCII(art string) string {
 	art = strings.TrimSpace(art)
 	
 	// Create style for each line
-	lineStyle := lipgloss.NewStyle().
-		Width(h.config.Header.Width)
-
-	// Alignment
-	switch h.config.Header.Alignment {
-	case "left":
-		lineStyle = lineStyle.Align(lipgloss.Left)
-	case "right":
-		lineStyle = lineStyle.Align(lipgloss.Right)
-	default:
-		lineStyle = lineStyle.Align(lipgloss.Center)
-	}
-
-	// Color
-	if h.config.Header.Color == "auto" {
-		lineStyle = lineStyle.Foreground(colorBlue())
-	} else {
-		lineStyle = lineStyle.Foreground(lipgloss.Color(h.config.Header.Color))
-	}
+	lineStyle := lipgloss.NewStyle().Width(h.config.Header.Width)
+	lineStyle = h.applyAlignment(lineStyle)
+	lineStyle = h.applyColor(lineStyle)
 
 	// Split into lines and style each
 	lines := strings.Split(art, "\n")

@@ -456,3 +456,27 @@ func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 		t.Errorf("Expected navigation to screenShuffleSettings, got %v", navMsg.screen)
 	}
 }
+
+func TestSettingsMenuNavigateToAppearanceSettings(t *testing.T) {
+	m := NewSettingsModel(t.TempDir())
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")}
+	_, cmd := m.Update(msg)
+
+	// Should return a command that produces navigateMsg to screenAppearanceSettings
+	if cmd == nil {
+		t.Fatal("Expected a command to be returned for appearance settings navigation")
+	}
+
+	// Execute the command and verify the message
+	resultMsg := cmd()
+	navMsg, ok := resultMsg.(navigateMsg)
+	if !ok {
+		t.Fatalf("Expected navigateMsg, got %T", resultMsg)
+	}
+	if navMsg.screen != screenAppearanceSettings {
+		t.Errorf("Expected navigation to screenAppearanceSettings, got %v", navMsg.screen)
+	}
+}

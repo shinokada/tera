@@ -73,11 +73,11 @@ func (c *AppearanceConfig) Validate() error {
 		h.CustomText = h.CustomText[:100]
 	}
 
-	// Validate ASCII art line count
+	// Validate ASCII art line count - truncate if exceeds limit
 	if h.Mode == HeaderModeASCII && h.AsciiArt != "" {
 		lines := strings.Split(h.AsciiArt, "\n")
 		if len(lines) > 15 {
-			return fmt.Errorf("ASCII art exceeds 15 lines")
+			h.AsciiArt = strings.Join(lines[:15], "\n")
 		}
 	}
 

@@ -204,12 +204,18 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (AppearanceSettingsModel, t
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
-	// Decrease message timer
-	if m.messageTime > 0 {
-		m.messageTime--
-		if m.messageTime == 0 {
-			m.message = ""
+	switch msg.(type) {
+	case tickMsg:
+		// Decrease message timer
+		if m.messageTime > 0 {
+			m.messageTime--
+			if m.messageTime == 0 {
+				m.message = ""
+			} else {
+				return m, tickEverySecond()
+			}
 		}
+		return m, nil
 	}
 
 	switch msg := msg.(type) {
@@ -333,7 +339,6 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 		switch shortcut {
 		case "1": // Header Mode
 			m.state = appearanceStateModeSelect
-			m.textInput.Focus()
 
 		case "2": // Custom Text
 			m.state = appearanceStateTextInput
@@ -354,6 +359,7 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 			m.config.Header.Bold = !m.config.Header.Bold
 			m.initMenu() // Refresh menu
 			m.showMessage("Bold toggled", true)
+			return *m, tickEverySecond()
 
 		case "7": // Padding
 			m.state = appearanceStatePaddingInput
@@ -381,6 +387,7 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 			m.paddingTopInput.SetValue(fmt.Sprintf("%d", m.config.Header.PaddingTop))
 			m.paddingBottomInput.SetValue(fmt.Sprintf("%d", m.config.Header.PaddingBottom))
 			m.showMessage("Reset to defaults", true)
+			return *m, tickEverySecond()
 
 		case "0": // Back
 			return *m, func() tea.Msg {
@@ -395,6 +402,7 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 			m.initMenu()
 			m.state = appearanceStateMenu
 			m.showMessage(fmt.Sprintf("Mode set to: %s", m.config.Header.Mode), true)
+			return *m, tickEverySecond()
 		}
 
 	case appearanceStateTextInput:
@@ -402,12 +410,14 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 		m.initMenu()
 		m.state = appearanceStateMenu
 		m.showMessage("Custom text updated", true)
+		return *m, tickEverySecond()
 
 	case appearanceStateAsciiInput:
 		m.config.Header.AsciiArt = m.asciiInput.Value()
 		m.initMenu()
 		m.state = appearanceStateMenu
 		m.showMessage("ASCII art updated", true)
+		return *m, tickEverySecond()
 
 	case appearanceStateAlignmentSelect:
 		selectedItem := m.alignmentList.SelectedItem()
@@ -416,6 +426,7 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 			m.initMenu()
 			m.state = appearanceStateMenu
 			m.showMessage(fmt.Sprintf("Alignment set to: %s", m.config.Header.Alignment), true)
+			return *m, tickEverySecond()
 		}
 
 	case appearanceStateWidthInput:
@@ -423,11 +434,13 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 		_, err := fmt.Sscanf(m.widthInput.Value(), "%d", &width)
 		if err != nil || width < 10 || width > 120 {
 			m.showMessage("Width must be a number between 10-120", false)
+			return *m, tickEverySecond()
 		} else {
 			m.config.Header.Width = width
 			m.initMenu()
 			m.state = appearanceStateMenu
 			m.showMessage(fmt.Sprintf("Width set to: %d", width), true)
+			return *m, tickEverySecond()
 		}
 
 	case appearanceStateColorInput:
@@ -435,6 +448,7 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 		m.initMenu()
 		m.state = appearanceStateMenu
 		m.showMessage("Color updated", true)
+		return *m, tickEverySecond()
 
 	case appearanceStatePaddingInput:
 		// Validate both padding values
@@ -445,14 +459,17 @@ func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cm
 
 		if errTop != nil || paddingTop < 0 || paddingTop > 5 {
 			m.showMessage("Padding top must be a number between 0-5", false)
+			return *m, tickEverySecond()
 		} else if errBottom != nil || paddingBottom < 0 || paddingBottom > 5 {
 			m.showMessage("Padding bottom must be a number between 0-5", false)
+			return *m, tickEverySecond()
 		} else {
 			m.config.Header.PaddingTop = paddingTop
 			m.config.Header.PaddingBottom = paddingBottom
 			m.initMenu()
 			m.state = appearanceStateMenu
 			m.showMessage(fmt.Sprintf("Padding updated: Top=%d, Bottom=%d", paddingTop, paddingBottom), true)
+			return *m, tickEverySecond()
 		}
 
 	case appearanceStatePreview:
@@ -490,7 +507,7 @@ func (m *AppearanceSettingsModel) saveConfig() (AppearanceSettingsModel, tea.Cmd
 func (m *AppearanceSettingsModel) showMessage(msg string, success bool) {
 	m.message = msg
 	m.messageSuccess = success
-	m.messageTime = 120 // Show for ~2 seconds
+	m.messageTime = 2 // Show for 2 seconds
 }
 
 func (m AppearanceSettingsModel) View() string {
