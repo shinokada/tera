@@ -80,18 +80,15 @@ func LoadVotedStations() (*VotedStations, error) {
 	return &voted, nil
 }
 
-// SaveVotedStations saves the list of voted stations
-func (v *VotedStations) Save() error {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-
+// saveLocked persists state to disk. Caller must hold v.mu.
+func (v *VotedStations) saveLocked() error {
 	path, err := GetVotedStationsPath()
 	if err != nil {
 		return err
 	}
 
-	// Ensure config directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	// Ensure config directory exists (0700 for security)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -113,9 +110,18 @@ func (v *VotedStations) Save() error {
 	return nil
 }
 
+// Save saves the list of voted stations (public API - acquires lock)
+func (v *VotedStations) Save() error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.saveLocked()
+}
+
 // AddVote adds a vote for a station or updates the timestamp if already voted
 func (v *VotedStations) AddVote(stationUUID string) error {
 	v.mu.Lock()
+	defer v.mu.Unlock()
+	
 	// Update existing vote timestamp if found
 	found := false
 	for i := 0; i < len(v.Stations); i++ {
@@ -133,10 +139,9 @@ func (v *VotedStations) AddVote(stationUUID string) error {
 			VotedAt:     time.Now(),
 		})
 	}
-	v.mu.Unlock()
 
-	// Persist changes - return error so caller can handle it
-	return v.Save()
+	// Persist changes using saveLocked (we already hold the lock)
+	return v.saveLocked()
 }
 
 // HasVoted checks if a station has been voted for (permanent record)
@@ -186,11 +191,12 @@ func (v *VotedStations) CleanupOldVotes(olderThan time.Duration) {
 }
 
 // ClearAll removes all vote history
-func (v *VotedStations) ClearAll() {
+func (v *VotedStations) ClearAll() error {
 	v.mu.Lock()
+	defer v.mu.Unlock()
+	
 	v.Stations = []VotedStation{}
-	v.mu.Unlock()
-	_ = v.Save()
+	return v.saveLocked()
 }
 
 // RemoveVote removes a specific station from vote history
@@ -208,8 +214,8 @@ func (v *VotedStations) RemoveVote(stationUUID string) error {
 	}
 	
 	if found {
-		// Unlock will be deferred, so we can safely save
-		return v.Save()
+		// Persist using saveLocked (we already hold the lock)
+		return v.saveLocked()
 	}
 	return nil
 }

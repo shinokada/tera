@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
@@ -11,10 +12,15 @@ import (
 )
 
 // Global header renderer instance (initialized in app.go)
-var globalHeaderRenderer *HeaderRenderer
+var (
+	globalHeaderRenderer *HeaderRenderer
+	headerRendererMu     sync.RWMutex
+)
 
 // InitializeHeaderRenderer initializes the global header renderer
 func InitializeHeaderRenderer() {
+	headerRendererMu.Lock()
+	defer headerRendererMu.Unlock()
 	globalHeaderRenderer = NewHeaderRenderer()
 }
 
@@ -149,10 +155,14 @@ func createStyledDelegate() list.DefaultDelegate {
 	return delegate
 }
 
-// renderHeader renders the header with fallback
+// renderHeader renders the header with fallback (thread-safe)
 func renderHeader() string {
-	if globalHeaderRenderer != nil {
-		return globalHeaderRenderer.Render()
+	headerRendererMu.RLock()
+	renderer := globalHeaderRenderer
+	headerRendererMu.RUnlock()
+	
+	if renderer != nil {
+		return renderer.Render()
 	}
 	// Fallback to default if renderer not initialized
 	return lipgloss.NewStyle().
@@ -254,7 +264,8 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 
 	// Count content lines
 	contentLines := strings.Count(b.String(), "\n")
-	totalUsed := teraHeaderLines + contentLines + 2 // +2 for padding
+	p := getPadding()
+	totalUsed := teraHeaderLines + contentLines + p.PageVertical // padding from docStyleNoTopPadding
 
 	// Calculate remaining space for help text to be at bottom
 	// Reserve 1 line for help text itself

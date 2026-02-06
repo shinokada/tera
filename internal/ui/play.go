@@ -252,7 +252,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		return m, ticksEverySecond()
+		// Only start tick if not already running
+		if m.saveMessageTime == 0 {
+			return m, ticksEverySecond()
+		}
+		return m, nil
 
 	case playbackStoppedMsg:
 		// Playback stopped
@@ -288,15 +292,23 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 150
 		// Start tick to show the message and trigger UI refresh to show voted status
-		return m, ticksEverySecond()
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 150
 		// Start tick to show the message and trigger UI refresh
-		return m, ticksEverySecond()
+		if startTick {
+			return m, ticksEverySecond()
+		}
+		return m, nil
 
 	case listsLoadedMsg:
 		m.lists = msg.lists
