@@ -63,8 +63,8 @@ func saveAllGists(gists []*GistMetadata) error {
 		return err
 	}
 
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	// Ensure directory exists (0700 for security - may contain sensitive tokens)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 

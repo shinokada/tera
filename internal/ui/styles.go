@@ -149,28 +149,30 @@ func createStyledDelegate() list.DefaultDelegate {
 	return delegate
 }
 
+// renderHeader renders the header with fallback
+func renderHeader() string {
+	if globalHeaderRenderer != nil {
+		return globalHeaderRenderer.Render()
+	}
+	// Fallback to default if renderer not initialized
+	return lipgloss.NewStyle().
+		Width(50).
+		Align(lipgloss.Center).
+		Foreground(colorBlue()).
+		Bold(true).
+		PaddingTop(1).
+		Render("TERA") + "\n"
+}
+
 // wrapPageWithHeader wraps content with header at the top and applies consistent padding
 func wrapPageWithHeader(content string) string {
 	var b strings.Builder
 
-	// Render header using configuration
-	if globalHeaderRenderer != nil {
-		header := globalHeaderRenderer.Render()
-		if header != "" {
-			b.WriteString(header)
-			// Header should already have proper spacing/newlines from renderer
-		}
-	} else {
-		// Fallback to default if renderer not initialized
-		header := lipgloss.NewStyle().
-			Width(50).
-			Align(lipgloss.Center).
-			Foreground(colorBlue()).
-			Bold(true).
-			PaddingTop(1).
-			Render("TERA")
+	// Render header using helper
+	header := renderHeader()
+	if header != "" {
 		b.WriteString(header)
-		b.WriteString("\n")
+		// Header should already have proper spacing/newlines from renderer
 	}
 
 	b.WriteString(content)
@@ -246,21 +248,9 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 		b.WriteString(layout.Content)
 	}
 
-	// First, get the rendered header to avoid double rendering
-	header := ""
-	teraHeaderLines := 3 // Default fallback
-	if globalHeaderRenderer != nil {
-		header = globalHeaderRenderer.Render()
-		teraHeaderLines = strings.Count(header, "\n")
-	} else {
-		header = lipgloss.NewStyle().
-			Width(50).
-			Align(lipgloss.Center).
-			Foreground(colorBlue()).
-			Bold(true).
-			PaddingTop(1).
-			Render("TERA") + "\n"
-	}
+	// Get the rendered header using helper
+	header := renderHeader()
+	teraHeaderLines := strings.Count(header, "\n")
 
 	// Count content lines
 	contentLines := strings.Count(b.String(), "\n")

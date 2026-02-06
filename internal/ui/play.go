@@ -41,6 +41,7 @@ type PlayModel struct {
 	selectedStation  *api.Station
 	stationToDelete  *api.Station
 	player           *player.MPVPlayer
+	apiClient        *api.Client            // Reusable API client
 	saveMessage      string
 	saveMessageTime  int // frames to show message
 	width            int
@@ -108,6 +109,7 @@ func NewPlayModel(favoritePath string) PlayModel {
 		lists:         []string{},
 		listItems:     []list.Item{},
 		player:        player.NewMPVPlayer(),
+		apiClient:     api.NewClient(),
 		helpModel:     components.NewHelpModel(components.CreateFavoritesHelp()),
 		votedStations: votedStations,
 	}
@@ -683,7 +685,7 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 
 // voteForStation votes for the currently playing station
 func (m *PlayModel) voteForStation() tea.Cmd {
-	return components.ExecuteVote(m.selectedStation, m.votedStations, api.NewClient())
+	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
 // View renders the play screen

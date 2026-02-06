@@ -64,6 +64,11 @@ func LoadVotedStations() (*VotedStations, error) {
 		return nil, fmt.Errorf("failed to read voted stations: %w", err)
 	}
 
+	// Handle empty file gracefully
+	if len(data) == 0 {
+		return &VotedStations{Stations: []VotedStation{}}, nil
+	}
+
 	var voted VotedStations
 	if err := json.Unmarshal(data, &voted); err != nil {
 		return nil, fmt.Errorf("failed to parse voted stations: %w", err)
@@ -109,7 +114,7 @@ func (v *VotedStations) Save() error {
 }
 
 // AddVote adds a vote for a station or updates the timestamp if already voted
-func (v *VotedStations) AddVote(stationUUID string) {
+func (v *VotedStations) AddVote(stationUUID string) error {
 	v.mu.Lock()
 	// Update existing vote timestamp if found
 	found := false
@@ -130,8 +135,8 @@ func (v *VotedStations) AddVote(stationUUID string) {
 	}
 	v.mu.Unlock()
 
-	// Persist changes
-	_ = v.Save()
+	// Persist changes - return error so caller can handle it
+	return v.Save()
 }
 
 // HasVoted checks if a station has been voted for (permanent record)
@@ -189,15 +194,22 @@ func (v *VotedStations) ClearAll() {
 }
 
 // RemoveVote removes a specific station from vote history
-func (v *VotedStations) RemoveVote(stationUUID string) {
+func (v *VotedStations) RemoveVote(stationUUID string) error {
 	v.mu.Lock()
+	defer v.mu.Unlock()
+	
+	found := false
 	for i := 0; i < len(v.Stations); i++ {
 		if v.Stations[i].StationUUID == stationUUID {
 			v.Stations = append(v.Stations[:i], v.Stations[i+1:]...)
-			v.mu.Unlock()
-			_ = v.Save()
-			return
+			found = true
+			break
 		}
 	}
-	v.mu.Unlock()
+	
+	if found {
+		// Unlock will be deferred, so we can safely save
+		return v.Save()
+	}
+	return nil
 }

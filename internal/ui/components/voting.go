@@ -54,8 +54,10 @@ func ExecuteVote(station *api.Station, votedStations *storage.VotedStations, api
 			if strings.Contains(errMsgLower, "too often") ||
 				strings.Contains(errMsgLower, "already voted") ||
 				strings.Contains(errMsgLower, "voteerror") {
-				votedStations.AddVote(station.StationUUID)
-				// AddVote already calls Save() in the new implementation
+				if err := votedStations.AddVote(station.StationUUID); err != nil {
+					// Failed to save vote locally - return error
+					return VoteFailedMsg{Err: fmt.Errorf("failed to record vote: %w", err)}
+				}
 				return VoteSuccessMsg{Message: "You voted", StationUUID: station.StationUUID}
 			}
 
@@ -66,7 +68,10 @@ func ExecuteVote(station *api.Station, votedStations *storage.VotedStations, api
 		}
 
 		// Successful vote - mark as voted
-		votedStations.AddVote(station.StationUUID)
+		if err := votedStations.AddVote(station.StationUUID); err != nil {
+			// API vote succeeded but local save failed - inform user
+			return VoteFailedMsg{Err: fmt.Errorf("vote succeeded but failed to save locally: %w", err)}
+		}
 
 		return VoteSuccessMsg{Message: "Voted for " + station.TrimName(), StationUUID: station.StationUUID}
 	}

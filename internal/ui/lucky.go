@@ -53,6 +53,7 @@ type LuckyModel struct {
 	listItems       []list.Item
 	listModel       list.Model
 	helpModel       components.HelpModel
+	votedStations   *storage.VotedStations // Track voted stations
 	// Shuffle mode fields
 	shuffleEnabled    bool
 	shuffleManager    *shuffle.Manager
@@ -116,6 +117,13 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 		shuffleConfig = storage.DefaultShuffleConfig()
 	}
 
+	// Load voted stations
+	votedStations, err := storage.LoadVotedStations()
+	if err != nil {
+		// If we can't load, create empty list
+		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+	}
+
 	m := LuckyModel{
 		state:          luckyStateInput,
 		apiClient:      apiClient,
@@ -127,6 +135,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 		width:          80,
 		height:         24,
 		helpModel:      components.NewHelpModel(components.CreatePlayingHelp()),
+		votedStations:  votedStations,
 		shuffleEnabled: false,
 		shuffleConfig:  shuffleConfig,
 	}
@@ -795,7 +804,7 @@ func (m LuckyModel) saveToQuickFavorites() tea.Cmd {
 
 // voteForStation votes for the currently playing station
 func (m LuckyModel) voteForStation() tea.Cmd {
-	return components.ExecuteVote(m.selectedStation, nil, m.apiClient) // votedStations is nil in LuckyModel, components.ExecuteVote handles it
+	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
 // saveStationVolume saves the updated volume for a station in My-favorites
