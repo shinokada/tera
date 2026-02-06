@@ -140,7 +140,7 @@ Color values can be:
   - ANSI color numbers (0-255)
   - Hex colors (#FF5733 or #F53)
 
-Example: Edit ~/.config/tera/theme.yaml to customize your theme.`)
+Example: Edit theme.yaml in your config directory to customize your theme.`)
 }
 
 func printHelp() {

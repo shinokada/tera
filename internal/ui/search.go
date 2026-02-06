@@ -66,6 +66,7 @@ type SearchModel struct {
 	listItems       []list.Item
 	listModel       list.Model
 	helpModel       components.HelpModel
+	votedStations   *storage.VotedStations // Track voted stations
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
@@ -151,6 +152,13 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	if err != nil || history == nil {
 		history = storage.NewSearchHistoryStore()
 	}
+	
+	// Load voted stations
+	votedStations, err := storage.LoadVotedStations()
+	if err != nil {
+		// If we can't load, just create empty list
+		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+	}
 
 	model := SearchModel{
 		state:               searchStateMenu,
@@ -167,6 +175,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		width:               80, // Default width
 		height:              24, // Default height
 		helpModel:           components.NewHelpModel(components.CreatePlayingHelp()),
+		votedStations:       votedStations,
 		advancedInputs:      advInputs,
 		advancedFocusIdx:    0,
 		advancedBitrate:     "",
@@ -1054,21 +1063,62 @@ func (m SearchModel) saveToQuickFavorites(station api.Station) tea.Cmd {
 
 // voteForStation votes for the currently selected station
 func (m SearchModel) voteForStation() tea.Cmd {
+	// Capture values before creating closure
+	station := m.selectedStation
+	votedStations := m.votedStations
+	
 	return func() tea.Msg {
-		if m.selectedStation == nil {
+		if station == nil {
 			return voteFailedMsg{err: fmt.Errorf("no station selected")}
 		}
 
-		result, err := m.apiClient.Vote(context.Background(), m.selectedStation.StationUUID)
-		if err != nil {
-			return voteFailedMsg{err: err}
+		// Guard against nil votedStations
+		if votedStations == nil {
+			return voteFailedMsg{err: fmt.Errorf("voting system not initialized")}
 		}
 
-		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
+		// Check if can vote (respects 10-minute API cooldown)
+		if !votedStations.CanVoteAgain(station.StationUUID) {
+			return voteFailedMsg{err: fmt.Errorf("already voted for this station (wait 10 minutes)")}
 		}
 
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
+		client := api.NewClient()
+		result, err := client.Vote(context.Background(), station.StationUUID)
+
+		// Check if API says we already voted (even if our local record doesn't have it)
+		if err != nil || !result.OK {
+			// Check if the error is about voting too often
+			var errMsg string
+			if err != nil {
+				errMsg = err.Error()
+			} else {
+				errMsg = result.Message
+			}
+			
+			// If API says "already voted", "too often", or "VoteError", record it locally
+			errMsgLower := strings.ToLower(errMsg)
+			if strings.Contains(errMsgLower, "too often") || 
+			   strings.Contains(errMsgLower, "already voted") ||
+			   strings.Contains(errMsgLower, "voteerror") {
+				votedStations.AddVote(station.StationUUID)
+				if saveErr := votedStations.Save(); saveErr != nil {
+					return voteFailedMsg{err: fmt.Errorf("failed to save vote: %v", saveErr)}
+				}
+				// Return success message since we saved it locally
+				return voteSuccessMsg{message: "You voted", stationUUID: station.StationUUID}
+			}
+			
+			if err != nil {
+				return voteFailedMsg{err: err}
+			}
+			return voteFailedMsg{err: fmt.Errorf("%s", errMsg)}
+		}
+
+		// Successful vote - mark as voted
+		votedStations.AddVote(station.StationUUID)
+		_ = votedStations.Save()
+
+		return voteSuccessMsg{message: "Voted for " + station.TrimName(), stationUUID: station.StationUUID}
 	}
 }
 
@@ -1181,7 +1231,9 @@ func (m SearchModel) View() string {
 	case searchStatePlaying:
 		var content strings.Builder
 		if m.selectedStation != nil {
-			content.WriteString(RenderStationDetails(*m.selectedStation))
+			// Check if user has voted for this station
+			hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+			content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {

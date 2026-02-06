@@ -52,9 +52,9 @@ Upload all your favorite lists to GitHub as a gist.
    - Or type custom name and press Enter
 
 3. **TERA uploads your files:**
-   - All `.json` files from `~/.config/tera/favorites/` are uploaded
+   - All `.json` files from `favorites/` in your config directory are uploaded
    - Gist is created on GitHub
-   - Metadata saved locally to `~/.config/tera/gist_metadata.json`
+   - Metadata saved locally to `gist_metadata.json` in your config directory
 
 **Result:**
 ```
@@ -121,7 +121,7 @@ https://gist.github.com/username/xyz789
 ```
 
 **What happens:**
-1. TERA creates backup of existing files in `~/.config/tera/favorites/.backup/`
+1. TERA creates backup of existing files in `favorites/.backup/` in your config directory
 2. Backup files named: `filename.20260129-150405.bak`
 3. Downloads all files from the gist
 4. Overwrites existing files in your favorites folder
@@ -300,10 +300,9 @@ My Gists → [Review old backups] → Delete outdated ones
 
 ---
 
-## File Locations
-
+### Storage Location (Config Directory)
 ```
-~/.config/tera/
+tera/
 ├── gist_metadata.json         # List of your saved gists
 ├── tokens/
 │   └── github_token          # Your GitHub token

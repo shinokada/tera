@@ -98,6 +98,7 @@ func NewPlayModel(favoritePath string) PlayModel {
 	votedStations, err := storage.LoadVotedStations()
 	if err != nil {
 		// If we can't load, just create empty list
+		// TODO: Consider logging this error for debuggability
 		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
 	}
 	
@@ -248,8 +249,8 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case playbackStartedMsg:
-		// Playback started successfully
-		return m, nil
+		// Playback started successfully - trigger refresh to show voted status
+		return m, tea.Batch(ticksEverySecond())
 
 	case playbackStoppedMsg:
 		// Playback stopped
@@ -286,12 +287,14 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case voteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
 		m.saveMessageTime = 150
-		return m, nil
+		// Start tick to show the message and trigger UI refresh to show voted status
+		return m, ticksEverySecond()
 
 	case voteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
 		m.saveMessageTime = 150
-		return m, nil
+		// Start tick to show the message and trigger UI refresh
+		return m, ticksEverySecond()
 
 	case listsLoadedMsg:
 		m.lists = msg.lists
@@ -681,6 +684,7 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 // voteForStation votes for the currently playing station
 func (m *PlayModel) voteForStation() tea.Cmd {
 	// Capture values before creating closure to avoid race conditions
+	// Note: votedStations must be the pointer to ensure changes persist
 	station := m.selectedStation
 	votedStations := m.votedStations
 
@@ -689,25 +693,55 @@ func (m *PlayModel) voteForStation() tea.Cmd {
 			return voteFailedMsg{err: fmt.Errorf("no station selected")}
 		}
 
-		// Check if already voted
-		if votedStations.HasVoted(station.StationUUID) {
+		// Guard against nil votedStations
+		if votedStations == nil {
+			return voteFailedMsg{err: fmt.Errorf("voting system not initialized")}
+		}
+
+		// Check if can vote (respects 10-minute API cooldown)
+		if !votedStations.CanVoteAgain(station.StationUUID) {
 			return voteFailedMsg{err: fmt.Errorf("already voted for this station (wait 10 minutes)")}
 		}
 
 		client := api.NewClient()
 		result, err := client.Vote(context.Background(), station.StationUUID)
-		if err != nil {
-			return voteFailedMsg{err: err}
+		
+		// Check if API says we already voted (even if our local record doesn't have it)
+		if err != nil || !result.OK {
+			// Check if the error is about voting too often
+			var errMsg string
+			if err != nil {
+				errMsg = err.Error()
+			} else {
+				errMsg = result.Message
+			}
+			
+			// If API says "already voted", "too often", or "VoteError", record it locally
+			// This catches messages like: "VoteError 'you are voting for the same station too often'"
+			errMsgLower := strings.ToLower(errMsg)
+			if strings.Contains(errMsgLower, "too often") || 
+			   strings.Contains(errMsgLower, "already voted") ||
+			   strings.Contains(errMsgLower, "voteerror") {
+				// Mark as voted locally so we show the indicator
+				votedStations.AddVote(station.StationUUID)
+				if saveErr := votedStations.Save(); saveErr != nil {
+					return voteFailedMsg{err: fmt.Errorf("failed to save vote: %v", saveErr)}
+				}
+				// Return success message since we saved it locally
+				return voteSuccessMsg{message: "You voted", stationUUID: station.StationUUID}
+			}
+			
+			if err != nil {
+				return voteFailedMsg{err: err}
+			}
+			return voteFailedMsg{err: fmt.Errorf("%s", errMsg)}
 		}
 
-		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
-		}
-
-		// Mark as voted
+		// Successful vote - mark as voted
 		votedStations.AddVote(station.StationUUID)
 		_ = votedStations.Save()
 
+		// Return station UUID for potential future use (e.g., updating UI state)
 		return voteSuccessMsg{message: "Voted for " + station.TrimName(), stationUUID: station.StationUUID}
 	}
 }
@@ -766,8 +800,10 @@ func (m PlayModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info (consistent format across all playing views)
-	content.WriteString(RenderStationDetails(*m.selectedStation))
+	// Station info with voted status integrated
+	// Guard against nil votedStations
+	hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
@@ -775,12 +811,6 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(successStyle().Render("▶ Playing..."))
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
-	}
-
-	// Show voted status
-	if m.votedStations.HasVoted(m.selectedStation.StationUUID) {
-		content.WriteString("  ")
-		content.WriteString(successStyle().Render("✓ Voted"))
 	}
 
 	// Save message (if any)

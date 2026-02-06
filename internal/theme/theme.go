@@ -66,11 +66,11 @@ var (
 
 // GetConfigDir returns the theme config directory path
 func GetConfigDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".config", "tera"), nil
+	return filepath.Join(configDir, "tera"), nil
 }
 
 // GetConfigPath returns the theme config file path

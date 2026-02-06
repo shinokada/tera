@@ -282,6 +282,11 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 
 // RenderStationDetails renders station details in a formatted way
 func RenderStationDetails(station api.Station) string {
+	return RenderStationDetailsWithVote(station, false)
+}
+
+// RenderStationDetailsWithVote renders station details with optional voted indicator
+func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 	var s strings.Builder
 
 	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
@@ -302,7 +307,13 @@ func RenderStationDetails(station api.Station) string {
 		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
 	}
 
-	s.WriteString(fmt.Sprintf("Votes:   %d\n", station.Votes))
+	// Votes with voted indicator
+	s.WriteString(fmt.Sprintf("Votes:   %d", station.Votes))
+	if voted {
+		s.WriteString("  ")
+		s.WriteString(successStyle().Render("✓ You voted"))
+	}
+	s.WriteString("\n")
 
 	if station.Codec != "" {
 		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))

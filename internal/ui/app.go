@@ -73,8 +73,8 @@ func NewApp() App {
 	// Get favorite path from environment or use default
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
-		home, _ := os.UserHomeDir()
-		favPath = filepath.Join(home, ".config", "tera", "favorites")
+		configDir, _ := os.UserConfigDir()
+		favPath = filepath.Join(configDir, "tera", "favorites")
 	}
 
 	// Ensure favorites directory exists

@@ -36,7 +36,7 @@ The Token Management menu provides four options:
 **First-time setup:**
 - Paste your GitHub Personal Access Token
 - TERA validates the token with GitHub API
-- Token is saved securely to `~/.config/tera/tokens/github_token`
+- Token is saved securely to `tokens/github_token` in your config directory
 - File permissions automatically set to `600` (owner read/write only)
 
 **Updating existing token:**
@@ -69,9 +69,9 @@ The Token Management menu provides four options:
 
 ## Token Storage & Security
 
-### Storage Location
+### Storage Location (Config Directory)
 ```
-~/.config/tera/
+tera/
 ├── tokens/
 │   └── github_token      # Your GitHub token (permissions: 600)
 └── gist_metadata.json    # Your gist list (permissions: 644)
