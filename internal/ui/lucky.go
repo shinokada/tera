@@ -250,13 +250,13 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+	case components.VoteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+	case components.VoteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
 		m.saveMessageTime = 150
 		return m, nil
 
@@ -795,27 +795,7 @@ func (m LuckyModel) saveToQuickFavorites() tea.Cmd {
 
 // voteForStation votes for the currently playing station
 func (m LuckyModel) voteForStation() tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return voteFailedMsg{err: fmt.Errorf("no station selected")}
-		}
-
-		// Reuse injected API client for consistency and testability
-		client := m.apiClient
-		if client == nil {
-			client = api.NewClient()
-		}
-		result, err := client.Vote(context.Background(), m.selectedStation.StationUUID)
-		if err != nil {
-			return voteFailedMsg{err: err}
-		}
-
-		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
-		}
-
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
-	}
+	return components.ExecuteVote(m.selectedStation, nil, m.apiClient) // votedStations is nil in LuckyModel, components.ExecuteVote handles it
 }
 
 // saveStationVolume saves the updated volume for a station in My-favorites

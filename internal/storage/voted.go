@@ -23,6 +23,8 @@ import (
 //
 // To clear vote history: Use ClearAll() or RemoveVote() methods.
 
+const voteCooldown = 10 * time.Minute
+
 // VotedStation represents a station that has been voted for
 type VotedStation struct {
 	StationUUID string    `json:"station_uuid"`
@@ -93,8 +95,14 @@ func (v *VotedStations) Save() error {
 		return fmt.Errorf("failed to marshal voted stations: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	// Atomic write: write to temp file then rename
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write voted stations: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("failed to rename voted stations file: %w", err)
 	}
 
 	return nil
@@ -103,21 +111,27 @@ func (v *VotedStations) Save() error {
 // AddVote adds a vote for a station or updates the timestamp if already voted
 func (v *VotedStations) AddVote(stationUUID string) {
 	v.mu.Lock()
-	defer v.mu.Unlock()
-
 	// Update existing vote timestamp if found
+	found := false
 	for i := 0; i < len(v.Stations); i++ {
 		if v.Stations[i].StationUUID == stationUUID {
 			v.Stations[i].VotedAt = time.Now()
-			return
+			found = true
+			break
 		}
 	}
 
-	// Add new vote if not found
-	v.Stations = append(v.Stations, VotedStation{
-		StationUUID: stationUUID,
-		VotedAt:     time.Now(),
-	})
+	if !found {
+		// Add new vote if not found
+		v.Stations = append(v.Stations, VotedStation{
+			StationUUID: stationUUID,
+			VotedAt:     time.Now(),
+		})
+	}
+	v.mu.Unlock()
+
+	// Persist changes
+	_ = v.Save()
 }
 
 // HasVoted checks if a station has been voted for (permanent record)
@@ -138,7 +152,7 @@ func (v *VotedStations) CanVoteAgain(stationUUID string) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	cutoff := time.Now().Add(-10 * time.Minute)
+	cutoff := time.Now().Add(-voteCooldown)
 	for _, station := range v.Stations {
 		if station.StationUUID == stationUUID {
 			// If voted more than 10 minutes ago, can vote again
@@ -169,19 +183,21 @@ func (v *VotedStations) CleanupOldVotes(olderThan time.Duration) {
 // ClearAll removes all vote history
 func (v *VotedStations) ClearAll() {
 	v.mu.Lock()
-	defer v.mu.Unlock()
 	v.Stations = []VotedStation{}
+	v.mu.Unlock()
+	_ = v.Save()
 }
 
 // RemoveVote removes a specific station from vote history
 func (v *VotedStations) RemoveVote(stationUUID string) {
 	v.mu.Lock()
-	defer v.mu.Unlock()
-
 	for i := 0; i < len(v.Stations); i++ {
 		if v.Stations[i].StationUUID == stationUUID {
 			v.Stations = append(v.Stations[:i], v.Stations[i+1:]...)
+			v.mu.Unlock()
+			_ = v.Save()
 			return
 		}
 	}
+	v.mu.Unlock()
 }

@@ -48,16 +48,16 @@ type App struct {
 	connectionSettingsScreen ConnectionSettingsModel
 	appearanceSettingsScreen AppearanceSettingsModel
 	apiClient                *api.Client
-	favoritePath          string
-	quickFavorites        []api.Station
-	quickFavPlayer        *player.MPVPlayer
-	playingFromMain       bool
-	playingStation        *api.Station
-	numberBuffer          string               // Buffer for multi-digit number input
-	unifiedMenuIndex      int                  // Unified index for navigating both menu and favorites
-	helpModel             components.HelpModel // Help overlay
-	volumeDisplay         string               // Temporary volume display message
-	volumeDisplayFrames   int                  // Countdown for volume display
+	favoritePath             string
+	quickFavorites           []api.Station
+	quickFavPlayer           *player.MPVPlayer
+	playingFromMain          bool
+	playingStation           *api.Station
+	numberBuffer             string               // Buffer for multi-digit number input
+	unifiedMenuIndex         int                  // Unified index for navigating both menu and favorites
+	helpModel                components.HelpModel // Help overlay
+	volumeDisplay            string               // Temporary volume display message
+	volumeDisplayFrames      int                  // Countdown for volume display
 	// Update checking
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
@@ -411,8 +411,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, cmd
 	case screenAppearanceSettings:
-		newModel, cmd := a.appearanceSettingsScreen.Update(msg)
-		a.appearanceSettingsScreen = newModel
+		var m tea.Model
+		m, cmd = a.appearanceSettingsScreen.Update(msg)
+		a.appearanceSettingsScreen = m.(AppearanceSettingsModel)
 
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {

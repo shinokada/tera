@@ -46,9 +46,9 @@ type PlayModel struct {
 	width            int
 	height           int
 	err              error
-	listsNeedInit    bool                 // Flag to trigger list model initialization
-	stationsNeedInit bool                 // Flag to trigger station model initialization
-	helpModel        components.HelpModel // Help overlay
+	listsNeedInit    bool                   // Flag to trigger list model initialization
+	stationsNeedInit bool                   // Flag to trigger station model initialization
+	helpModel        components.HelpModel   // Help overlay
 	votedStations    *storage.VotedStations // Track voted stations
 }
 
@@ -93,7 +93,7 @@ func (i stationListItem) Description() string {
 func NewPlayModel(favoritePath string) PlayModel {
 	// Note: favorites directory and My-favorites.json are created at app startup
 	// in app.go's NewApp() function, so no need to check here
-	
+
 	// Load voted stations
 	votedStations, err := storage.LoadVotedStations()
 	if err != nil {
@@ -101,7 +101,7 @@ func NewPlayModel(favoritePath string) PlayModel {
 		// TODO: Consider logging this error for debuggability
 		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
 	}
-	
+
 	return PlayModel{
 		state:         playStateListSelection,
 		favoritePath:  favoritePath,
@@ -250,7 +250,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		return m, tea.Batch(ticksEverySecond())
+		return m, ticksEverySecond()
 
 	case playbackStoppedMsg:
 		// Playback stopped
@@ -284,14 +284,14 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		return m, nil
 
-	case voteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+	case components.VoteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
 		m.saveMessageTime = 150
 		// Start tick to show the message and trigger UI refresh to show voted status
 		return m, ticksEverySecond()
 
-	case voteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+	case components.VoteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
 		m.saveMessageTime = 150
 		// Start tick to show the message and trigger UI refresh
 		return m, ticksEverySecond()
@@ -683,67 +683,7 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 
 // voteForStation votes for the currently playing station
 func (m *PlayModel) voteForStation() tea.Cmd {
-	// Capture values before creating closure to avoid race conditions
-	// Note: votedStations must be the pointer to ensure changes persist
-	station := m.selectedStation
-	votedStations := m.votedStations
-
-	return func() tea.Msg {
-		if station == nil {
-			return voteFailedMsg{err: fmt.Errorf("no station selected")}
-		}
-
-		// Guard against nil votedStations
-		if votedStations == nil {
-			return voteFailedMsg{err: fmt.Errorf("voting system not initialized")}
-		}
-
-		// Check if can vote (respects 10-minute API cooldown)
-		if !votedStations.CanVoteAgain(station.StationUUID) {
-			return voteFailedMsg{err: fmt.Errorf("already voted for this station (wait 10 minutes)")}
-		}
-
-		client := api.NewClient()
-		result, err := client.Vote(context.Background(), station.StationUUID)
-		
-		// Check if API says we already voted (even if our local record doesn't have it)
-		if err != nil || !result.OK {
-			// Check if the error is about voting too often
-			var errMsg string
-			if err != nil {
-				errMsg = err.Error()
-			} else {
-				errMsg = result.Message
-			}
-			
-			// If API says "already voted", "too often", or "VoteError", record it locally
-			// This catches messages like: "VoteError 'you are voting for the same station too often'"
-			errMsgLower := strings.ToLower(errMsg)
-			if strings.Contains(errMsgLower, "too often") || 
-			   strings.Contains(errMsgLower, "already voted") ||
-			   strings.Contains(errMsgLower, "voteerror") {
-				// Mark as voted locally so we show the indicator
-				votedStations.AddVote(station.StationUUID)
-				if saveErr := votedStations.Save(); saveErr != nil {
-					return voteFailedMsg{err: fmt.Errorf("failed to save vote: %v", saveErr)}
-				}
-				// Return success message since we saved it locally
-				return voteSuccessMsg{message: "You voted", stationUUID: station.StationUUID}
-			}
-			
-			if err != nil {
-				return voteFailedMsg{err: err}
-			}
-			return voteFailedMsg{err: fmt.Errorf("%s", errMsg)}
-		}
-
-		// Successful vote - mark as voted
-		votedStations.AddVote(station.StationUUID)
-		_ = votedStations.Save()
-
-		// Return station UUID for potential future use (e.g., updating UI state)
-		return voteSuccessMsg{message: "Voted for " + station.TrimName(), stationUUID: station.StationUUID}
-	}
+	return components.ExecuteVote(m.selectedStation, m.votedStations, api.NewClient())
 }
 
 // View renders the play screen
@@ -990,15 +930,6 @@ type deleteSuccessMsg struct {
 }
 
 type deleteFailedMsg struct {
-	err error
-}
-
-type voteSuccessMsg struct {
-	message     string
-	stationUUID string
-}
-
-type voteFailedMsg struct {
 	err error
 }
 

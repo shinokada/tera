@@ -37,8 +37,12 @@ func TestTokenCRUD(t *testing.T) {
 	}
 
 	// Permissions check
-	configDir, _ := os.UserConfigDir()
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		configDir = filepath.Join(os.Getenv("HOME"), ".config")
+	}
 	path := filepath.Join(configDir, "tera/tokens/github_token")
+
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("Stat failed: %v", err)

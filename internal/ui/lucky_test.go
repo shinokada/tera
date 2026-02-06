@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/ui/components"
 )
 
 func TestNewLuckyModel(t *testing.T) {
@@ -492,7 +493,7 @@ func TestLuckyVoteSuccessMsg(t *testing.T) {
 	model := NewLuckyModel(client, "/tmp/test")
 	model.state = luckyStatePlaying
 
-	msg := voteSuccessMsg{message: "Voted for Test Station"}
+	msg := components.VoteSuccessMsg{Message: "Voted for Test Station"}
 	updatedModel, _ := model.Update(msg)
 
 	luckyModel := updatedModel.(LuckyModel)

@@ -9,8 +9,8 @@ Check if the code is still using the old config directory, `~/.config/tera`. If 
 - Move all the files from `~/.config/tera` to OS config directory.
 | Operating System | Config Directory |
 | --- | --- |
-| Linux|~/.config/tera/|
-| macOS|~/Library/Application Support/tera/|
-| Windows | %APPDATA%\tera\|
+| Linux| ~/.config/tera/ |
+| macOS| ~/Library/Application Support/tera/ |
+| Windows | %APPDATA%\tera\ |
 
 - Update the README.md by adding the migration guide.

@@ -246,16 +246,22 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 		b.WriteString(layout.Content)
 	}
 
-	// Calculate how many lines we've used so far
-	// First, count actual header lines from the renderer
-	var teraHeaderLines int
+	// First, get the rendered header to avoid double rendering
+	header := ""
+	teraHeaderLines := 3 // Default fallback
 	if globalHeaderRenderer != nil {
-		header := globalHeaderRenderer.Render()
+		header = globalHeaderRenderer.Render()
 		teraHeaderLines = strings.Count(header, "\n")
 	} else {
-		teraHeaderLines = 3 // Default fallback
+		header = lipgloss.NewStyle().
+			Width(50).
+			Align(lipgloss.Center).
+			Foreground(colorBlue()).
+			Bold(true).
+			PaddingTop(1).
+			Render("TERA") + "\n"
 	}
-	
+
 	// Count content lines
 	contentLines := strings.Count(b.String(), "\n")
 	totalUsed := teraHeaderLines + contentLines + 2 // +2 for padding
@@ -277,7 +283,12 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 		b.WriteString(helpStyle().Render(layout.Help))
 	}
 
-	return wrapPageWithHeader(b.String())
+	// Combine header and content
+	var fullContent strings.Builder
+	fullContent.WriteString(header)
+	fullContent.WriteString(b.String())
+
+	return docStyleNoTopPadding().Render(fullContent.String())
 }
 
 // RenderStationDetails renders station details in a formatted way

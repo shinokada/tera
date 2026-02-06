@@ -152,7 +152,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 	if err != nil || history == nil {
 		history = storage.NewSearchHistoryStore()
 	}
-	
+
 	// Load voted stations
 	votedStations, err := storage.LoadVotedStations()
 	if err != nil {
@@ -346,13 +346,13 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+	case components.VoteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+	case components.VoteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
 		m.saveMessageTime = 150
 		return m, nil
 
@@ -793,6 +793,7 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleStationInfoInput handles input in the station info state
 func (m SearchModel) handleStationInfoInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+
 	// Handle menu navigation and selection
 	newList, selected := components.HandleMenuKey(msg, m.stationInfoMenu)
 	m.stationInfoMenu = newList
@@ -1063,63 +1064,7 @@ func (m SearchModel) saveToQuickFavorites(station api.Station) tea.Cmd {
 
 // voteForStation votes for the currently selected station
 func (m SearchModel) voteForStation() tea.Cmd {
-	// Capture values before creating closure
-	station := m.selectedStation
-	votedStations := m.votedStations
-	
-	return func() tea.Msg {
-		if station == nil {
-			return voteFailedMsg{err: fmt.Errorf("no station selected")}
-		}
-
-		// Guard against nil votedStations
-		if votedStations == nil {
-			return voteFailedMsg{err: fmt.Errorf("voting system not initialized")}
-		}
-
-		// Check if can vote (respects 10-minute API cooldown)
-		if !votedStations.CanVoteAgain(station.StationUUID) {
-			return voteFailedMsg{err: fmt.Errorf("already voted for this station (wait 10 minutes)")}
-		}
-
-		client := api.NewClient()
-		result, err := client.Vote(context.Background(), station.StationUUID)
-
-		// Check if API says we already voted (even if our local record doesn't have it)
-		if err != nil || !result.OK {
-			// Check if the error is about voting too often
-			var errMsg string
-			if err != nil {
-				errMsg = err.Error()
-			} else {
-				errMsg = result.Message
-			}
-			
-			// If API says "already voted", "too often", or "VoteError", record it locally
-			errMsgLower := strings.ToLower(errMsg)
-			if strings.Contains(errMsgLower, "too often") || 
-			   strings.Contains(errMsgLower, "already voted") ||
-			   strings.Contains(errMsgLower, "voteerror") {
-				votedStations.AddVote(station.StationUUID)
-				if saveErr := votedStations.Save(); saveErr != nil {
-					return voteFailedMsg{err: fmt.Errorf("failed to save vote: %v", saveErr)}
-				}
-				// Return success message since we saved it locally
-				return voteSuccessMsg{message: "You voted", stationUUID: station.StationUUID}
-			}
-			
-			if err != nil {
-				return voteFailedMsg{err: err}
-			}
-			return voteFailedMsg{err: fmt.Errorf("%s", errMsg)}
-		}
-
-		// Successful vote - mark as voted
-		votedStations.AddVote(station.StationUUID)
-		_ = votedStations.Save()
-
-		return voteSuccessMsg{message: "Voted for " + station.TrimName(), stationUUID: station.StationUUID}
-	}
+	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
 // saveStationVolume saves the updated volume for a station in My-favorites

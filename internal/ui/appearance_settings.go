@@ -200,7 +200,8 @@ func (m AppearanceSettingsModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m AppearanceSettingsModel) Update(msg tea.Msg) (AppearanceSettingsModel, tea.Cmd) {
+func (m AppearanceSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -325,7 +326,8 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (AppearanceSettingsModel, t
 	return m, tea.Batch(cmds...)
 }
 
-func (m *AppearanceSettingsModel) handleEnter() (AppearanceSettingsModel, tea.Cmd) {
+func (m *AppearanceSettingsModel) handleEnter() (tea.Model, tea.Cmd) {
+
 	switch m.state {
 	case appearanceStateMenu:
 		selectedItem := m.menuList.SelectedItem()
@@ -608,15 +610,15 @@ func (m AppearanceSettingsModel) viewColorInput() string {
 func (m AppearanceSettingsModel) viewPaddingInput() string {
 	var b strings.Builder
 	b.WriteString("Configure header padding:\n\n")
-	
+
 	b.WriteString("Padding Top (0-5):\n")
 	b.WriteString(m.paddingTopInput.View())
 	b.WriteString("\n\n")
-	
+
 	b.WriteString("Padding Bottom (0-5):\n")
 	b.WriteString(m.paddingBottomInput.View())
 	b.WriteString("\n\n")
-	
+
 	b.WriteString("Press Tab to switch between fields\n")
 	b.WriteString("Press Enter to save, Esc to cancel")
 	return b.String()
