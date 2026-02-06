@@ -8,17 +8,17 @@ import (
 )
 
 const (
-	tokenDirName  = ".config/tera/tokens"
+	tokenDirName  = "tera/tokens"
 	tokenFileName = "github_token"
 )
 
 // getTokenPath returns the full path to the token file
 func getTokenPath() (string, error) {
-	home, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
+		return "", fmt.Errorf("failed to get user config directory: %w", err)
 	}
-	return filepath.Join(home, tokenDirName, tokenFileName), nil
+	return filepath.Join(configDir, tokenDirName, tokenFileName), nil
 }
 
 // SaveToken saves the token to a secure file

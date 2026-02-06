@@ -27,6 +27,7 @@ const (
 	screenSettings
 	screenShuffleSettings
 	screenConnectionSettings
+	screenAppearanceSettings
 )
 
 // Main menu configuration
@@ -45,17 +46,18 @@ type App struct {
 	settingsScreen           SettingsModel
 	shuffleSettingsScreen    ShuffleSettingsModel
 	connectionSettingsScreen ConnectionSettingsModel
+	appearanceSettingsScreen AppearanceSettingsModel
 	apiClient                *api.Client
-	favoritePath          string
-	quickFavorites        []api.Station
-	quickFavPlayer        *player.MPVPlayer
-	playingFromMain       bool
-	playingStation        *api.Station
-	numberBuffer          string               // Buffer for multi-digit number input
-	unifiedMenuIndex      int                  // Unified index for navigating both menu and favorites
-	helpModel             components.HelpModel // Help overlay
-	volumeDisplay         string               // Temporary volume display message
-	volumeDisplayFrames   int                  // Countdown for volume display
+	favoritePath             string
+	quickFavorites           []api.Station
+	quickFavPlayer           *player.MPVPlayer
+	playingFromMain          bool
+	playingStation           *api.Station
+	numberBuffer             string               // Buffer for multi-digit number input
+	unifiedMenuIndex         int                  // Unified index for navigating both menu and favorites
+	helpModel                components.HelpModel // Help overlay
+	volumeDisplay            string               // Temporary volume display message
+	volumeDisplayFrames      int                  // Countdown for volume display
 	// Update checking
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
@@ -71,8 +73,8 @@ func NewApp() App {
 	// Get favorite path from environment or use default
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
-		home, _ := os.UserHomeDir()
-		favPath = filepath.Join(home, ".config", "tera", "favorites")
+		configDir, _ := os.UserConfigDir()
+		favPath = filepath.Join(configDir, "tera", "favorites")
 	}
 
 	// Ensure favorites directory exists
@@ -87,6 +89,9 @@ func NewApp() App {
 		quickFavPlayer: player.NewMPVPlayer(),
 		helpModel:      components.NewHelpModel(components.CreateMainMenuHelp()),
 	}
+
+	// Initialize header renderer
+	InitializeHeaderRenderer()
 
 	// Initialize main menu
 	app.initMainMenu()
@@ -277,6 +282,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.connectionSettingsScreen.height = a.height
 			}
 			return a, a.connectionSettingsScreen.Init()
+		case screenAppearanceSettings:
+			a.appearanceSettingsScreen = NewAppearanceSettingsModel()
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.appearanceSettingsScreen.width = a.width
+				a.appearanceSettingsScreen.height = a.height
+			}
+			return a, a.appearanceSettingsScreen.Init()
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
@@ -391,6 +404,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var m tea.Model
 		m, cmd = a.connectionSettingsScreen.Update(msg)
 		a.connectionSettingsScreen = m.(ConnectionSettingsModel)
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenAppearanceSettings:
+		var m tea.Model
+		m, cmd = a.appearanceSettingsScreen.Update(msg)
+		a.appearanceSettingsScreen = m.(AppearanceSettingsModel)
 
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
@@ -697,6 +720,8 @@ func (a App) View() string {
 		return a.shuffleSettingsScreen.View()
 	case screenConnectionSettings:
 		return a.connectionSettingsScreen.View()
+	case screenAppearanceSettings:
+		return a.appearanceSettingsScreen.View()
 	}
 	return "Unknown screen"
 }

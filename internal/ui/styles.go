@@ -3,12 +3,26 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
 	"github.com/shinokada/tera/internal/theme"
 )
+
+// Global header renderer instance (initialized in app.go)
+var (
+	globalHeaderRenderer *HeaderRenderer
+	headerRendererMu     sync.RWMutex
+)
+
+// InitializeHeaderRenderer initializes the global header renderer
+func InitializeHeaderRenderer() {
+	headerRendererMu.Lock()
+	defer headerRendererMu.Unlock()
+	globalHeaderRenderer = NewHeaderRenderer()
+}
 
 // Color accessors - these call theme.Current() to get current theme values
 func colorCyan() lipgloss.Color   { t := theme.Current(); return t.PrimaryColor() }
@@ -141,23 +155,26 @@ func createStyledDelegate() list.DefaultDelegate {
 	return delegate
 }
 
-// wrapPageWithHeader wraps content with TERA header at the top and applies consistent padding
-func wrapPageWithHeader(content string) string {
-	var b strings.Builder
-	// Center TERA header with proper width - add top padding here
-	header := lipgloss.NewStyle().
+// renderHeader renders the header with fallback (thread-safe)
+func renderHeader() string {
+	headerRendererMu.RLock()
+	renderer := globalHeaderRenderer
+	headerRendererMu.RUnlock()
+	
+	if renderer != nil {
+		return renderer.Render()
+	}
+	// Fallback to default if renderer not initialized
+	return lipgloss.NewStyle().
 		Width(50).
 		Align(lipgloss.Center).
-		Foreground(colorBlue()). // Use blue color for TERA
+		Foreground(colorBlue()).
 		Bold(true).
 		PaddingTop(1).
-		Render("TERA")
-	b.WriteString(header)
-	b.WriteString("\n")
-	b.WriteString(content)
-	// Use style without top padding since header already has it
-	return docStyleNoTopPadding().Render(b.String())
+		Render("TERA") + "\n"
 }
+
+
 
 // PageLayout represents a consistent page layout structure
 type PageLayout struct {
@@ -170,6 +187,23 @@ type PageLayout struct {
 // RenderPage renders a page with consistent layout using the template
 // This ensures all pages have the same spacing and structure
 func RenderPage(layout PageLayout) string {
+	// Assemble page content using shared helper
+	content := assemblePageContent(layout)
+
+	// Add help text (if provided)
+	if layout.Help != "" {
+		if layout.Content != "" {
+			content += "\n"
+		}
+		content += helpStyle().Render(layout.Help)
+	}
+
+	// Wrap with header and styling using shared helper
+	return wrapWithHeaderAndStyle(content)
+}
+
+// assemblePageContent assembles page content with consistent structure (title, subtitle, content)
+func assemblePageContent(layout PageLayout) string {
 	var b strings.Builder
 
 	// Add consistent spacing after TERA header
@@ -192,46 +226,31 @@ func RenderPage(layout PageLayout) string {
 		b.WriteString(layout.Content)
 	}
 
-	// Help text (if provided)
-	if layout.Help != "" {
-		if layout.Content != "" {
-			b.WriteString("\n")
-		}
-		b.WriteString(helpStyle().Render(layout.Help))
-	}
+	return b.String()
+}
 
-	return wrapPageWithHeader(b.String())
+// wrapWithHeaderAndStyle combines header, content, and applies styling
+func wrapWithHeaderAndStyle(content string) string {
+	header := renderHeader()
+	var fullContent strings.Builder
+	fullContent.WriteString(header)
+	fullContent.WriteString(content)
+	return docStyleNoTopPadding().Render(fullContent.String())
 }
 
 // RenderPageWithBottomHelp renders a page with help text at the bottom of the screen
 func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
-	var b strings.Builder
+	// Assemble page content
+	content := assemblePageContent(layout)
 
-	// Add consistent spacing after TERA header
-	b.WriteString("\n")
+	// Get the rendered header for line counting
+	header := renderHeader()
+	teraHeaderLines := strings.Count(header, "\n")
 
-	// Title section - always takes up one line (empty or not) for consistency
-	if layout.Title != "" {
-		b.WriteString(titleStyle().Render(layout.Title))
-	}
-	b.WriteString("\n")
-
-	// Subtitle section - always takes up one line (empty or not) for consistency
-	if layout.Subtitle != "" {
-		b.WriteString(subtitleStyle().Render(layout.Subtitle))
-	}
-	b.WriteString("\n")
-
-	// Main content
-	if layout.Content != "" {
-		b.WriteString(layout.Content)
-	}
-
-	// Calculate how many lines we've used so far
-	// TERA header (3 lines) + blank line (1) + title (1) + subtitle (1) + content lines + padding (2)
-	contentLines := strings.Count(b.String(), "\n")
-	teraHeaderLines := 3
-	totalUsed := teraHeaderLines + contentLines + 2 // +2 for padding
+	// Count content lines
+	contentLines := strings.Count(content, "\n")
+	p := getPadding()
+	totalUsed := teraHeaderLines + contentLines + p.PageVertical // padding from docStyleNoTopPadding
 
 	// Calculate remaining space for help text to be at bottom
 	// Reserve 1 line for help text itself
@@ -241,6 +260,8 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	}
 
 	// Add spacing to push help text to bottom
+	var b strings.Builder
+	b.WriteString(content)
 	for i := 0; i < remainingLines; i++ {
 		b.WriteString("\n")
 	}
@@ -250,11 +271,17 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 		b.WriteString(helpStyle().Render(layout.Help))
 	}
 
-	return wrapPageWithHeader(b.String())
+	// Wrap with header and styling using shared helper
+	return wrapWithHeaderAndStyle(b.String())
 }
 
 // RenderStationDetails renders station details in a formatted way
 func RenderStationDetails(station api.Station) string {
+	return RenderStationDetailsWithVote(station, false)
+}
+
+// RenderStationDetailsWithVote renders station details with optional voted indicator
+func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 	var s strings.Builder
 
 	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
@@ -275,7 +302,13 @@ func RenderStationDetails(station api.Station) string {
 		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
 	}
 
-	s.WriteString(fmt.Sprintf("Votes:   %d\n", station.Votes))
+	// Votes with voted indicator
+	s.WriteString(fmt.Sprintf("Votes:   %d", station.Votes))
+	if voted {
+		s.WriteString("  ")
+		s.WriteString(successStyle().Render("✓ You voted"))
+	}
+	s.WriteString("\n")
 
 	if station.Codec != "" {
 		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))

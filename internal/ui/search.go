@@ -66,6 +66,7 @@ type SearchModel struct {
 	listItems       []list.Item
 	listModel       list.Model
 	helpModel       components.HelpModel
+	votedStations   *storage.VotedStations // Track voted stations
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
@@ -152,6 +153,13 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		history = storage.NewSearchHistoryStore()
 	}
 
+	// Load voted stations
+	votedStations, err := storage.LoadVotedStations()
+	if err != nil {
+		// If we can't load, just create empty list
+		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+	}
+
 	model := SearchModel{
 		state:               searchStateMenu,
 		apiClient:           apiClient,
@@ -167,6 +175,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		width:               80, // Default width
 		height:              24, // Default height
 		helpModel:           components.NewHelpModel(components.CreatePlayingHelp()),
+		votedStations:       votedStations,
 		advancedInputs:      advInputs,
 		advancedFocusIdx:    0,
 		advancedBitrate:     "",
@@ -337,13 +346,13 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+	case components.VoteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+	case components.VoteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
 		m.saveMessageTime = 150
 		return m, nil
 
@@ -784,6 +793,7 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleStationInfoInput handles input in the station info state
 func (m SearchModel) handleStationInfoInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+
 	// Handle menu navigation and selection
 	newList, selected := components.HandleMenuKey(msg, m.stationInfoMenu)
 	m.stationInfoMenu = newList
@@ -1054,22 +1064,7 @@ func (m SearchModel) saveToQuickFavorites(station api.Station) tea.Cmd {
 
 // voteForStation votes for the currently selected station
 func (m SearchModel) voteForStation() tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return voteFailedMsg{err: fmt.Errorf("no station selected")}
-		}
-
-		result, err := m.apiClient.Vote(context.Background(), m.selectedStation.StationUUID)
-		if err != nil {
-			return voteFailedMsg{err: err}
-		}
-
-		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
-		}
-
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
-	}
+	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
 // saveStationVolume saves the updated volume for a station in My-favorites
@@ -1181,7 +1176,9 @@ func (m SearchModel) View() string {
 	case searchStatePlaying:
 		var content strings.Builder
 		if m.selectedStation != nil {
-			content.WriteString(RenderStationDetails(*m.selectedStation))
+			// Check if user has voted for this station
+			hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+			content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {

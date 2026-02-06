@@ -89,6 +89,19 @@ sudo mv tera /usr/local/bin/
 2. Extract the archive
 3. Add the extracted directory to your PATH or move `tera.exe` to a directory already in your PATH
 
+## Migration from v1 to v2
+
+If you are upgrading from TERA v1 to v2, you need to move your configuration files to the new platform-specific directory.
+
+1. Locate your old configuration directory: `~/.config/tera`
+2. Move all files and folders (including `favorites`, `tokens`, and `.yaml` files) to the new location:
+
+| Operating System | New Config Directory |
+| --- | --- |
+| **Linux** | `~/.config/tera/` (No change) |
+| **macOS** | `~/Library/Application Support/tera/` |
+| **Windows** | `%APPDATA%\tera\` |
+
 ## Quick Start
 
 ```sh
@@ -153,6 +166,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 Access app configuration from the main menu (option 6):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
+- **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
 - **Connection Settings** - Auto-reconnect and buffering for unstable networks (4G/GPRS)
 - **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
 - **Search History** - View and clear your search history
@@ -160,6 +174,28 @@ Access app configuration from the main menu (option 6):
 - **About TERA** - See version, installation method, and update command
 
 The Settings menu automatically detects how you installed TERA (Homebrew, Go, Scoop, Winget, etc.) and shows the appropriate update command.
+
+### Appearance Settings
+
+Customize how the TERA header appears at the top of the application:
+
+**Header Modes:**
+- **Default** - Show "TERA" text (default)
+- **Text** - Display custom text
+- **ASCII** - Show custom ASCII art (max 15 lines)
+- **None** - Hide header completely
+
+**Customization Options:**
+- **Alignment** - Left, center, or right
+- **Width** - Header width (10-120 characters)
+- **Color** - Auto, hex code (#FF0000), or ANSI code (0-255)
+- **Bold** - Enable/disable bold text
+- **Padding** - Top and bottom spacing (0-5 lines)
+
+**Tips:**
+- Preview changes before saving
+- Use [TAAG](https://patorjk.com/software/taag/) or `figlet` to generate ASCII art
+- Settings stored in the config directory (see [File Locations](#file-locations))
 
 ### Connection Settings
 
@@ -169,7 +205,7 @@ For users on unstable networks (mobile data, GPRS, 4G), configure automatic reco
 - **Reconnect delay** - Wait time between attempts: 1-30 seconds (default: 5s)
 - **Stream buffer** - Cache size to handle brief signal drops: 10-200 MB (default: 50MB)
 
-Settings stored in `~/.config/tera/connection_config.yaml`.
+Settings stored in the config directory (see [File Locations](#file-locations)).
 
 ### Quick Play from Main Menu
 
@@ -220,7 +256,7 @@ The easiest way to change themes is through the Settings menu:
 
 ### Manual Configuration
 
-You can also customize colors and padding by editing `~/.config/tera/theme.yaml`:
+You can also customize colors and padding by editing the theme config file:
 
 ```sh
 tera theme path   # Show config file location
@@ -370,7 +406,7 @@ f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h:
 
 ### Configuration File
 
-Shuffle settings are stored in `~/.config/tera/shuffle.yaml`:
+Shuffle settings are stored in the config directory as `shuffle.yaml`:
 
 ```yaml
 shuffle:
@@ -498,11 +534,23 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 
 ## File Locations
 
+TERA stores its configuration files in the OS-standard config directory:
+
+| Operating System | Location                                       |
+| ---------------- | ---------------------------------------------- |
+| **Linux**        | `~/.config/tera/`                              |
+| **macOS**        | `~/Library/Application Support/tera/`          |
+| **Windows**      | `%APPDATA%\tera\`                              |
+
+### Configuration Files
+
 ```
-~/.config/tera/
+tera/
 ├── theme.yaml              # Color and padding customization
+├── appearance_config.yaml  # Header customization (text, ASCII art, etc.)
 ├── connection_config.yaml  # Auto-reconnect and buffering settings
 ├── shuffle.yaml            # Shuffle mode settings
+├── voted_stations.json     # Voting history (prevents duplicate votes)
 ├── gist_metadata.json      # Your gist history
 ├── tokens/
 │   └── github_token        # GitHub Personal Access Token
@@ -510,6 +558,12 @@ Backup and sync your favorite lists across devices using GitHub Gists.
     ├── My-favorites.json   # Quick play list (main menu 10+)
     ├── Rock.json           # Your custom lists
     └── Jazz.json
+```
+
+**Environment Variable Override:**
+You can set a custom favorites directory:
+```sh
+export TERA_FAVORITE_PATH="/path/to/your/favorites"
 ```
 
 ## Troubleshooting
@@ -538,10 +592,7 @@ pkill -9 mpv
 ```
 
 ### Can't find My-favorites.json
-TERA creates it automatically at first launch. Check:
-```sh
-ls -la ~/.config/tera/favorites/
-```
+TERA creates it automatically at first launch. Check the favorites directory in your OS-specific config location (see [File Locations](#file-locations)).
 
 If missing, restart TERA and it will be created.
 

@@ -200,11 +200,12 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 	// Main settings menu
 	menuItems := []components.MenuItem{
 		components.NewMenuItem("Theme / Colors", "Choose a color theme", "1"),
-		components.NewMenuItem("Connection Settings", "Auto-reconnect and buffering", "2"),
-		components.NewMenuItem("Shuffle Settings", "Configure shuffle mode behavior", "3"),
-		components.NewMenuItem("Search History", "Manage search history settings", "4"),
-		components.NewMenuItem("Check for Updates", "Check for new versions", "5"),
-		components.NewMenuItem("About TERA", "Version and information", "6"),
+		components.NewMenuItem("Appearance", "Customize header and layout", "2"),
+		components.NewMenuItem("Connection Settings", "Auto-reconnect and buffering", "3"),
+		components.NewMenuItem("Shuffle Settings", "Configure shuffle mode behavior", "4"),
+		components.NewMenuItem("Search History", "Manage search history settings", "5"),
+		components.NewMenuItem("Check for Updates", "Check for new versions", "6"),
+		components.NewMenuItem("About TERA", "Version and information", "7"),
 	}
 	menuList := components.CreateMenu(menuItems, "", 50, 12)
 
@@ -340,22 +341,28 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "2":
+		// Navigate to appearance settings
+		return m, func() tea.Msg {
+			return navigateMsg{screen: screenAppearanceSettings}
+		}
+
+	case "3":
 		// Navigate to connection settings
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenConnectionSettings}
 		}
 
-	case "3":
+	case "4":
 		// Navigate to shuffle settings
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenShuffleSettings}
 		}
 
-	case "4":
+	case "5":
 		m.state = settingsStateHistory
 		return m, nil
 
-	case "5":
+	case "6":
 		m.state = settingsStateUpdates
 		if !m.updateChecked && !m.updateChecking {
 			m.updateChecking = true
@@ -363,7 +370,7 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "6":
+	case "7":
 		m.state = settingsStateAbout
 		return m, nil
 
@@ -373,24 +380,29 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 0:
 			m.state = settingsStateTheme
 		case 1:
+			// Navigate to appearance settings
+			return m, func() tea.Msg {
+				return navigateMsg{screen: screenAppearanceSettings}
+			}
+		case 2:
 			// Navigate to connection settings
 			return m, func() tea.Msg {
 				return navigateMsg{screen: screenConnectionSettings}
 			}
-		case 2:
+		case 3:
 			// Navigate to shuffle settings
 			return m, func() tea.Msg {
 				return navigateMsg{screen: screenShuffleSettings}
 			}
-		case 3:
-			m.state = settingsStateHistory
 		case 4:
+			m.state = settingsStateHistory
+		case 5:
 			m.state = settingsStateUpdates
 			if !m.updateChecked && !m.updateChecking {
 				m.updateChecking = true
 				return m, checkForUpdates()
 			}
-		case 5:
+		case 6:
 			m.state = settingsStateAbout
 		}
 		return m, nil
@@ -599,7 +611,7 @@ func (m SettingsModel) viewMenu() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-6: Shortcut • Esc/0: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-7: Shortcut • Esc/0: Back • Ctrl+C: Quit",
 	}, m.height)
 }
 

@@ -21,12 +21,12 @@ type GistMetadata struct {
 
 // getMetadataPath returns the full path to the metadata file
 func getMetadataPath() (string, error) {
-	home, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
+		return "", fmt.Errorf("failed to get user config directory: %w", err)
 	}
 	// Using the same config directory as tokens
-	return filepath.Join(home, ".config/tera", metadataFileName), nil
+	return filepath.Join(configDir, "tera", metadataFileName), nil
 }
 
 // GetAllGists retrieves all stored gist metadata
@@ -63,7 +63,7 @@ func saveAllGists(gists []*GistMetadata) error {
 		return err
 	}
 
-	// Ensure directory exists
+	// Ensure directory exists (0700 for security - may contain sensitive tokens)
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}

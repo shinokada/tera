@@ -41,14 +41,16 @@ type PlayModel struct {
 	selectedStation  *api.Station
 	stationToDelete  *api.Station
 	player           *player.MPVPlayer
+	apiClient        *api.Client            // Reusable API client
 	saveMessage      string
 	saveMessageTime  int // frames to show message
 	width            int
 	height           int
 	err              error
-	listsNeedInit    bool                 // Flag to trigger list model initialization
-	stationsNeedInit bool                 // Flag to trigger station model initialization
-	helpModel        components.HelpModel // Help overlay
+	listsNeedInit    bool                   // Flag to trigger list model initialization
+	stationsNeedInit bool                   // Flag to trigger station model initialization
+	helpModel        components.HelpModel   // Help overlay
+	votedStations    *storage.VotedStations // Track voted stations
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -92,13 +94,24 @@ func (i stationListItem) Description() string {
 func NewPlayModel(favoritePath string) PlayModel {
 	// Note: favorites directory and My-favorites.json are created at app startup
 	// in app.go's NewApp() function, so no need to check here
+
+	// Load voted stations
+	votedStations, err := storage.LoadVotedStations()
+	if err != nil {
+		// If we can't load, just create empty list
+		// TODO: Consider logging this error for debuggability
+		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+	}
+
 	return PlayModel{
-		state:        playStateListSelection,
-		favoritePath: favoritePath,
-		lists:        []string{},
-		listItems:    []list.Item{},
-		player:       player.NewMPVPlayer(),
-		helpModel:    components.NewHelpModel(components.CreateFavoritesHelp()),
+		state:         playStateListSelection,
+		favoritePath:  favoritePath,
+		lists:         []string{},
+		listItems:     []list.Item{},
+		player:        player.NewMPVPlayer(),
+		apiClient:     api.NewClient(),
+		helpModel:     components.NewHelpModel(components.CreateFavoritesHelp()),
+		votedStations: votedStations,
 	}
 }
 
@@ -238,7 +251,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case playbackStartedMsg:
-		// Playback started successfully
+		// Playback started successfully - trigger refresh to show voted status
+		// Only start tick if not already running
+		if m.saveMessageTime == 0 {
+			return m, ticksEverySecond()
+		}
 		return m, nil
 
 	case playbackStoppedMsg:
@@ -273,14 +290,24 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		return m, nil
 
-	case voteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+	case components.VoteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 150
+		// Start tick to show the message and trigger UI refresh to show voted status
+		if startTick {
+			return m, ticksEverySecond()
+		}
 		return m, nil
 
-	case voteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+	case components.VoteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = 150
+		// Start tick to show the message and trigger UI refresh
+		if startTick {
+			return m, ticksEverySecond()
+		}
 		return m, nil
 
 	case listsLoadedMsg:
@@ -670,23 +697,7 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 
 // voteForStation votes for the currently playing station
 func (m PlayModel) voteForStation() tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return voteFailedMsg{err: fmt.Errorf("no station selected")}
-		}
-
-		client := api.NewClient()
-		result, err := client.Vote(context.Background(), m.selectedStation.StationUUID)
-		if err != nil {
-			return voteFailedMsg{err: err}
-		}
-
-		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
-		}
-
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
-	}
+	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
 // View renders the play screen
@@ -743,8 +754,10 @@ func (m PlayModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info (consistent format across all playing views)
-	content.WriteString(RenderStationDetails(*m.selectedStation))
+	// Station info with voted status integrated
+	// Guard against nil votedStations
+	hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
@@ -931,14 +944,6 @@ type deleteSuccessMsg struct {
 }
 
 type deleteFailedMsg struct {
-	err error
-}
-
-type voteSuccessMsg struct {
-	message string
-}
-
-type voteFailedMsg struct {
 	err error
 }
 

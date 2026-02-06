@@ -46,9 +46,9 @@ func TestSettingsMenuNavigation(t *testing.T) {
 		expectedState settingsState
 	}{
 		{"Press 1 for Theme", "1", settingsStateTheme},
-		{"Press 4 for History", "4", settingsStateHistory},
-		{"Press 5 for Updates", "5", settingsStateUpdates},
-		{"Press 6 for About", "6", settingsStateAbout},
+		{"Press 5 for History", "5", settingsStateHistory},
+		{"Press 6 for Updates", "6", settingsStateUpdates},
+		{"Press 7 for About", "7", settingsStateAbout},
 	}
 
 	for _, tt := range tests {
@@ -414,7 +414,7 @@ func TestSettingsMenuNavigateToConnectionSettings(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")}
 	_, cmd := m.Update(msg)
 
 	// Should return a command that produces navigateMsg to screenConnectionSettings
@@ -438,7 +438,7 @@ func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")}
 	_, cmd := m.Update(msg)
 
 	// Should return a command that produces navigateMsg to screenShuffleSettings
@@ -454,5 +454,29 @@ func TestSettingsMenuNavigateToShuffleSettings(t *testing.T) {
 	}
 	if navMsg.screen != screenShuffleSettings {
 		t.Errorf("Expected navigation to screenShuffleSettings, got %v", navMsg.screen)
+	}
+}
+
+func TestSettingsMenuNavigateToAppearanceSettings(t *testing.T) {
+	m := NewSettingsModel(t.TempDir())
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")}
+	_, cmd := m.Update(msg)
+
+	// Should return a command that produces navigateMsg to screenAppearanceSettings
+	if cmd == nil {
+		t.Fatal("Expected a command to be returned for appearance settings navigation")
+	}
+
+	// Execute the command and verify the message
+	resultMsg := cmd()
+	navMsg, ok := resultMsg.(navigateMsg)
+	if !ok {
+		t.Fatalf("Expected navigateMsg, got %T", resultMsg)
+	}
+	if navMsg.screen != screenAppearanceSettings {
+		t.Errorf("Expected navigation to screenAppearanceSettings, got %v", navMsg.screen)
 	}
 }

@@ -240,3 +240,34 @@ func CreatePlayingHelp() []HelpSection {
 		},
 	}
 }
+
+func CreateAppearanceHelp() []HelpSection {
+	return []HelpSection{
+		{
+			Title: "Navigation",
+			Items: []HelpItem{
+				{"↑↓/jk", "Navigate menu"},
+				{"Enter", "Select/Edit"},
+				{"Esc/q", "Back"},
+				{"?", "Toggle help"},
+			},
+		},
+		{
+			Title: "Header Modes",
+			Items: []HelpItem{
+				{"default", "Show 'TERA'"},
+				{"text", "Custom text"},
+				{"ascii", "ASCII art"},
+				{"none", "No header"},
+			},
+		},
+		{
+			Title: "Actions",
+			Items: []HelpItem{
+				{"Save", "Apply changes"},
+				{"Preview", "See result"},
+				{"Reset", "Restore defaults"},
+			},
+		},
+	}
+}

@@ -53,6 +53,7 @@ type LuckyModel struct {
 	listItems       []list.Item
 	listModel       list.Model
 	helpModel       components.HelpModel
+	votedStations   *storage.VotedStations // Track voted stations
 	// Shuffle mode fields
 	shuffleEnabled    bool
 	shuffleManager    *shuffle.Manager
@@ -116,6 +117,13 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 		shuffleConfig = storage.DefaultShuffleConfig()
 	}
 
+	// Load voted stations
+	votedStations, err := storage.LoadVotedStations()
+	if err != nil {
+		// If we can't load, create empty list
+		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+	}
+
 	m := LuckyModel{
 		state:          luckyStateInput,
 		apiClient:      apiClient,
@@ -127,6 +135,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 		width:          80,
 		height:         24,
 		helpModel:      components.NewHelpModel(components.CreatePlayingHelp()),
+		votedStations:  votedStations,
 		shuffleEnabled: false,
 		shuffleConfig:  shuffleConfig,
 	}
@@ -250,13 +259,13 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.message)
+	case components.VoteSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
 		m.saveMessageTime = 150
 		return m, nil
 
-	case voteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.err)
+	case components.VoteFailedMsg:
+		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
 		m.saveMessageTime = 150
 		return m, nil
 
@@ -795,27 +804,7 @@ func (m LuckyModel) saveToQuickFavorites() tea.Cmd {
 
 // voteForStation votes for the currently playing station
 func (m LuckyModel) voteForStation() tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return voteFailedMsg{err: fmt.Errorf("no station selected")}
-		}
-
-		// Reuse injected API client for consistency and testability
-		client := m.apiClient
-		if client == nil {
-			client = api.NewClient()
-		}
-		result, err := client.Vote(context.Background(), m.selectedStation.StationUUID)
-		if err != nil {
-			return voteFailedMsg{err: err}
-		}
-
-		if !result.OK {
-			return voteFailedMsg{err: fmt.Errorf("%s", result.Message)}
-		}
-
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName()}
-	}
+	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
 // saveStationVolume saves the updated volume for a station in My-favorites
