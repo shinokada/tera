@@ -106,8 +106,8 @@ func (h *HeaderRenderer) createBaseStyle() lipgloss.Style {
 
 // styleASCII applies styling to ASCII art
 func (h *HeaderRenderer) styleASCII(art string) string {
-	// Trim any trailing/leading newlines from the art itself
-	art = strings.TrimSpace(art)
+	// Trim only newline characters, preserving intentional leading spaces
+	art = strings.Trim(art, "\r\n")
 	
 	// Create style for each line
 	lineStyle := lipgloss.NewStyle().Width(h.config.Header.Width)

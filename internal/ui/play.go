@@ -680,18 +680,22 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 
 // voteForStation votes for the currently playing station
 func (m *PlayModel) voteForStation() tea.Cmd {
+	// Capture values before creating closure to avoid race conditions
+	station := m.selectedStation
+	votedStations := m.votedStations
+
 	return func() tea.Msg {
-		if m.selectedStation == nil {
+		if station == nil {
 			return voteFailedMsg{err: fmt.Errorf("no station selected")}
 		}
 
 		// Check if already voted
-		if m.votedStations.HasVoted(m.selectedStation.StationUUID) {
+		if votedStations.HasVoted(station.StationUUID) {
 			return voteFailedMsg{err: fmt.Errorf("already voted for this station (wait 10 minutes)")}
 		}
 
 		client := api.NewClient()
-		result, err := client.Vote(context.Background(), m.selectedStation.StationUUID)
+		result, err := client.Vote(context.Background(), station.StationUUID)
 		if err != nil {
 			return voteFailedMsg{err: err}
 		}
@@ -701,10 +705,10 @@ func (m *PlayModel) voteForStation() tea.Cmd {
 		}
 
 		// Mark as voted
-		m.votedStations.AddVote(m.selectedStation.StationUUID)
-		_ = m.votedStations.Save()
+		votedStations.AddVote(station.StationUUID)
+		_ = votedStations.Save()
 
-		return voteSuccessMsg{message: "Voted for " + m.selectedStation.TrimName(), stationUUID: m.selectedStation.StationUUID}
+		return voteSuccessMsg{message: "Voted for " + station.TrimName(), stationUUID: station.StationUUID}
 	}
 }
 
