@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/shuffle"
 	"github.com/shinokada/tera/internal/storage"
@@ -60,6 +61,8 @@ type LuckyModel struct {
 	shuffleConfig     storage.ShuffleConfig
 	allStations       []api.Station // All stations from search for shuffle
 	lastSearchKeyword string        // Keyword used for current shuffle session
+	blocklistManager  *blocklist.Manager
+	lastBlockTime     time.Time
 }
 
 // Messages for lucky screen
@@ -90,8 +93,17 @@ type saveToListFailedMsg struct {
 	isDuplicate bool
 }
 
+type luckyPlaybackStalledMsg struct {
+	station api.Station
+}
+
+type luckyCheckSignalMsg struct {
+	station api.Station
+	attempt int
+}
+
 // NewLuckyModel creates a new lucky screen model
-func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
+func NewLuckyModel(apiClient *api.Client, favoritePath string, blocklistManager *blocklist.Manager) LuckyModel {
 	ti := textinput.New()
 	ti.Placeholder = "rock, jazz, classical, meditation..."
 	ti.CharLimit = 50
@@ -125,19 +137,20 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string) LuckyModel {
 	}
 
 	m := LuckyModel{
-		state:          luckyStateInput,
-		apiClient:      apiClient,
-		textInput:      ti,
-		newListInput:   nli,
-		favoritePath:   favoritePath,
-		player:         player.NewMPVPlayer(),
-		searchHistory:  history,
-		width:          80,
-		height:         24,
-		helpModel:      components.NewHelpModel(components.CreatePlayingHelp()),
-		votedStations:  votedStations,
-		shuffleEnabled: false,
-		shuffleConfig:  shuffleConfig,
+		state:            luckyStateInput,
+		apiClient:        apiClient,
+		textInput:        ti,
+		newListInput:     nli,
+		favoritePath:     favoritePath,
+		player:           player.NewMPVPlayer(),
+		searchHistory:    history,
+		width:            80,
+		height:           24,
+		helpModel:        components.NewHelpModel(components.CreatePlayingHelp()),
+		votedStations:    votedStations,
+		shuffleEnabled:   false,
+		shuffleConfig:    shuffleConfig,
+		blocklistManager: blocklistManager,
 	}
 
 	// Build menu with history items
@@ -245,6 +258,23 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = luckyStateSavePrompt
 		return m, nil
 
+	case luckyPlaybackStalledMsg:
+		// Stop player if it's still "playing" (but silent)
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.saveMessage = "✗ No signal detected"
+		m.saveMessageTime = 3000
+		m.state = luckyStateInput
+		m.selectedStation = nil
+		return m, nil
+
+	case luckyCheckSignalMsg:
+		if (m.state == luckyStatePlaying || m.state == luckyStateShufflePlaying) && m.selectedStation != nil && m.selectedStation.StationUUID == msg.station.StationUUID {
+			return m, m.checkPlaybackSignal(msg.station, msg.attempt)
+		}
+		return m, nil
+
 	case saveSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
 		m.saveMessageTime = 150
@@ -315,7 +345,12 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case shuffleAdvanceMsg:
 		// Auto-advance to next shuffle station
 		if m.shuffleManager != nil && m.state == luckyStateShufflePlaying {
-			nextStation, err := m.shuffleManager.Next()
+			nextStation, err := m.shuffleManager.Next(func(s api.Station) bool {
+				if m.blocklistManager == nil {
+					return true
+				}
+				return !m.blocklistManager.IsBlocked(s.StationUUID)
+			})
 			if err != nil {
 				m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
 				m.saveMessageTime = 150
@@ -342,6 +377,49 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, ticksEverySecond()
+
+	case stationBlockedMsg:
+		m.lastBlockTime = time.Now()
+
+		if msg.success {
+			// Stop playback
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+
+			// Show message
+			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
+			m.saveMessageTime = 300 // 5 seconds
+
+			// If shuffle is active, advance to next station
+			if m.state == luckyStateShufflePlaying && m.shuffleManager != nil {
+				return m, func() tea.Msg {
+					return shuffleAdvanceMsg{}
+				}
+			}
+
+			// Return to input
+			m.state = luckyStateInput
+			m.selectedStation = nil
+			// Reload history
+			m.reloadSearchHistory()
+			m.rebuildMenuWithHistory()
+		} else {
+			// Already blocked
+			m.saveMessage = msg.message
+			m.saveMessageTime = 150
+		}
+		return m, nil
+
+	case undoBlockSuccessMsg:
+		m.saveMessage = "✓ Block undone"
+		m.saveMessageTime = 150
+		return m, nil
+
+	case undoBlockFailedMsg:
+		m.saveMessage = "No recent block to undo"
+		m.saveMessageTime = 150
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -679,7 +757,7 @@ func (m LuckyModel) loadAvailableLists() tea.Cmd {
 
 // initializeListModel creates the list model with current dimensions
 func (m *LuckyModel) initializeListModel() {
-	listHeight := m.height - 10
+	listHeight := m.height - 14
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -758,6 +836,21 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
+		// Filter out blocked stations
+		if m.blocklistManager != nil {
+			filtered := make([]api.Station, 0, len(stations))
+			for _, s := range stations {
+				if !m.blocklistManager.IsBlocked(s.StationUUID) {
+					filtered = append(filtered, s)
+				}
+			}
+			stations = filtered
+		}
+
+		if len(stations) == 0 {
+			return luckySearchErrorMsg{err: fmt.Errorf("all stations found for '%s' are blocked", keyword)}
+		}
+
 		// Pick a random station (rand is auto-seeded since Go 1.20)
 		randomIndex := rand.Intn(len(stations))
 		selectedStation := stations[randomIndex]
@@ -768,17 +861,41 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 
 // startPlayback initiates playback of the selected station
 func (m LuckyModel) startPlayback() tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return playbackErrorMsg{fmt.Errorf("no station selected")}
+	return tea.Batch(
+		func() tea.Msg {
+			if m.selectedStation == nil {
+				return playbackErrorMsg{fmt.Errorf("no station selected")}
+			}
+
+			if err := m.player.Play(m.selectedStation); err != nil {
+				return playbackErrorMsg{err}
+			}
+
+			return playbackStartedMsg{}
+		},
+		m.checkPlaybackSignal(*m.selectedStation, 1),
+	)
+}
+
+// checkPlaybackSignal checks for audio bitrate to ensure the station is actually playing
+func (m LuckyModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		if m.player == nil || !m.player.IsPlaying() {
+			return nil
 		}
 
-		if err := m.player.Play(m.selectedStation); err != nil {
-			return playbackErrorMsg{err}
+		bitrate, err := m.player.GetAudioBitrate()
+		if err == nil && bitrate > 0 {
+			// Signal detected!
+			return playbackStartedMsg{}
 		}
 
-		return playbackStartedMsg{}
-	}
+		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
+			return luckyPlaybackStalledMsg{station: station}
+		}
+
+		return luckyCheckSignalMsg{station: station, attempt: attempt + 1}
+	})
 }
 
 // saveToQuickFavorites saves the current station to My-favorites.json
@@ -914,6 +1031,18 @@ func (m LuckyModel) viewInput() string {
 		content.WriteString(errorStyle().Render(m.err.Error()))
 	}
 
+	// Save message if any
+	if m.saveMessage != "" {
+		content.WriteString("\n")
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+			content.WriteString(successStyle().Render(m.saveMessage))
+		} else if strings.Contains(m.saveMessage, "✗") {
+			content.WriteString(errorStyle().Render(m.saveMessage))
+		} else {
+			content.WriteString(infoStyle().Render(m.saveMessage))
+		}
+	}
+
 	helpText := "↑↓/jk: Navigate • Enter: Search • t: Toggle shuffle"
 	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
 		maxItems := len(m.searchHistory.LuckyQueries)
@@ -937,6 +1066,18 @@ func (m LuckyModel) viewSearching() string {
 	content.WriteString(infoStyle().Render("🔍 Searching for stations..."))
 	content.WriteString("\n\n")
 	content.WriteString("Finding a random station for you...")
+
+	// Save message if any
+	if m.saveMessage != "" {
+		content.WriteString("\n\n")
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+			content.WriteString(successStyle().Render(m.saveMessage))
+		} else if strings.Contains(m.saveMessage, "✗") {
+			content.WriteString(errorStyle().Render(m.saveMessage))
+		} else {
+			content.WriteString(infoStyle().Render(m.saveMessage))
+		}
+	}
 
 	return RenderPage(PageLayout{
 		Title:   "I Feel Lucky",
@@ -987,7 +1128,7 @@ func (m LuckyModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "Space: Pause/Play • f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
+		Help:    "b: Block • u: Undo • Space: Pause/Play • f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
 	}, m.height)
 }
 
@@ -1177,7 +1318,12 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.shuffleManager == nil {
 			return m, nil
 		}
-		nextStation, err := m.shuffleManager.Next()
+		nextStation, err := m.shuffleManager.Next(func(s api.Station) bool {
+			if m.blocklistManager == nil {
+				return true
+			}
+			return !m.blocklistManager.IsBlocked(s.StationUUID)
+		})
 		if err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
 			m.saveMessageTime = 150
@@ -1191,6 +1337,18 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.shuffleTimerTick(),
 		)
 	case "b":
+		// Block current station
+		if m.selectedStation != nil {
+			return m, m.blockStation()
+		}
+		return m, nil
+	case "u":
+		// Undo last block (within 5 seconds)
+		if time.Since(m.lastBlockTime) < 5*time.Second {
+			return m, m.undoLastBlock()
+		}
+		return m, nil
+	case "[":
 		// Previous shuffle station (from history)
 		if m.shuffleManager == nil {
 			return m, nil
@@ -1278,6 +1436,21 @@ func (m LuckyModel) searchForShuffle(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
+		// Filter out blocked stations
+		if m.blocklistManager != nil {
+			filtered := make([]api.Station, 0, len(stations))
+			for _, s := range stations {
+				if !m.blocklistManager.IsBlocked(s.StationUUID) {
+					filtered = append(filtered, s)
+				}
+			}
+			stations = filtered
+		}
+
+		if len(stations) == 0 {
+			return luckySearchErrorMsg{err: fmt.Errorf("all stations found for '%s' are blocked", keyword)}
+		}
+
 		return luckyShuffleSearchResultsMsg{
 			stations: stations,
 			keyword:  keyword,
@@ -1352,15 +1525,24 @@ func (m LuckyModel) viewShufflePlaying() string {
 
 		for i := startIdx; i < len(history); i++ {
 			station := history[i]
+			isBlocked := false
+			if m.blocklistManager != nil {
+				isBlocked = m.blocklistManager.IsBlocked(station.StationUUID)
+			}
+			name := station.TrimName()
+			if isBlocked {
+				name = "🚫 " + name
+			}
+
 			if i == len(history)-1 {
 				// Current station
 				content.WriteString("  → ")
-				content.WriteString(highlightStyle().Render(station.TrimName()))
+				content.WriteString(highlightStyle().Render(name))
 				content.WriteString(" ← Current")
 			} else {
 				// Previous station
 				content.WriteString("  ← ")
-				content.WriteString(station.TrimName())
+				content.WriteString(name)
 			}
 			content.WriteString("\n")
 		}
@@ -1390,13 +1572,58 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "Space: Pause/Play • f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
+	help := "Space: Pause/Play • b: Block • u: Undo • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: content.String(),
 		Help:    help,
 	}, m.height)
+}
+
+// blockStation blocks the currently playing station
+func (m LuckyModel) blockStation() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return luckySearchErrorMsg{fmt.Errorf("no station selected")}
+		}
+
+		ctx := context.Background()
+		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
+		if err != nil {
+			// Check if already blocked
+			if err == blocklist.ErrStationAlreadyBlocked {
+				return stationBlockedMsg{
+					message:     "Station is already blocked",
+					stationUUID: m.selectedStation.StationUUID,
+					success:     false,
+				}
+			}
+			return luckySearchErrorMsg{err}
+		}
+
+		return stationBlockedMsg{
+			message:     msg,
+			stationUUID: m.selectedStation.StationUUID,
+			success:     true,
+		}
+	}
+}
+
+// undoLastBlock undoes the last block operation
+func (m LuckyModel) undoLastBlock() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		undone, err := m.blocklistManager.UndoLastBlock(ctx)
+		if err != nil {
+			return luckySearchErrorMsg{err}
+		}
+
+		if undone {
+			return undoBlockSuccessMsg{}
+		}
+		return undoBlockFailedMsg{}
+	}
 }
 
 // reloadSearchHistory reloads history from disk

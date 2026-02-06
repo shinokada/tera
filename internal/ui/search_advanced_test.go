@@ -5,12 +5,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 )
 
 func TestBuildAdvancedSearchParams(t *testing.T) {
 	// Setup helper to create a model with inputs filled
 	createModelWithInputs := func(tag, lang, country, state, name string, sortByVotes bool) SearchModel {
-		model := NewSearchModel(api.NewClient(), "")
+		model := NewSearchModel(api.NewClient(), "", blocklist.NewManager("/tmp/blocklist"))
 
 		// Fill inputs (order: tag, lang, country, state, name)
 		model.advancedInputs[0].SetValue(tag)
@@ -165,7 +166,7 @@ func TestBuildAdvancedSearchParams(t *testing.T) {
 }
 
 func TestBitrateToggle(t *testing.T) {
-	model := NewSearchModel(api.NewClient(), "")
+	model := NewSearchModel(api.NewClient(), "", blocklist.NewManager("/tmp/blocklist"))
 	model.state = searchStateAdvancedForm
 	model.advancedFocusIdx = 6 // Focus on bitrate
 	model.advancedBitrate = "1"

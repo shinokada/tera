@@ -97,6 +97,10 @@ func (s *Storage) GetAllLists(ctx context.Context) ([]string, error) {
 		}
 		name := entry.Name()
 		if filepath.Ext(name) == ".json" {
+			// Skip system files that are not favorite lists
+			if name == "search-history.json" {
+				continue
+			}
 			// Remove .json extension
 			listName := name[:len(name)-5]
 			lists = append(lists, listName)

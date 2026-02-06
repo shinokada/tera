@@ -225,7 +225,7 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Update list sizes
-		listHeight := m.height - 10
+		listHeight := m.height - 14
 		m.menuList.SetSize(m.width-4, listHeight)
 		m.modeList.SetSize(m.width-4, listHeight)
 		m.alignmentList.SetSize(m.width-4, listHeight)

@@ -160,7 +160,7 @@ func renderHeader() string {
 	headerRendererMu.RLock()
 	renderer := globalHeaderRenderer
 	headerRendererMu.RUnlock()
-	
+
 	if renderer != nil {
 		return renderer.Render()
 	}
@@ -173,8 +173,6 @@ func renderHeader() string {
 		PaddingTop(1).
 		Render("TERA") + "\n"
 }
-
-
 
 // PageLayout represents a consistent page layout structure
 type PageLayout struct {
@@ -206,8 +204,8 @@ func RenderPage(layout PageLayout) string {
 func assemblePageContent(layout PageLayout) string {
 	var b strings.Builder
 
-	// Add consistent spacing after TERA header
-	b.WriteString("\n")
+	// Add consistent spacing after TERA header if needed
+	// (But we removed it to save vertical space for ASCII art)
 
 	// Title section - always takes up one line (empty or not) for consistency
 	if layout.Title != "" {

@@ -1,0 +1,2 @@
+// This file has been merged into blocklist_enhancements.go
+// Please delete this file: rm internal/ui/blocklist_enhanced.go

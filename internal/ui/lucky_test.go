@@ -6,12 +6,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
 func TestNewLuckyModel(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	if model.state != luckyStateInput {
 		t.Errorf("Expected initial state to be luckyStateInput, got %v", model.state)
@@ -48,7 +49,7 @@ func TestNewLuckyModel(t *testing.T) {
 
 func TestLuckyModelInit(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	cmd := model.Init()
 	if cmd == nil {
@@ -58,7 +59,7 @@ func TestLuckyModelInit(t *testing.T) {
 
 func TestLuckyInputStateEscNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 
 	msg := tea.KeyMsg{Type: tea.KeyEsc}
@@ -87,7 +88,7 @@ func TestLuckyInputStateEscNavigation(t *testing.T) {
 
 func TestLuckyInputStateEmptyKeyword(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 	model.textInput.SetValue("")
 
@@ -111,7 +112,7 @@ func TestLuckyInputStateEmptyKeyword(t *testing.T) {
 
 func TestLuckyInputStateValidKeyword(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 	model.textInput.SetValue("jazz")
 
@@ -134,7 +135,7 @@ func TestLuckyInputStateValidKeyword(t *testing.T) {
 
 func TestLuckyInputStateKeywordWithWhitespace(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 	model.textInput.SetValue("   rock   ")
 
@@ -154,7 +155,7 @@ func TestLuckyInputStateKeywordWithWhitespace(t *testing.T) {
 
 func TestLuckyInputStateWhitespaceOnlyKeyword(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 	model.textInput.SetValue("   ")
 
@@ -173,7 +174,7 @@ func TestLuckyInputStateWhitespaceOnlyKeyword(t *testing.T) {
 
 func TestLuckyPlayingStateEscNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -197,7 +198,7 @@ func TestLuckyPlayingStateEscNavigation(t *testing.T) {
 
 func TestLuckyPlayingStateZeroToMainMenu(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -227,7 +228,7 @@ func TestLuckyPlayingStateZeroToMainMenu(t *testing.T) {
 
 func TestLuckyPlayingStateFavoriteShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -241,7 +242,7 @@ func TestLuckyPlayingStateFavoriteShortcut(t *testing.T) {
 
 func TestLuckyPlayingStateSaveToListShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -260,7 +261,7 @@ func TestLuckyPlayingStateSaveToListShortcut(t *testing.T) {
 
 func TestLuckyPlayingStateVoteShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 	model.selectedStation = &api.Station{Name: "Test Station", StationUUID: "test-uuid"}
 
@@ -274,7 +275,7 @@ func TestLuckyPlayingStateVoteShortcut(t *testing.T) {
 
 func TestLuckySavePromptYes(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSavePrompt
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -301,7 +302,7 @@ func TestLuckySavePromptYes(t *testing.T) {
 
 func TestLuckySavePromptNo(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSavePrompt
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -344,7 +345,7 @@ func TestLuckySavePromptNo(t *testing.T) {
 
 func TestLuckySelectListEscNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSelectList
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -360,7 +361,7 @@ func TestLuckySelectListEscNavigation(t *testing.T) {
 
 func TestLuckySelectListNewListShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSelectList
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -380,7 +381,7 @@ func TestLuckySelectListNewListShortcut(t *testing.T) {
 
 func TestLuckyNewListInputEscNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateNewListInput
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -396,7 +397,7 @@ func TestLuckyNewListInputEscNavigation(t *testing.T) {
 
 func TestLuckyWindowSizeUpdate(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	msg := tea.WindowSizeMsg{Width: 120, Height: 40}
 	updatedModel, _ := model.Update(msg)
@@ -412,7 +413,7 @@ func TestLuckyWindowSizeUpdate(t *testing.T) {
 
 func TestLuckySearchResultsMsg(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSearching
 
 	station := &api.Station{Name: "Found Station", URLResolved: "http://example.com/stream"}
@@ -439,7 +440,7 @@ func TestLuckySearchResultsMsg(t *testing.T) {
 
 func TestLuckySearchErrorMsg(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSearching
 
 	msg := luckySearchErrorMsg{err: fmt.Errorf("no stations found")}
@@ -457,7 +458,7 @@ func TestLuckySearchErrorMsg(t *testing.T) {
 
 func TestLuckySaveSuccessMsg(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 
 	station := &api.Station{Name: "Test Station"}
@@ -476,7 +477,7 @@ func TestLuckySaveSuccessMsg(t *testing.T) {
 
 func TestLuckySaveFailedMsgDuplicate(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 
 	msg := saveFailedMsg{err: fmt.Errorf("duplicate"), isDuplicate: true}
@@ -490,7 +491,7 @@ func TestLuckySaveFailedMsgDuplicate(t *testing.T) {
 
 func TestLuckyVoteSuccessMsg(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStatePlaying
 
 	msg := components.VoteSuccessMsg{Message: "Voted for Test Station"}
@@ -508,7 +509,7 @@ func TestLuckyVoteSuccessMsg(t *testing.T) {
 
 func TestLuckyListsLoadedMsg(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateSelectList
 	model.width = 80
 	model.height = 24
@@ -528,7 +529,7 @@ func TestLuckyListsLoadedMsg(t *testing.T) {
 
 func TestLuckyViewStates(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	tests := []struct {
 		name  string
@@ -563,7 +564,7 @@ func TestLuckyViewStates(t *testing.T) {
 
 func TestLuckyShuffleToggle(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 	model.textInput.SetValue("") // Empty input
 
@@ -593,7 +594,7 @@ func TestLuckyShuffleToggle(t *testing.T) {
 
 func TestLuckyShuffleSearchTrigger(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateInput
 	model.textInput.SetValue("jazz")
 	model.shuffleEnabled = true
@@ -613,7 +614,7 @@ func TestLuckyShuffleSearchTrigger(t *testing.T) {
 
 func TestLuckyShufflePlayingStateStopShuffle(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 	model.shuffleEnabled = true
@@ -639,7 +640,7 @@ func TestLuckyShufflePlayingStateStopShuffle(t *testing.T) {
 
 func TestLuckyShufflePlayingStateEscNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 	model.shuffleEnabled = true
@@ -668,7 +669,7 @@ func TestLuckyShufflePlayingStateEscNavigation(t *testing.T) {
 
 func TestLuckyShufflePlayingStateZeroToMainMenu(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 	model.shuffleEnabled = true
@@ -703,7 +704,7 @@ func TestLuckyShufflePlayingStateZeroToMainMenu(t *testing.T) {
 
 func TestLuckyShufflePlayingStateFavoriteShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -717,7 +718,7 @@ func TestLuckyShufflePlayingStateFavoriteShortcut(t *testing.T) {
 
 func TestLuckyShufflePlayingStateSaveToListShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station"}
 
@@ -736,7 +737,7 @@ func TestLuckyShufflePlayingStateSaveToListShortcut(t *testing.T) {
 
 func TestLuckyShufflePlayingStateVoteShortcut(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station", StationUUID: "test-uuid"}
 
@@ -750,7 +751,7 @@ func TestLuckyShufflePlayingStateVoteShortcut(t *testing.T) {
 
 func TestLuckyShuffleViewShufflePlaying(t *testing.T) {
 	client := api.NewClient()
-	model := NewLuckyModel(client, "/tmp/test")
+	model := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = luckyStateShufflePlaying
 	model.selectedStation = &api.Station{Name: "Test Station", URLResolved: "http://example.com"}
 	// In real scenario, shuffleManager would be initialized

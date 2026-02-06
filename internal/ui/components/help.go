@@ -177,6 +177,8 @@ func CreateMainMenuHelp() []HelpSection {
 				{"Space", "Pause/Resume"},
 				{"/*", "Adjust volume"},
 				{"m", "Toggle mute"},
+				{"b", "Block station"},
+				{"u", "Undo block"},
 			},
 		},
 	}
@@ -206,6 +208,8 @@ func CreateFavoritesHelp() []HelpSection {
 			Items: []HelpItem{
 				{"f", "Save to Favorites"},
 				{"v", "Vote"},
+				{"b", "Block station"},
+				{"u", "Undo block"},
 			},
 		},
 	}
@@ -236,6 +240,8 @@ func CreatePlayingHelp() []HelpSection {
 				{"f", "Save to Favorites"},
 				{"s", "Save to List"},
 				{"v", "Vote"},
+				{"b", "Block station"},
+				{"u", "Undo block"},
 			},
 		},
 	}

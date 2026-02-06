@@ -9,6 +9,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 💾 **Favorites** - Organize stations into custom lists with duplicate detection
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
 - 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
+- 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
@@ -112,8 +113,10 @@ tera
 # 1) Play from Favorites - Browse your saved lists
 # 2) Search Stations     - Find new stations
 # 3) Manage Lists        - Create/edit/delete favorite lists
-# 4) I Feel Lucky        - Random station by keyword
-# 5) Gist Management     - Backup/restore via GitHub
+# 4) Block List          - Manage blocked stations
+# 5) I Feel Lucky        - Random station by keyword
+# 6) Gist Management     - Backup/restore via GitHub
+# 7) Settings            - Configure TERA
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
@@ -148,6 +151,35 @@ Create, rename, and delete your favorite lists. Stations can be:
 
 **Duplicate Detection**: TERA automatically prevents adding the same station twice to any list.
 
+### Block List
+
+Block unwanted stations to prevent them from appearing in search results and shuffle mode.
+
+**How to Block:**
+- While playing any station, press `b` to block it instantly
+- Press `u` within 5 seconds to undo (in case of accidental block)
+- Works in Search, I Feel Lucky, and Play from Favorites
+
+**Block List Management:**
+From main menu, select "4. Block List" to:
+- View all blocked stations with details (country, language, codec)
+- Press `u` to unblock a selected station
+- Press `c` to clear entire block list (with confirmation)
+
+**Keyboard Shortcuts:**
+
+| Screen | Key | Action |
+|--------|-----|--------|
+| Playing | `b` | Block current station |
+| Playing | `u` | Undo block (5 sec window) |
+| Block List | `u` | Unblock selected station |
+| Block List | `c` | Clear all blocks |
+
+**Storage Location:**
+- Linux: `~/.config/tera/blocklist.json`
+- macOS: `~/Library/Application Support/tera/blocklist.json`
+- Windows: `%APPDATA%\tera\blocklist.json`
+
 ### I Feel Lucky
 
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
@@ -163,7 +195,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 6):
+Access app configuration from the main menu (option 7):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -219,8 +251,10 @@ Choose an option:
   1. Play from Favorites
   2. Search Stations
   3. Manage Lists
-  4. I Feel Lucky
-  5. Gist Management
+  4. Block List
+  5. I Feel Lucky
+  6. Gist Management
+  7. Settings
 
 ─── Quick Play Favorites ───
   10. Jazz FM • UK • MP3 192kbps
@@ -242,7 +276,7 @@ Type 10-12 to play instantly!
 
 The easiest way to change themes is through the Settings menu:
 
-1. Press `6` from the main menu to open Settings
+1. Press `7` from the main menu to open Settings
 2. Select "Theme / Colors"
 3. Choose from predefined themes:
    - **Default** - Cyan and blue tones
@@ -284,7 +318,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `6` from the main menu to open Settings
+1. Press `7` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version
@@ -317,7 +351,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### How It Works
 
-1. Navigate to **I Feel Lucky** from the main menu (option 4)
+1. Navigate to **I Feel Lucky** from the main menu (option 5)
 2. Press `t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
@@ -435,7 +469,7 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
-| `1-6`    | Quick select menu item       |
+| `1-7`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
 ### Playback Controls
@@ -446,6 +480,8 @@ You can edit this file directly or use the Settings menu.
 | `*`     | Volume up (+5%)   |
 | `/`     | Volume down (-5%) |
 | `m`     | Toggle mute       |
+| `b`     | Block station     |
+| `u`     | Undo block (5s)   |
 
 ### Playing/Browsing Stations
 
@@ -516,7 +552,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 5) Gist Management → 6) Token Management
+1. Go to: Main Menu → 6) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!
@@ -550,6 +586,7 @@ tera/
 ├── appearance_config.yaml  # Header customization (text, ASCII art, etc.)
 ├── connection_config.yaml  # Auto-reconnect and buffering settings
 ├── shuffle.yaml            # Shuffle mode settings
+├── blocklist.json          # Blocked radio stations
 ├── voted_stations.json     # Voting history (prevents duplicate votes)
 ├── gist_metadata.json      # Your gist history
 ├── tokens/

@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/theme"
@@ -40,33 +41,35 @@ const (
 
 // SearchModel represents the search screen
 type SearchModel struct {
-	state           searchState
-	searchType      api.SearchType
-	menuList        list.Model // List-based menu navigation
-	stationInfoMenu list.Model // Station info submenu navigation
-	apiClient       *api.Client
-	textInput       textinput.Model
-	newListInput    textinput.Model
-	spinner         spinner.Model
-	results         []api.Station
-	resultsItems    []list.Item
-	resultsList     list.Model
-	selectedStation *api.Station
-	player          *player.MPVPlayer
-	favoritePath    string
-	quickFavorites  []api.Station               // My-favorites.json for duplicate checking
-	searchHistory   *storage.SearchHistoryStore // Search history
-	numberBuffer    string                      // Buffer for number input display
-	saveMessage     string
-	saveMessageTime int
-	width           int
-	height          int
-	err             error
-	availableLists  []string
-	listItems       []list.Item
-	listModel       list.Model
-	helpModel       components.HelpModel
-	votedStations   *storage.VotedStations // Track voted stations
+	state            searchState
+	searchType       api.SearchType
+	menuList         list.Model // List-based menu navigation
+	stationInfoMenu  list.Model // Station info submenu navigation
+	apiClient        *api.Client
+	textInput        textinput.Model
+	newListInput     textinput.Model
+	spinner          spinner.Model
+	results          []api.Station
+	resultsItems     []list.Item
+	resultsList      list.Model
+	selectedStation  *api.Station
+	player           *player.MPVPlayer
+	favoritePath     string
+	quickFavorites   []api.Station               // My-favorites.json for duplicate checking
+	searchHistory    *storage.SearchHistoryStore // Search history
+	numberBuffer     string                      // Buffer for number input display
+	saveMessage      string
+	saveMessageTime  int
+	width            int
+	height           int
+	err              error
+	availableLists   []string
+	listItems        []list.Item
+	listModel        list.Model
+	helpModel        components.HelpModel
+	votedStations    *storage.VotedStations // Track voted stations
+	blocklistManager *blocklist.Manager
+	lastBlockTime    time.Time
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
@@ -91,8 +94,17 @@ type playerErrorMsg struct {
 	err error
 }
 
+type playbackStalledMsg struct {
+	station api.Station
+}
+
+type checkSignalMsg struct {
+	station api.Station
+	attempt int
+}
+
 // NewSearchModel creates a new search screen model
-func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
+func NewSearchModel(apiClient *api.Client, favoritePath string, blocklistManager *blocklist.Manager) SearchModel {
 	ti := textinput.New()
 	ti.Placeholder = "Enter search query..."
 	ti.CharLimit = 100
@@ -180,6 +192,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string) SearchModel {
 		advancedFocusIdx:    0,
 		advancedBitrate:     "",
 		advancedSortByVotes: true, // Default to sorting by votes
+		blocklistManager:    blocklistManager,
 	}
 
 	// Build menu with history items included
@@ -226,9 +239,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate usable height (leaving room for footer only - title is inside list)
-		// Footer needs ~3 lines: empty line + help text + our custom footer
-		listHeight := msg.Height - 4
+		// Calculate usable height
+		listHeight := msg.Height - 14
 		if listHeight < 5 {
 			listHeight = 5 // Minimum height
 		}
@@ -288,12 +300,16 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = searchStateResults
 		m.resultsItems = make([]list.Item, 0, len(m.results))
 		for _, station := range m.results {
-			m.resultsItems = append(m.resultsItems, stationListItem{station: station})
+			isBlocked := false
+			if m.blocklistManager != nil {
+				isBlocked = m.blocklistManager.IsBlocked(station.StationUUID)
+			}
+			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked})
 		}
 
 		// Calculate proper list height
-		// Footer needs ~3 lines, so leave 4 lines total for safety
-		listHeight := m.height - 4
+		// Header needs enough space, so use same buffer as search menu
+		listHeight := m.height - 14
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -324,6 +340,27 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully, stay in playing state
+		return m, nil
+
+	case playerErrorMsg:
+		m.err = msg.err
+		m.state = searchStateResults
+		return m, nil
+
+	case playbackStalledMsg:
+		// Stop player if it's still "playing" (but silent)
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.saveMessage = "✗ No signal detected"
+		m.saveMessageTime = 3000
+		m.state = searchStateResults
+		return m, nil
+
+	case checkSignalMsg:
+		if m.state == searchStatePlaying && m.selectedStation != nil && m.selectedStation.StationUUID == msg.station.StationUUID {
+			return m, m.checkPlaybackSignal(msg.station, msg.attempt)
+		}
 		return m, nil
 
 	case playbackStoppedMsg:
@@ -378,12 +415,6 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case saveToListSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to %s", msg.stationName, msg.listName)
-		m.saveMessageTime = 150
-		m.state = searchStatePlaying
-		return m, nil
-
 	case saveToListFailedMsg:
 		if msg.isDuplicate {
 			m.saveMessage = "Already in this list"
@@ -392,6 +423,67 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessageTime = 150
 		m.state = searchStatePlaying
+		return m, nil
+
+	case stationBlockedMsg:
+		m.lastBlockTime = time.Now()
+
+		if msg.success {
+			// Stop playback
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+
+			// Show message
+			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
+			m.saveMessageTime = 300 // 5 seconds
+
+			// Return to results
+			m.state = searchStateResults
+
+			// Update blocked status in the list items
+			if m.resultsList.Items() != nil {
+				items := m.resultsList.Items()
+				for i, item := range items {
+					if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
+						si.isBlocked = true
+						items[i] = si
+						break
+					}
+				}
+				m.resultsList.SetItems(items)
+			}
+			m.selectedStation = nil
+		} else {
+			// Already blocked
+			m.saveMessage = msg.message
+			m.saveMessageTime = 150
+		}
+		return m, nil
+
+	case undoBlockSuccessMsg:
+		m.saveMessage = "✓ Block undone"
+		m.saveMessageTime = 150
+		// Update blocked status in the list items
+		if m.resultsList.Items() != nil {
+			items := m.resultsList.Items()
+			for i, item := range items {
+				if si, ok := item.(stationListItem); ok {
+					if m.blocklistManager != nil && !m.blocklistManager.IsBlocked(si.station.StationUUID) {
+						if si.isBlocked {
+							si.isBlocked = false
+							items[i] = si
+						}
+					}
+				}
+			}
+			m.resultsList.SetItems(items)
+		}
+		return m, nil
+
+	case undoBlockFailedMsg:
+		m.saveMessage = "No recent block to undo"
+		m.saveMessageTime = 150
 		return m, nil
 	}
 
@@ -569,7 +661,7 @@ func (m SearchModel) loadAvailableLists() tea.Cmd {
 
 // initializeListModel creates the list model with current dimensions
 func (m *SearchModel) initializeListModel() {
-	listHeight := m.height - 10
+	listHeight := m.height - 14
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -842,15 +934,37 @@ func (m SearchModel) executeStationAction(index int) (tea.Model, tea.Cmd) {
 
 // playStation starts playing a station
 func (m SearchModel) playStation(station api.Station) tea.Cmd {
-	return func() tea.Msg {
-		err := m.player.Play(&station)
-		if err != nil {
-			return playerErrorMsg{err: err}
+	return tea.Batch(
+		func() tea.Msg {
+			err := m.player.Play(&station)
+			if err != nil {
+				return playerErrorMsg{err: err}
+			}
+			return playbackStartedMsg{}
+		},
+		m.checkPlaybackSignal(station, 1),
+	)
+}
+
+// checkPlaybackSignal checks for audio bitrate to ensure the station is actually playing
+func (m SearchModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		if m.player == nil || !m.player.IsPlaying() {
+			return nil
 		}
-		// Return started message, not stopped
-		// Player will continue running until user stops it
-		return playbackStartedMsg{}
-	}
+
+		bitrate, err := m.player.GetAudioBitrate()
+		if err == nil && bitrate > 0 {
+			// Signal detected!
+			return playbackStartedMsg{}
+		}
+
+		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
+			return playbackStalledMsg{station: station}
+		}
+
+		return checkSignalMsg{station: station, attempt: attempt + 1}
+	})
 }
 
 // handlePlaybackStopped handles return to results after playback
@@ -989,6 +1103,18 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
 		if startTick {
 			return m, ticksEverySecond()
+		}
+		return m, nil
+	case "b":
+		// Block current station
+		if m.selectedStation != nil {
+			return m, m.blockStation()
+		}
+		return m, nil
+	case "u":
+		// Undo last block (within 5 seconds)
+		if time.Since(m.lastBlockTime) < 5*time.Second {
+			return m, m.undoLastBlock()
 		}
 		return m, nil
 	case "?":
@@ -1162,8 +1288,23 @@ func (m SearchModel) View() string {
 				Help:    "Esc: Back to search menu",
 			})
 		}
+
+		var content strings.Builder
+		content.WriteString(m.resultsList.View())
+
+		if m.saveMessage != "" {
+			content.WriteString("\n\n")
+			if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+				content.WriteString(successStyle().Render(m.saveMessage))
+			} else if strings.Contains(m.saveMessage, "✗") {
+				content.WriteString(errorStyle().Render(m.saveMessage))
+			} else {
+				content.WriteString(infoStyle().Render(m.saveMessage))
+			}
+		}
+
 		return RenderPage(PageLayout{
-			Content: m.resultsList.View(),
+			Content: content.String(),
 			Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 		})
 
@@ -1204,7 +1345,7 @@ func (m SearchModel) View() string {
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
-			Help:    "f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
+			Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • v: Vote • ?: Help",
 		}, m.height)
 
 	case searchStateSelectList:
@@ -1791,4 +1932,49 @@ func (m SearchModel) viewAdvancedForm() string {
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
+}
+
+// blockStation blocks the currently playing station
+func (m SearchModel) blockStation() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return searchErrorMsg{fmt.Errorf("no station selected")}
+		}
+
+		ctx := context.Background()
+		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
+		if err != nil {
+			// Check if already blocked
+			if err == blocklist.ErrStationAlreadyBlocked {
+				return stationBlockedMsg{
+					message:     "Station is already blocked",
+					stationUUID: m.selectedStation.StationUUID,
+					success:     false,
+				}
+			}
+			return searchErrorMsg{err}
+		}
+
+		return stationBlockedMsg{
+			message:     msg,
+			stationUUID: m.selectedStation.StationUUID,
+			success:     true,
+		}
+	}
+}
+
+// undoLastBlock undoes the last block operation
+func (m SearchModel) undoLastBlock() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		undone, err := m.blocklistManager.UndoLastBlock(ctx)
+		if err != nil {
+			return searchErrorMsg{err}
+		}
+
+		if undone {
+			return undoBlockSuccessMsg{}
+		}
+		return undoBlockFailedMsg{}
+	}
 }

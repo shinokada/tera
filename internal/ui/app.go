@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
@@ -28,10 +29,11 @@ const (
 	screenShuffleSettings
 	screenConnectionSettings
 	screenAppearanceSettings
+	screenBlocklist
 )
 
 // Main menu configuration
-const mainMenuItemCount = 6
+const mainMenuItemCount = 7
 
 type App struct {
 	screen                   Screen
@@ -47,7 +49,9 @@ type App struct {
 	shuffleSettingsScreen    ShuffleSettingsModel
 	connectionSettingsScreen ConnectionSettingsModel
 	appearanceSettingsScreen AppearanceSettingsModel
+	blocklistScreen          BlocklistModel
 	apiClient                *api.Client
+	blocklistManager         *blocklist.Manager
 	favoritePath             string
 	quickFavorites           []api.Station
 	quickFavPlayer           *player.MPVPlayer
@@ -82,12 +86,21 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
 	}
 
+	// Initialize blocklist manager
+	configDir, _ := os.UserConfigDir()
+	blocklistPath := filepath.Join(configDir, "tera", "blocklist.json")
+	blocklistMgr := blocklist.NewManager(blocklistPath)
+	if err := blocklistMgr.Load(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist: %v\n", err)
+	}
+
 	app := App{
-		screen:         screenMainMenu,
-		favoritePath:   favPath,
-		apiClient:      api.NewClient(),
-		quickFavPlayer: player.NewMPVPlayer(),
-		helpModel:      components.NewHelpModel(components.CreateMainMenuHelp()),
+		screen:           screenMainMenu,
+		favoritePath:     favPath,
+		apiClient:        api.NewClient(),
+		quickFavPlayer:   player.NewMPVPlayer(),
+		helpModel:        components.NewHelpModel(components.CreateMainMenuHelp()),
+		blocklistManager: blocklistMgr,
 	}
 
 	// Initialize header renderer
@@ -110,9 +123,10 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Play from Favorites", "", "1"),
 		components.NewMenuItem("Search Stations", "", "2"),
 		components.NewMenuItem("Manage Lists", "", "3"),
-		components.NewMenuItem("I Feel Lucky", "", "4"),
-		components.NewMenuItem("Gist Management", "", "5"),
-		components.NewMenuItem("Settings", "", "6"),
+		components.NewMenuItem("Block List", "", "4"),
+		components.NewMenuItem("I Feel Lucky", "", "5"),
+		components.NewMenuItem("Gist Management", "", "6"),
+		components.NewMenuItem("Settings", "", "7"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -213,7 +227,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Initialize screen-specific models with current dimensions
 		switch msg.screen {
 		case screenPlay:
-			a.playScreen = NewPlayModel(a.favoritePath)
+			a.playScreen = NewPlayModel(a.favoritePath, a.blocklistManager)
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -221,7 +235,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.playScreen.Init()
 		case screenSearch:
-			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath)
+			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.blocklistManager)
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -237,7 +251,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.listManagementScreen.Init()
 		case screenLucky:
-			a.luckyScreen = NewLuckyModel(a.apiClient, a.favoritePath)
+			a.luckyScreen = NewLuckyModel(a.apiClient, a.favoritePath, a.blocklistManager)
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.luckyScreen.width = a.width
@@ -290,6 +304,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.appearanceSettingsScreen.height = a.height
 			}
 			return a, a.appearanceSettingsScreen.Init()
+		case screenBlocklist:
+			a.blocklistScreen = NewBlocklistModel(a.blocklistManager)
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.blocklistScreen.width = a.width
+				a.blocklistScreen.height = a.height
+			}
+			return a, a.blocklistScreen.Init()
 		case screenMainMenu:
 			// Return to main menu and reload favorites
 			a.loadQuickFavorites()
@@ -414,6 +436,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var m tea.Model
 		m, cmd = a.appearanceSettingsScreen.Update(msg)
 		a.appearanceSettingsScreen = m.(AppearanceSettingsModel)
+
+		// Check if we should return to main menu
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenBlocklist:
+		var m tea.Model
+		m, cmd = a.blocklistScreen.Update(msg)
+		a.blocklistScreen = m.(BlocklistModel)
 
 		// Check if we should return to main menu
 		if _, ok := msg.(backToMainMsg); ok {
@@ -658,15 +690,19 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenList}
 		}
-	case 3: // I Feel Lucky
+	case 3: // Block List
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenBlocklist}
+		}
+	case 4: // I Feel Lucky
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 4: // Gist Management
+	case 5: // Gist Management
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
-	case 5: // Settings
+	case 6: // Settings
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSettings}
 		}
@@ -722,6 +758,8 @@ func (a App) View() string {
 		return a.connectionSettingsScreen.View()
 	case screenAppearanceSettings:
 		return a.appearanceSettingsScreen.View()
+	case screenBlocklist:
+		return a.blocklistScreen.View()
 	}
 	return "Unknown screen"
 }
@@ -772,9 +810,10 @@ func (a App) viewMainMenu() string {
 		{"1", "Play from Favorites"},
 		{"2", "Search Stations"},
 		{"3", "Manage Lists"},
-		{"4", "I Feel Lucky"},
-		{"5", "Gist Management"},
-		{"6", "Settings"},
+		{"4", "Block List"},
+		{"5", "I Feel Lucky"},
+		{"6", "Gist Management"},
+		{"7", "Settings"},
 	}
 
 	for i, item := range menuItems {
@@ -865,7 +904,7 @@ func (a App) viewMainMenu() string {
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-6: Menu • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-7: Menu • 10+: Quick Play • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)

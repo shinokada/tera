@@ -7,10 +7,13 @@ import (
 	"sort"
 	"strings"
 
+	"time"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 	"github.com/shinokada/tera/internal/player"
 	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
@@ -41,7 +44,7 @@ type PlayModel struct {
 	selectedStation  *api.Station
 	stationToDelete  *api.Station
 	player           *player.MPVPlayer
-	apiClient        *api.Client            // Reusable API client
+	apiClient        *api.Client // Reusable API client
 	saveMessage      string
 	saveMessageTime  int // frames to show message
 	width            int
@@ -51,6 +54,9 @@ type PlayModel struct {
 	stationsNeedInit bool                   // Flag to trigger station model initialization
 	helpModel        components.HelpModel   // Help overlay
 	votedStations    *storage.VotedStations // Track voted stations
+	blocklistManager *blocklist.Manager
+	lastBlockTime    time.Time
+	trackHistory     []string // Last 5 tracks played
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -64,14 +70,18 @@ func (i playListItem) Description() string { return "" }
 
 // stationListItem wraps a station for the bubbles list
 type stationListItem struct {
-	station api.Station
+	station   api.Station
+	isBlocked bool
 }
 
 func (i stationListItem) FilterValue() string { return i.station.Name }
 func (i stationListItem) Title() string {
-	// Combine name and info into single line
 	var parts []string
-	parts = append(parts, i.station.TrimName())
+	name := i.station.TrimName()
+	if i.isBlocked {
+		name = "🚫 " + name
+	}
+	parts = append(parts, name)
 
 	if i.station.Country != "" {
 		parts = append(parts, i.station.Country)
@@ -91,7 +101,7 @@ func (i stationListItem) Description() string {
 }
 
 // NewPlayModel creates a new play screen model
-func NewPlayModel(favoritePath string) PlayModel {
+func NewPlayModel(favoritePath string, blocklistManager *blocklist.Manager) PlayModel {
 	// Note: favorites directory and My-favorites.json are created at app startup
 	// in app.go's NewApp() function, so no need to check here
 
@@ -104,20 +114,68 @@ func NewPlayModel(favoritePath string) PlayModel {
 	}
 
 	return PlayModel{
-		state:         playStateListSelection,
-		favoritePath:  favoritePath,
-		lists:         []string{},
-		listItems:     []list.Item{},
-		player:        player.NewMPVPlayer(),
-		apiClient:     api.NewClient(),
-		helpModel:     components.NewHelpModel(components.CreateFavoritesHelp()),
-		votedStations: votedStations,
+		state:            playStateListSelection,
+		favoritePath:     favoritePath,
+		lists:            []string{},
+		listItems:        []list.Item{},
+		player:           player.NewMPVPlayer(),
+		apiClient:        api.NewClient(),
+		helpModel:        components.NewHelpModel(components.CreateFavoritesHelp()),
+		votedStations:    votedStations,
+		blocklistManager: blocklistManager,
 	}
 }
 
 // Init initializes the play screen
 func (m PlayModel) Init() tea.Cmd {
 	return m.loadLists()
+}
+
+// playStation starts playing a station
+func (m PlayModel) playStation(station api.Station) tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg {
+			err := m.player.Play(&station)
+			if err != nil {
+				return playbackErrorMsg{err}
+			}
+			return playbackStartedMsg{}
+		},
+		m.checkPlaybackSignal(station, 1),
+	)
+}
+
+// checkPlaybackSignal checks for audio bitrate to ensure the station is actually playing
+func (m PlayModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		if m.player == nil || !m.player.IsPlaying() {
+			return nil
+		}
+
+		bitrate, err := m.player.GetAudioBitrate()
+		if err == nil && bitrate > 0 {
+			// Signal detected!
+			return playbackStartedMsg{}
+		}
+
+		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
+			return favoritesPlaybackStalledMsg{station: station}
+		}
+
+		return favoritesCheckSignalMsg{station: station, attempt: attempt + 1}
+	})
+}
+
+// pollTrackHistory polls for track updates every 5 seconds
+func (m PlayModel) pollTrackHistory() tea.Cmd {
+	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
+		if m.player == nil || !m.player.IsPlaying() {
+			return nil
+		}
+
+		tracks := m.player.GetTrackHistory()
+		return trackHistoryMsg{tracks: tracks}
+	})
 }
 
 // loadLists loads all available favorite lists
@@ -145,6 +203,10 @@ func (m PlayModel) getAvailableLists() ([]string, error) {
 		}
 		name := entry.Name()
 		if strings.HasSuffix(name, ".json") {
+			// Skip system files that are not favorite lists
+			if name == "search-history.json" {
+				continue
+			}
 			// Remove .json extension
 			listName := strings.TrimSuffix(name, ".json")
 			lists = append(lists, listName)
@@ -228,7 +290,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Calculate usable height
-		listHeight := msg.Height - 10
+		listHeight := msg.Height - 14
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -254,18 +316,34 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Playback started successfully - trigger refresh to show voted status
 		// Only start tick if not already running
 		if m.saveMessageTime == 0 {
-			return m, ticksEverySecond()
+			return m, tea.Batch(ticksEverySecond(), m.pollTrackHistory())
+		}
+		return m, m.pollTrackHistory()
+
+	case playbackErrorMsg:
+		m.err = msg.err
+		m.state = playStateSavePrompt // Show prompt even on error
+		return m, nil
+
+	case favoritesPlaybackStalledMsg:
+		// Stop player if it's still "playing" (but silent)
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.saveMessage = "✗ No signal detected"
+		m.saveMessageTime = 3000
+		// Show save prompt when going back from playing
+		m.state = playStateSavePrompt
+		return m, nil
+
+	case favoritesCheckSignalMsg:
+		if m.state == playStatePlaying && m.selectedStation != nil && m.selectedStation.StationUUID == msg.station.StationUUID {
+			return m, m.checkPlaybackSignal(msg.station, msg.attempt)
 		}
 		return m, nil
 
 	case playbackStoppedMsg:
 		// Playback stopped
-		return m, nil
-
-	case playbackErrorMsg:
-		m.err = msg.err
-		m.state = playStateStationSelection
-		m.selectedStation = nil
 		return m, nil
 
 	case saveSuccessMsg:
@@ -310,6 +388,71 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case stationBlockedMsg:
+		m.lastBlockTime = time.Now()
+
+		if msg.success {
+			// Stop playback
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+
+			// Show message
+			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
+			m.saveMessageTime = 300 // 5 seconds
+
+			// Return to station selection
+			m.state = playStateStationSelection
+			// Update the blocked status in the list
+			if m.stationListModel.Items() != nil {
+				items := m.stationListModel.Items()
+				for i, item := range items {
+					if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
+						si.isBlocked = true
+						items[i] = si
+						break
+					}
+				}
+				m.stationListModel.SetItems(items)
+			}
+			m.selectedStation = nil
+
+			startTick := m.saveMessageTime == 0
+			if startTick {
+				return m, ticksEverySecond()
+			}
+		} else {
+			// Already blocked
+			m.saveMessage = msg.message
+			m.saveMessageTime = 150
+		}
+		return m, nil
+
+	case undoBlockSuccessMsg:
+		m.saveMessage = "✓ Block undone"
+		m.saveMessageTime = 150
+		// Update blocked status in list
+		if m.stationListModel.Items() != nil {
+			items := m.stationListModel.Items()
+			for i, item := range items {
+				if si, ok := item.(stationListItem); ok {
+					if m.blocklistManager != nil && !m.blocklistManager.IsBlocked(si.station.StationUUID) {
+						if si.isBlocked {
+							si.isBlocked = false
+							items[i] = si
+						}
+					}
+				}
+			}
+			m.stationListModel.SetItems(items)
+		}
+		return m, nil
+
+	case undoBlockFailedMsg:
+		m.saveMessage = "No recent block to undo"
+		m.saveMessageTime = 150
+		return m, nil
+
 	case listsLoadedMsg:
 		m.lists = msg.lists
 		m.listItems = make([]list.Item, len(msg.lists))
@@ -330,7 +473,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stations = msg.stations
 		m.stationItems = make([]list.Item, len(msg.stations))
 		for i, station := range msg.stations {
-			m.stationItems[i] = stationListItem{station: station}
+			isBlocked := false
+			if m.blocklistManager != nil {
+				isBlocked = m.blocklistManager.IsBlocked(station.StationUUID)
+			}
+			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked}
 		}
 
 		// Initialize now if we have dimensions, otherwise flag for later
@@ -352,6 +499,14 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, ticksEverySecond()
 
+	case trackHistoryMsg:
+		m.trackHistory = msg.tracks
+		// Continue polling if still playing
+		if m.state == playStatePlaying {
+			return m, m.pollTrackHistory()
+		}
+		return m, nil
+
 	case errMsg:
 		m.err = msg.err
 		return m, nil
@@ -368,7 +523,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // initializeListModel creates the list model with current dimensions
 func (m *PlayModel) initializeListModel() {
-	listHeight := m.height - 10
+	listHeight := m.height - 14
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -387,7 +542,7 @@ func (m *PlayModel) initializeListModel() {
 
 // initializeStationListModel creates the station list model with current dimensions
 func (m *PlayModel) initializeStationListModel() {
-	listHeight := m.height - 10
+	listHeight := m.height - 14
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -466,28 +621,13 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation = &i.station
 			m.state = playStatePlaying
 			// Start playback
-			return m, m.startPlayback()
+			return m, m.playStation(i.station)
 		}
 	}
 
 	var cmd tea.Cmd
 	m.stationListModel, cmd = m.stationListModel.Update(msg)
 	return m, cmd
-}
-
-// startPlayback initiates playback of the selected station
-func (m PlayModel) startPlayback() tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return errMsg{fmt.Errorf("no station selected")}
-		}
-
-		if err := m.player.Play(m.selectedStation); err != nil {
-			return playbackErrorMsg{err}
-		}
-
-		return playbackStartedMsg{}
-	}
 }
 
 // updatePlaying handles input during playback
@@ -524,6 +664,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.state = playStateStationSelection
 		m.selectedStation = nil
+		m.trackHistory = []string{}
 		return m, nil
 	case "0":
 		// Return to main menu (Level 3 shortcut)
@@ -532,6 +673,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.selectedStation = nil
+		m.trackHistory = []string{}
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
@@ -591,6 +733,18 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
 		if startTick {
 			return m, ticksEverySecond()
+		}
+		return m, nil
+	case "b":
+		// Block current station
+		if m.selectedStation != nil {
+			return m, m.blockStation()
+		}
+		return m, nil
+	case "u":
+		// Undo last block (within 5 seconds)
+		if time.Since(m.lastBlockTime) < 5*time.Second {
+			return m, m.undoLastBlock()
 		}
 		return m, nil
 	}
@@ -700,6 +854,51 @@ func (m PlayModel) voteForStation() tea.Cmd {
 	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 
+// blockStation blocks the currently playing station
+func (m PlayModel) blockStation() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return errMsg{fmt.Errorf("no station selected")}
+		}
+
+		ctx := context.Background()
+		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
+		if err != nil {
+			// Check if already blocked
+			if err == blocklist.ErrStationAlreadyBlocked {
+				return stationBlockedMsg{
+					message:     "Station is already blocked",
+					stationUUID: m.selectedStation.StationUUID,
+					success:     false,
+				}
+			}
+			return errMsg{err}
+		}
+
+		return stationBlockedMsg{
+			message:     msg,
+			stationUUID: m.selectedStation.StationUUID,
+			success:     true,
+		}
+	}
+}
+
+// undoLastBlock undoes the last block operation
+func (m PlayModel) undoLastBlock() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		undone, err := m.blocklistManager.UndoLastBlock(ctx)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		if undone {
+			return undoBlockSuccessMsg{}
+		}
+		return undoBlockFailedMsg{}
+	}
+}
+
 // View renders the play screen
 func (m PlayModel) View() string {
 	if m.helpModel.IsVisible() {
@@ -737,11 +936,27 @@ func (m PlayModel) viewListSelection() string {
 		return noListsView()
 	}
 
+	var content strings.Builder
+	content.WriteString(m.listModel.View())
+
+	if m.saveMessage != "" {
+		content.WriteString("\n\n")
+		var style lipgloss.Style
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+			style = successStyle()
+		} else if strings.Contains(m.saveMessage, "✗") {
+			style = errorStyle()
+		} else {
+			style = infoStyle()
+		}
+		content.WriteString(style.Render(m.saveMessage))
+	}
+
 	// Use the consistent page template
 	return RenderPage(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: "Select a Favorite List",
-		Content:  m.listModel.View(),
+		Content:  content.String(),
 		Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back • Ctrl+C: Quit",
 	})
 }
@@ -767,6 +982,32 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}
 
+	// Track history
+	if len(m.trackHistory) > 0 {
+		content.WriteString("\n\n")
+		content.WriteString(subtitleStyle().Render("Recently Played:"))
+		content.WriteString("\n")
+
+		for i, track := range m.trackHistory {
+			if i >= 5 {
+				break
+			}
+
+			// Show newest first with indicators
+			indicator := "  "
+			if i == 0 {
+				indicator = "🎵"
+			}
+
+			trackStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+			if i == 0 {
+				trackStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+			}
+
+			content.WriteString(fmt.Sprintf("%s %s\n", indicator, trackStyle.Render(track)))
+		}
+	}
+
 	// Save message (if any)
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
@@ -790,7 +1031,7 @@ func (m PlayModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "f: Favorites • v: Vote • 0: Main Menu • ?: Help",
+		Help:    "b: Block • u: Undo • f: Favorites • v: Vote • 0: Main Menu • ?: Help",
 	}, m.height)
 }
 
@@ -805,10 +1046,26 @@ func (m PlayModel) viewStationSelection() string {
 		return noStationsView(m.selectedList)
 	}
 
+	var content strings.Builder
+	content.WriteString(m.stationListModel.View())
+
+	if m.saveMessage != "" {
+		content.WriteString("\n\n")
+		var style lipgloss.Style
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+			style = successStyle()
+		} else if strings.Contains(m.saveMessage, "✗") {
+			style = errorStyle()
+		} else {
+			style = infoStyle()
+		}
+		content.WriteString(style.Render(m.saveMessage))
+	}
+
 	// Use the consistent page template
 	return RenderPage(PageLayout{
 		Title:   "Play from Favorites",
-		Content: m.stationListModel.View(),
+		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 	})
 }
@@ -930,6 +1187,15 @@ type playbackErrorMsg struct {
 	err error
 }
 
+type favoritesPlaybackStalledMsg struct {
+	station api.Station
+}
+
+type favoritesCheckSignalMsg struct {
+	station api.Station
+	attempt int
+}
+
 type saveSuccessMsg struct {
 	station *api.Station
 }
@@ -949,4 +1215,8 @@ type deleteFailedMsg struct {
 
 type errMsg struct {
 	err error
+}
+
+type trackHistoryMsg struct {
+	tracks []string
 }

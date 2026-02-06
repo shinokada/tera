@@ -7,11 +7,13 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/internal/blocklist"
 )
 
 func TestNewPlayModel(t *testing.T) {
 	favPath := "/tmp/favorites"
-	model := NewPlayModel(favPath)
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel(favPath, blocklistManager)
 
 	if model.favoritePath != favPath {
 		t.Errorf("Expected favoritePath %s, got %s", favPath, model.favoritePath)
@@ -36,7 +38,8 @@ func TestPlayFromFavoritesLayout(t *testing.T) {
 	}
 
 	// Create model
-	model := NewPlayModel(tmpDir)
+	blocklistManager := blocklist.NewManager(filepath.Join(tmpDir, "blocklist.json"))
+	model := NewPlayModel(tmpDir, blocklistManager)
 	model.width = 80
 	model.height = 24
 
@@ -79,7 +82,8 @@ func TestGetAvailableLists(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Test with no files initially - should return error
-	model := NewPlayModel(tmpDir)
+	blocklistManager := blocklist.NewManager(filepath.Join(tmpDir, "blocklist.json"))
+	model := NewPlayModel(tmpDir, blocklistManager)
 	lists, err := model.getAvailableLists()
 	// Should get error since no files exist yet
 	if err == nil {
@@ -124,7 +128,8 @@ func TestGetAvailableLists(t *testing.T) {
 }
 
 func TestPlayModel_Update_ListsLoaded(t *testing.T) {
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	model.width = 80
 	model.height = 24
 
@@ -163,7 +168,8 @@ func TestPlayModel_Update_NavigationKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			model := NewPlayModel("/tmp/favorites")
+			blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+			model := NewPlayModel("/tmp/favorites", blocklistManager)
 			model.state = playStateListSelection
 			model.width = 80
 			model.height = 24
@@ -207,7 +213,8 @@ func TestPlayModel_Update_NavigationKeys(t *testing.T) {
 }
 
 func TestPlayModel_View_NoLists(t *testing.T) {
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	view := model.View()
 
 	if view == "" {
@@ -222,7 +229,8 @@ func TestPlayModel_View_NoLists(t *testing.T) {
 }
 
 func TestPlayModel_View_WithLists(t *testing.T) {
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	model.width = 80
 	model.height = 24
 
@@ -276,7 +284,8 @@ func TestErrorView(t *testing.T) {
 
 func TestPlayModel_Update_EnterKey(t *testing.T) {
 	// Test that Enter key changes state when list is properly initialized
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	model.width = 80
 	model.height = 24
 	model.state = playStateListSelection

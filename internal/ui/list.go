@@ -94,6 +94,10 @@ func (m ListManagementModel) loadLists() tea.Cmd {
 			}
 			name := entry.Name()
 			if strings.HasSuffix(name, ".json") {
+				// Skip system files that are not favorite lists
+				if name == "search-history.json" {
+					continue
+				}
 				listName := strings.TrimSuffix(name, ".json")
 				lists = append(lists, listName)
 			}
@@ -687,10 +691,10 @@ func (m ListManagementModel) viewMenu() string {
 
 	content.WriteString(m.listModel.View())
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
-	})
+	}, m.height)
 }
 
 // viewCreate renders the create list view
@@ -770,10 +774,10 @@ func (m ListManagementModel) viewSelectListToDelete() string {
 		maxNum = 9
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
-	})
+	}, m.height)
 }
 
 // viewConfirmDelete renders the delete confirmation view
@@ -843,10 +847,10 @@ func (m ListManagementModel) viewSelectListToEdit() string {
 		maxNum = 9
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
-	})
+	}, m.height)
 }
 
 // viewEnterNewName renders the new name input view
@@ -886,11 +890,11 @@ func (m ListManagementModel) viewShowAll() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "All Favorite Lists",
 		Content: content.String(),
 		Help:    "Esc: Back • Ctrl+C: Quit",
-	})
+	}, m.height)
 }
 
 // Messages

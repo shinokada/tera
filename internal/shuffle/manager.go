@@ -68,8 +68,9 @@ func (m *Manager) GetCurrentStation() (*api.Station, error) {
 	return &station, nil
 }
 
-// Next advances to the next station in shuffle
-func (m *Manager) Next() (*api.Station, error) {
+// Next advances to the next station in shuffle.
+// filter is an optional function to skip stations (returns true to keep, false to skip).
+func (m *Manager) Next(filter func(api.Station) bool) (*api.Station, error) {
 	if len(m.stations) == 0 {
 		return nil, fmt.Errorf("no stations available")
 	}
@@ -82,22 +83,35 @@ func (m *Manager) Next() (*api.Station, error) {
 		}
 	}
 
-	// Move to next station
-	m.currentIndex++
-	m.sessionCount++
+	// Try to find the next valid station
+	stationsTried := 0
+	for stationsTried < len(m.stations) {
+		// Move to next station
+		m.currentIndex++
+		// If we've exhausted all stations, reshuffle
+		if m.currentIndex >= len(m.shuffledIndices) {
+			m.shuffledIndices = rand.Perm(len(m.stations))
+			m.currentIndex = 0
+		}
 
-	// If we've exhausted all stations, reshuffle
-	if m.currentIndex >= len(m.shuffledIndices) {
-		m.shuffledIndices = rand.Perm(len(m.stations))
-		m.currentIndex = 0
+		station, err := m.GetCurrentStation()
+		if err != nil {
+			return nil, err
+		}
+
+		// If no filter or filter accepts it, we're done
+		if filter == nil || filter(*station) {
+			m.sessionCount++
+			// Restart timer if auto-advance is enabled
+			if m.config.AutoAdvance {
+				m.restartTimer()
+			}
+			return station, nil
+		}
+		stationsTried++
 	}
 
-	// Restart timer if auto-advance is enabled
-	if m.config.AutoAdvance {
-		m.restartTimer()
-	}
-
-	return m.GetCurrentStation()
+	return nil, fmt.Errorf("no unblocked stations available")
 }
 
 // Previous goes back to the previous station in history
