@@ -71,7 +71,10 @@ func LoadVotedStations() (*VotedStations, error) {
 
 	var voted VotedStations
 	if err := json.Unmarshal(data, &voted); err != nil {
-		return nil, fmt.Errorf("failed to parse voted stations: %w", err)
+		// Corrupt JSON (e.g., partial write from crash before atomic rename)
+		// Fall back to empty state rather than failing - the user can re-vote
+		// Log could be added here if logging infrastructure exists
+		return &VotedStations{Stations: []VotedStation{}}, nil
 	}
 
 	// Note: We no longer clean up old votes automatically.
@@ -98,8 +101,9 @@ func (v *VotedStations) saveLocked() error {
 	}
 
 	// Atomic write: write to temp file then rename
+	// Use 0600 (owner read/write only) to match restrictive directory permissions
 	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write voted stations: %w", err)
 	}
 
@@ -176,7 +180,7 @@ func (v *VotedStations) CanVoteAgain(stationUUID string) bool {
 // CleanupOldVotes removes votes older than specified duration
 // Note: This is kept for potential future use, but is not called automatically.
 // Votes are now stored permanently to prevent accidental duplicate voting.
-func (v *VotedStations) CleanupOldVotes(olderThan time.Duration) {
+func (v *VotedStations) CleanupOldVotes(olderThan time.Duration) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -188,6 +192,7 @@ func (v *VotedStations) CleanupOldVotes(olderThan time.Duration) {
 		}
 	}
 	v.Stations = filtered
+	return v.saveLocked()
 }
 
 // ClearAll removes all vote history

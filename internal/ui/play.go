@@ -696,7 +696,7 @@ func (m PlayModel) saveStationVolume(station *api.Station) {
 }
 
 // voteForStation votes for the currently playing station
-func (m *PlayModel) voteForStation() tea.Cmd {
+func (m PlayModel) voteForStation() tea.Cmd {
 	return components.ExecuteVote(m.selectedStation, m.votedStations, m.apiClient)
 }
 

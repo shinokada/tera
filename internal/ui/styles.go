@@ -174,21 +174,7 @@ func renderHeader() string {
 		Render("TERA") + "\n"
 }
 
-// wrapPageWithHeader wraps content with header at the top and applies consistent padding
-func wrapPageWithHeader(content string) string {
-	var b strings.Builder
 
-	// Render header using helper
-	header := renderHeader()
-	if header != "" {
-		b.WriteString(header)
-		// Header should already have proper spacing/newlines from renderer
-	}
-
-	b.WriteString(content)
-	// Use style without top padding since header already has it
-	return docStyleNoTopPadding().Render(b.String())
-}
 
 // PageLayout represents a consistent page layout structure
 type PageLayout struct {
@@ -201,6 +187,23 @@ type PageLayout struct {
 // RenderPage renders a page with consistent layout using the template
 // This ensures all pages have the same spacing and structure
 func RenderPage(layout PageLayout) string {
+	// Assemble page content using shared helper
+	content := assemblePageContent(layout)
+
+	// Add help text (if provided)
+	if layout.Help != "" {
+		if layout.Content != "" {
+			content += "\n"
+		}
+		content += helpStyle().Render(layout.Help)
+	}
+
+	// Wrap with header and styling using shared helper
+	return wrapWithHeaderAndStyle(content)
+}
+
+// assemblePageContent assembles page content with consistent structure (title, subtitle, content)
+func assemblePageContent(layout PageLayout) string {
 	var b strings.Builder
 
 	// Add consistent spacing after TERA header
@@ -223,47 +226,29 @@ func RenderPage(layout PageLayout) string {
 		b.WriteString(layout.Content)
 	}
 
-	// Help text (if provided)
-	if layout.Help != "" {
-		if layout.Content != "" {
-			b.WriteString("\n")
-		}
-		b.WriteString(helpStyle().Render(layout.Help))
-	}
+	return b.String()
+}
 
-	return wrapPageWithHeader(b.String())
+// wrapWithHeaderAndStyle combines header, content, and applies styling
+func wrapWithHeaderAndStyle(content string) string {
+	header := renderHeader()
+	var fullContent strings.Builder
+	fullContent.WriteString(header)
+	fullContent.WriteString(content)
+	return docStyleNoTopPadding().Render(fullContent.String())
 }
 
 // RenderPageWithBottomHelp renders a page with help text at the bottom of the screen
 func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
-	var b strings.Builder
+	// Assemble page content
+	content := assemblePageContent(layout)
 
-	// Add consistent spacing after TERA header
-	b.WriteString("\n")
-
-	// Title section - always takes up one line (empty or not) for consistency
-	if layout.Title != "" {
-		b.WriteString(titleStyle().Render(layout.Title))
-	}
-	b.WriteString("\n")
-
-	// Subtitle section - always takes up one line (empty or not) for consistency
-	if layout.Subtitle != "" {
-		b.WriteString(subtitleStyle().Render(layout.Subtitle))
-	}
-	b.WriteString("\n")
-
-	// Main content
-	if layout.Content != "" {
-		b.WriteString(layout.Content)
-	}
-
-	// Get the rendered header using helper
+	// Get the rendered header for line counting
 	header := renderHeader()
 	teraHeaderLines := strings.Count(header, "\n")
 
 	// Count content lines
-	contentLines := strings.Count(b.String(), "\n")
+	contentLines := strings.Count(content, "\n")
 	p := getPadding()
 	totalUsed := teraHeaderLines + contentLines + p.PageVertical // padding from docStyleNoTopPadding
 
@@ -275,6 +260,8 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	}
 
 	// Add spacing to push help text to bottom
+	var b strings.Builder
+	b.WriteString(content)
 	for i := 0; i < remainingLines; i++ {
 		b.WriteString("\n")
 	}
@@ -284,12 +271,8 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 		b.WriteString(helpStyle().Render(layout.Help))
 	}
 
-	// Combine header and content
-	var fullContent strings.Builder
-	fullContent.WriteString(header)
-	fullContent.WriteString(b.String())
-
-	return docStyleNoTopPadding().Render(fullContent.String())
+	// Wrap with header and styling using shared helper
+	return wrapWithHeaderAndStyle(b.String())
 }
 
 // RenderStationDetails renders station details in a formatted way
