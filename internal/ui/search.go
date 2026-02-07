@@ -871,6 +871,12 @@ func (m SearchModel) handleResultsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.playStation(item.station)
 		}
 		return m, nil
+	case "u":
+		// Undo last block (within 5 seconds)
+		if time.Since(m.lastBlockTime) < 5*time.Second {
+			return m, m.undoLastBlock()
+		}
+		return m, nil
 	default:
 		// Pass all other keys (arrows, etc.) to the list for navigation
 		var cmd tea.Cmd
