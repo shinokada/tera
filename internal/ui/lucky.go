@@ -264,7 +264,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = 3000
+		m.saveMessageTime = 3 // 3 seconds
 		m.state = luckyStateInput
 		m.selectedStation = nil
 		return m, nil
@@ -1588,6 +1588,9 @@ func (m LuckyModel) blockStation() tea.Cmd {
 		if m.selectedStation == nil {
 			return luckySearchErrorMsg{fmt.Errorf("no station selected")}
 		}
+		if m.blocklistManager == nil {
+			return luckySearchErrorMsg{fmt.Errorf("blocklist not available")}
+		}
 
 		ctx := context.Background()
 		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
@@ -1614,6 +1617,9 @@ func (m LuckyModel) blockStation() tea.Cmd {
 // undoLastBlock undoes the last block operation
 func (m LuckyModel) undoLastBlock() tea.Cmd {
 	return func() tea.Msg {
+		if m.blocklistManager == nil {
+			return undoBlockFailedMsg{}
+		}
 		ctx := context.Background()
 		undone, err := m.blocklistManager.UndoLastBlock(ctx)
 		if err != nil {

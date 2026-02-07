@@ -165,8 +165,9 @@ func (m *Manager) Unblock(ctx context.Context, stationUUID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if blocked
-	if _, exists := m.blockedMap[stationUUID]; !exists {
+	// Check if blocked and save for rollback
+	station, exists := m.blockedMap[stationUUID]
+	if !exists {
 		return ErrStationNotBlocked
 	}
 
@@ -174,7 +175,12 @@ func (m *Manager) Unblock(ctx context.Context, stationUUID string) error {
 	delete(m.blockedMap, stationUUID)
 
 	// Save to disk
-	return m.save()
+	if err := m.save(); err != nil {
+		// Rollback on error
+		m.blockedMap[stationUUID] = station
+		return err
+	}
+	return nil
 }
 
 // IsBlocked checks if a station is blocked

@@ -34,9 +34,9 @@ func (r BlockRule) Matches(station *api.Station) bool {
 
 	switch r.Type {
 	case BlockRuleCountry:
-		// Match against both Country and CountryCode
-		return strings.EqualFold(station.Country, r.Value) ||
-			strings.EqualFold(station.CountryCode, r.Value)
+		// Match against both Country and CountryCode (case-insensitive, trimmed)
+		return strings.EqualFold(strings.TrimSpace(station.Country), r.Value) ||
+			strings.EqualFold(strings.TrimSpace(station.CountryCode), r.Value)
 
 	case BlockRuleLanguage:
 		// Match if language is present in comma-separated languages (case-insensitive)

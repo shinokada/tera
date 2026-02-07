@@ -2,6 +2,7 @@ package blocklist
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -333,7 +334,7 @@ func TestWarningMessages(t *testing.T) {
 	// Block stations up to warning threshold
 	for i := 0; i < BlockWarningThreshold; i++ {
 		station := &api.Station{
-			StationUUID: string(rune(i)),
+			StationUUID: fmt.Sprintf("uuid-warn-%d", i),
 			Name:        "Station",
 		}
 		msg, err := manager.Block(ctx, station)

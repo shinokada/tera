@@ -329,6 +329,11 @@ func (p *MPVPlayer) addToTrackHistory(track string) {
 
 // monitorMetadata monitors for metadata changes (track info)
 func (p *MPVPlayer) monitorMetadata() {
+	// Capture stopCh to avoid data race with Play() reassigning it
+	p.mu.Lock()
+	stopCh := p.stopCh
+	p.mu.Unlock()
+
 	ticker := time.NewTicker(5 * time.Second) // Check every 5 seconds
 	defer ticker.Stop()
 
@@ -349,7 +354,7 @@ func (p *MPVPlayer) monitorMetadata() {
 				p.addToTrackHistory(track)
 			}
 
-		case <-p.stopCh:
+		case <-stopCh:
 			return
 		}
 	}

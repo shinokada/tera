@@ -831,8 +831,6 @@ func (m BlocklistModel) viewBlockByTag() string {
 
 // viewActiveRules renders the active rules list
 func (m BlocklistModel) viewActiveRules() string {
-	rules := m.manager.GetBlockRules()
-
 	var content strings.Builder
 
 	if m.message != "" {
@@ -844,20 +842,12 @@ func (m BlocklistModel) viewActiveRules() string {
 		content.WriteString("\n\n")
 	}
 
-	if len(rules) == 0 {
+	if len(m.rules) == 0 {
 		content.WriteString(infoStyle().Render("No block rules defined yet.\n\n"))
 		content.WriteString("Use the Block Rules menu to add rules.")
 	} else {
-		// Use the list model for better navigation
-		if len(m.rules) == 0 || len(m.rules) != len(rules) {
-			// Need to reload rules list
-			for i, rule := range rules {
-				content.WriteString(fmt.Sprintf("%d. %s\n", i+1, rule.String()))
-			}
-		} else {
-			// Use the interactive list
-			content.WriteString(m.rulesListModel.View())
-		}
+		// Use the interactive list
+		content.WriteString(m.rulesListModel.View())
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{

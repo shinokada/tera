@@ -402,7 +402,7 @@ Configure shuffle behavior in **Settings → Shuffle Settings**:
 
 **Auto-advance**
 - Enable/disable automatic station switching
-- When disabled, you manually control station changes with `n`/`b`
+- When disabled, you manually control station changes with `n`/`[`
 
 **Auto-advance Interval**
 - Set how long each station plays before auto-advancing
@@ -437,7 +437,7 @@ Codec: AAC • Bitrate: 128 kbps
   ← WBGO Jazz 88.3
   → Smooth Jazz 24/7  ← Current
 
-f: Fav • s: List • v: Vote • n: Next • b: Prev • p: Pause timer • h: Stop shuffle
+f: Fav • s: List • v: Vote • n: Next • [: Prev • b: Block • p: Pause timer • h: Stop shuffle
 ```
 
 ### Configuration File

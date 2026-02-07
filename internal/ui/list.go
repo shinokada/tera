@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -83,25 +84,10 @@ func (m ListManagementModel) Init() tea.Cmd {
 // loadLists loads all available lists
 func (m ListManagementModel) loadLists() tea.Cmd {
 	return func() tea.Msg {
-		entries, err := os.ReadDir(m.favoritePath)
+		store := storage.NewStorage(m.favoritePath)
+		lists, err := store.GetAllLists(context.Background())
 		if err != nil {
 			return errMsg{err}
-		}
-
-		var lists []string
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			if strings.HasSuffix(name, ".json") {
-				// Skip system files that are not favorite lists
-				if name == storage.SystemFileSearchHistory {
-					continue
-				}
-				listName := strings.TrimSuffix(name, ".json")
-				lists = append(lists, listName)
-			}
 		}
 
 		return listManagementListsLoadedMsg{lists}
