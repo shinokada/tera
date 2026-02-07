@@ -46,7 +46,7 @@ func DetectInstallMethod() InstallInfo {
 	if checkGoInstall() {
 		return InstallInfo{
 			Method:        InstallMethodGo,
-			UpdateCommand: "go install github.com/shinokada/tera/cmd/tera@latest",
+			UpdateCommand: "go install github.com/shinokada/tera/v2/cmd/tera@latest",
 			Description:   "Go Install",
 		}
 	}

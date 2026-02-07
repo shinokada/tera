@@ -159,7 +159,7 @@ release:
     sudo mv tera /usr/local/bin/
     
     # Or install via Go
-    go install github.com/shinokada/tera/cmd/tera@{{.Version}}
+    go install github.com/shinokada/tera/v2/cmd/tera@{{.Version}}
     ```
   footer: |
     ---

@@ -329,7 +329,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 TERA detects how you installed it and provides the correct update command. For example:
 - If installed via Homebrew: Shows `brew upgrade shinokada/tera/tera`
-- If installed via Go: Shows `go install github.com/shinokada/tera/cmd/tera@latest`
+- If installed via Go: Shows `go install github.com/shinokada/tera/v2/cmd/tera@latest`
 - If installed via Scoop: Shows `scoop update tera`
 - If installed via Winget: Shows `winget upgrade tera`
 
@@ -338,7 +338,7 @@ TERA detects how you installed it and provides the correct update command. For e
 | Installation Method | Update Command                                                            |
 | ------------------- | ------------------------------------------------------------------------- |
 | Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
-| Go install          | `go install github.com/shinokada/tera/cmd/tera@latest`                    |
+| Go install          | `go install github.com/shinokada/tera/v2/cmd/tera@latest`                 |
 | Scoop               | `scoop update tera`                                                       |
 | Winget              | `winget upgrade tera`                                                     |
 | APT/DEB             | `sudo apt update && sudo apt install --only-upgrade tera`                 |

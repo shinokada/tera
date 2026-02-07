@@ -10,17 +10,17 @@ import (
 func TestDetectInstallMethod(t *testing.T) {
 	// Basic smoke test - should not panic
 	info := DetectInstallMethod()
-	
+
 	// Should return a valid method
 	if info.Method < InstallMethodUnknown || info.Method > InstallMethodManual {
 		t.Errorf("Invalid install method: %d", info.Method)
 	}
-	
+
 	// Should have a description
 	if info.Description == "" {
 		t.Error("Install info should have a description")
 	}
-	
+
 	// If not manual/unknown, should have an update command
 	if info.Method != InstallMethodManual && info.Method != InstallMethodUnknown {
 		if info.UpdateCommand == "" {
@@ -67,7 +67,7 @@ func TestCheckGoInstall(t *testing.T) {
 			expected: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := checkGoInstallPath(tt.exePath, tt.gopath)
@@ -77,7 +77,7 @@ func TestCheckGoInstall(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Also test the actual function doesn't crash
 	_ = checkGoInstall()
 }
@@ -85,7 +85,7 @@ func TestCheckGoInstall(t *testing.T) {
 func TestCheckHomebrew(t *testing.T) {
 	// Smoke test - should not panic
 	_ = checkHomebrew()
-	
+
 	// Platform-specific test
 	if runtime.GOOS == "darwin" {
 		// On macOS, Homebrew is common
@@ -98,7 +98,7 @@ func TestCheckScoop(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Scoop is Windows-only")
 	}
-	
+
 	// Smoke test
 	_ = checkScoop()
 }
@@ -107,7 +107,7 @@ func TestCheckWinget(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Winget is Windows-only")
 	}
-	
+
 	// Smoke test
 	_ = checkWinget()
 }
@@ -116,7 +116,7 @@ func TestCheckAPT(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("APT is Linux-only")
 	}
-	
+
 	result := checkAPT()
 	// Check if the function runs without error
 	t.Logf("APT detection: %v", result)
@@ -126,7 +126,7 @@ func TestCheckRPM(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("RPM is Linux-only")
 	}
-	
+
 	result := checkRPM()
 	// Check if the function runs without error
 	t.Logf("RPM detection: %v", result)
@@ -134,7 +134,7 @@ func TestCheckRPM(t *testing.T) {
 
 func TestInstallMethodStrings(t *testing.T) {
 	tests := []struct {
-		method      InstallMethod
+		method            InstallMethod
 		shouldHaveCommand bool
 	}{
 		{InstallMethodHomebrew, true},
@@ -146,20 +146,20 @@ func TestInstallMethodStrings(t *testing.T) {
 		{InstallMethodManual, false},
 		{InstallMethodUnknown, false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.method.String(), func(t *testing.T) {
 			// Create an InstallInfo with this method
 			var info InstallInfo
 			info.Method = tt.method
-			
+
 			// Set appropriate values based on method
 			switch tt.method {
 			case InstallMethodHomebrew:
 				info.UpdateCommand = "brew upgrade shinokada/tera/tera"
 				info.Description = "Homebrew"
 			case InstallMethodGo:
-				info.UpdateCommand = "go install github.com/shinokada/tera/cmd/tera@latest"
+				info.UpdateCommand = "go install github.com/shinokada/tera/v2/cmd/tera@latest"
 				info.Description = "Go Install"
 			case InstallMethodScoop:
 				info.UpdateCommand = "scoop update tera"
@@ -178,7 +178,7 @@ func TestInstallMethodStrings(t *testing.T) {
 			case InstallMethodUnknown:
 				info.Description = "Unknown"
 			}
-			
+
 			// Verify update command presence matches expectation
 			hasCommand := info.UpdateCommand != ""
 			if hasCommand != tt.shouldHaveCommand {
@@ -192,22 +192,22 @@ func TestInstallMethodStrings(t *testing.T) {
 func TestDetectInstallMethodRealistic(t *testing.T) {
 	// Get the actual detection result
 	info := DetectInstallMethod()
-	
+
 	t.Logf("Detected install method: %s", info.Description)
 	t.Logf("Update command: %s", info.UpdateCommand)
-	
+
 	// Verify we got a valid result
 	if info.Description == "" {
 		t.Error("Description should not be empty")
 	}
-	
+
 	// If method is not manual/unknown, should have a command
 	if info.Method != InstallMethodManual && info.Method != InstallMethodUnknown {
 		if info.UpdateCommand == "" {
 			t.Error("Non-manual install should have an update command")
 		}
 	}
-	
+
 	// Verify the update command is reasonable for the method
 	switch info.Method {
 	case InstallMethodHomebrew:
@@ -215,7 +215,7 @@ func TestDetectInstallMethodRealistic(t *testing.T) {
 			t.Errorf("Unexpected Homebrew command: %s", info.UpdateCommand)
 		}
 	case InstallMethodGo:
-		if info.UpdateCommand != "go install github.com/shinokada/tera/cmd/tera@latest" {
+		if info.UpdateCommand != "go install github.com/shinokada/tera/v2/cmd/tera@latest" {
 			t.Errorf("Unexpected Go command: %s", info.UpdateCommand)
 		}
 	}
@@ -251,17 +251,17 @@ func TestExecutablePathDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get executable path: %v", err)
 	}
-	
+
 	t.Logf("Executable path: %s", exePath)
-	
+
 	// Try to resolve symlinks
 	realPath, err := filepath.EvalSymlinks(exePath)
 	if err != nil {
 		realPath = exePath
 	}
-	
+
 	t.Logf("Real path: %s", realPath)
-	
+
 	// Verify path is absolute
 	if !filepath.IsAbs(realPath) {
 		t.Error("Real path should be absolute")
