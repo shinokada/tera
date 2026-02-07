@@ -277,7 +277,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
-		m.saveMessageTime = 150
+		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		return m, nil
 
 	case saveFailedMsg:
@@ -286,17 +286,17 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 150
+		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		return m, nil
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		m.saveMessageTime = 150
+		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		return m, nil
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		m.saveMessageTime = 150
+		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		return m, nil
 
 	case listsLoadedMsg:
@@ -314,7 +314,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveToListSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to %s", msg.stationName, msg.listName)
-		m.saveMessageTime = 150
+		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		m.state = luckyStatePlaying
 		return m, nil
 
@@ -324,7 +324,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 150
+		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		m.state = luckyStatePlaying
 		return m, nil
 
@@ -1339,7 +1339,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 		if err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 			return m, nil
 		}
 		m.selectedStation = nextStation

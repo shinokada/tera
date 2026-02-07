@@ -139,7 +139,7 @@ func (m ShuffleSettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rebuildMenuList()
 			m.message = "✓ Reset to default settings"
 			m.messageIsSuccess = true
-			m.messageTime = 180
+			m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		case 5: // Back to Settings
 			return m, func() tea.Msg {
 				return navigateMsg{screen: screenSettings}
@@ -193,7 +193,7 @@ func (m ShuffleSettingsModel) updateInterval(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.state = shuffleSettingsMenu
 			m.message = fmt.Sprintf("✓ Auto-advance interval set to %d minutes", m.config.IntervalMinutes)
 			m.messageIsSuccess = true
-			m.messageTime = 180
+			m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		} else if selected == len(intervals) {
 			// Back option
 			m.state = shuffleSettingsMenu
@@ -246,7 +246,7 @@ func (m ShuffleSettingsModel) updateHistorySize(msg tea.KeyMsg) (tea.Model, tea.
 			m.state = shuffleSettingsMenu
 			m.message = fmt.Sprintf("✓ Shuffle history size set to %d stations", m.config.MaxHistory)
 			m.messageIsSuccess = true
-			m.messageTime = 180
+			m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		} else if selected == len(historySizes) {
 			// Back option
 			m.state = shuffleSettingsMenu
@@ -269,7 +269,7 @@ func (m *ShuffleSettingsModel) saveConfig() {
 	if err := storage.SaveShuffleConfig(m.config); err != nil {
 		m.message = fmt.Sprintf("✗ Failed to save: %v", err)
 		m.messageIsSuccess = false
-		m.messageTime = 180
+		m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 	}
 }
 

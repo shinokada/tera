@@ -331,7 +331,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = 3000
+		m.saveMessageTime = 150
 		// Show save prompt when going back from playing
 		m.state = playStateSavePrompt
 		return m, nil

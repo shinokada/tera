@@ -145,14 +145,14 @@ func (m ListManagementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case listManagementOperationSuccessMsg:
 		m.message = msg.message
-		m.messageTime = 150 // ~3 seconds
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		m.state = listManagementMenu
 		return m, m.loadLists()
 
 	case listManagementOperationErrorMsg:
 		m.err = msg.err
 		m.message = msg.err.Error()
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		return m, nil
 
 	case errMsg:

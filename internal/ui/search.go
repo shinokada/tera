@@ -353,7 +353,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = 3000
+		m.saveMessageTime = 150
 		m.state = searchStateResults
 		return m, nil
 

@@ -164,7 +164,7 @@ func (m ConnectionSettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 			m.buildBufferList()
 			m.message = "✓ Reset to default settings"
 			m.messageIsSuccess = true
-			m.messageTime = 180
+			m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		case 4: // Back to Settings
 			return m, func() tea.Msg {
 				return navigateMsg{screen: screenSettings}
@@ -217,7 +217,7 @@ func (m ConnectionSettingsModel) updateDelay(msg tea.KeyMsg) (tea.Model, tea.Cmd
 			m.state = connectionSettingsMenu
 			m.message = fmt.Sprintf("✓ Reconnect delay set to %d seconds", m.config.ReconnectDelay)
 			m.messageIsSuccess = true
-			m.messageTime = 180
+			m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		} else if selected == len(reconnectDelayOptions) {
 			// Back option
 			m.state = connectionSettingsMenu
@@ -273,7 +273,7 @@ func (m ConnectionSettingsModel) updateBuffer(msg tea.KeyMsg) (tea.Model, tea.Cm
 				m.message = fmt.Sprintf("✓ Stream buffer set to %d MB", m.config.StreamBufferMB)
 			}
 			m.messageIsSuccess = true
-			m.messageTime = 180
+			m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 		} else if selected == len(streamBufferOptions) {
 			// Back option
 			m.state = connectionSettingsMenu
@@ -296,7 +296,7 @@ func (m *ConnectionSettingsModel) saveConfig() {
 	if err := storage.SaveConnectionConfig(m.config); err != nil {
 		m.message = fmt.Sprintf("✗ Failed to save: %v", err)
 		m.messageIsSuccess = false
-		m.messageTime = 180
+		m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 	}
 }
 

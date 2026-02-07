@@ -185,24 +185,24 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case blocklistUnblockedMsg:
 		m.message = fmt.Sprintf("✓ Unblocked: %s", msg.stationName)
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		return m, m.loadBlockedStations()
 
 	case blocklistClearedMsg:
 		m.message = "✓ Cleared all blocked stations"
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		return m, m.loadBlockedStations()
 
 	case blockRuleAddedMsg:
 		m.message = fmt.Sprintf("✓ Added rule: %s = %s", msg.ruleType, msg.value)
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		m.state = blocklistRulesMenu
 		m.textInput.Blur()
 		return m, nil
 
 	case blockRuleErrorMsg:
 		m.message = fmt.Sprintf("✗ %v", msg.err)
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		return m, nil
 
 	case blockRulesLoadedMsg:
@@ -215,7 +215,7 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case blockRuleDeletedMsg:
 		m.message = fmt.Sprintf("✓ Deleted rule: %s", msg.rule.String())
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		m.state = blocklistViewRules
 		return m, m.loadBlockRules()
 
@@ -234,7 +234,7 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.err = msg.err
 		m.message = fmt.Sprintf("✗ %v", msg.err)
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		return m, nil
 	}
 
