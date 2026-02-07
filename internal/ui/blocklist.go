@@ -184,10 +184,12 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case blocklistUnblockedMsg:
 		m.message = fmt.Sprintf("✓ Unblocked: %s", msg.stationName)
+		m.messageTime = 150
 		return m, m.loadBlockedStations()
 
 	case blocklistClearedMsg:
 		m.message = "✓ Cleared all blocked stations"
+		m.messageTime = 150
 		return m, m.loadBlockedStations()
 
 	case blockRuleAddedMsg:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -70,8 +71,8 @@ func (m *Manager) Load(ctx context.Context) error {
 
 // Save writes the blocklist to disk
 func (m *Manager) Save(ctx context.Context) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	// Ensure directory exists
 	dir := filepath.Dir(m.blocklistPath)
@@ -204,14 +205,9 @@ func (m *Manager) GetAll() []BlockedStation {
 	}
 
 	// Sort by blocked_at descending (most recent first)
-	// Simple bubble sort since we don't expect huge lists
-	for i := 0; i < len(stations)-1; i++ {
-		for j := i + 1; j < len(stations); j++ {
-			if stations[i].BlockedAt.Before(stations[j].BlockedAt) {
-				stations[i], stations[j] = stations[j], stations[i]
-			}
-		}
-	}
+	sort.Slice(stations, func(i, j int) bool {
+		return stations[i].BlockedAt.After(stations[j].BlockedAt)
+	})
 
 	return stations
 }
@@ -253,12 +249,18 @@ func (m *Manager) UndoLastBlock(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
+	// Save for rollback
+	undone := *m.lastBlock
+
 	// Remove from map
 	delete(m.blockedMap, m.lastBlock.StationUUID)
 	m.lastBlock = nil
 
 	// Save to disk
 	if err := m.save(); err != nil {
+		// Rollback on error
+		m.blockedMap[undone.StationUUID] = undone
+		m.lastBlock = &undone
 		return false, err
 	}
 

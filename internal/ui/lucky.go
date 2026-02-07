@@ -389,7 +389,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Show message
 			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
-			m.saveMessageTime = 300 // 5 seconds
+			m.saveMessageTime = 5 // 5 seconds (1 tick per second)
 
 			// If shuffle is active, advance to next station
 			if m.state == luckyStateShufflePlaying && m.shuffleManager != nil {

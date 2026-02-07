@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -344,8 +345,8 @@ func TestWarningMessages(t *testing.T) {
 
 		// Check if warning appears at threshold
 		if i == BlockWarningThreshold-1 {
-			if msg == "" {
-				t.Error("Expected warning message at threshold")
+			if !strings.Contains(msg, "⚠️") {
+				t.Errorf("Expected warning at threshold, got: %s", msg)
 			}
 		}
 	}
