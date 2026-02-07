@@ -351,6 +351,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		m.state = searchStateResults
+		m.selectedStation = nil
 		return m, nil
 
 	case checkSignalMsg:
@@ -1065,12 +1066,12 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
 		if m.selectedStation != nil && newVol >= 0 {
-			m.selectedStation.SetVolume(newVol)
-			m.saveStationVolume(m.selectedStation)
+		m.selectedStation.SetVolume(newVol)
+		m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 2 // Show for 2 seconds
+		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
 		}
@@ -1079,12 +1080,12 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
 		if m.selectedStation != nil {
-			m.selectedStation.SetVolume(newVol)
-			m.saveStationVolume(m.selectedStation)
+		m.selectedStation.SetVolume(newVol)
+		m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 2 // Show for 2 seconds
+		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
 		}
@@ -1093,16 +1094,16 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle mute
 		muted, vol := m.player.ToggleMute()
 		if muted {
-			m.saveMessage = "Volume: Muted"
+		m.saveMessage = "Volume: Muted"
 		} else {
-			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+		m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 		}
 		if m.selectedStation != nil && !muted && vol >= 0 {
-			m.selectedStation.SetVolume(vol)
-			m.saveStationVolume(m.selectedStation)
+		m.selectedStation.SetVolume(vol)
+		m.saveStationVolume(m.selectedStation)
 		}
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 2 // Show for 2 seconds
+		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
 		}
@@ -1135,7 +1136,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// Resumed - show temporary message
 					m.saveMessage = "▶ Resumed"
 					startTick := m.saveMessageTime <= 0
-					m.saveMessageTime = 2
+					m.saveMessageTime = messageDisplayShort
 					if startTick {
 						return m, tickEverySecond()
 					}
