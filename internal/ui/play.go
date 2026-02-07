@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -316,7 +317,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Playback started successfully - trigger refresh to show voted status
 		// Only start tick if not already running
 		if m.saveMessageTime == 0 {
-			return m, tea.Batch(ticksEverySecond(), m.pollTrackHistory())
+			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
 		return m, m.pollTrackHistory()
 
@@ -331,7 +332,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		// Show save prompt when going back from playing
 		m.state = playStateSavePrompt
 		return m, nil
@@ -348,7 +349,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
-		m.saveMessageTime = 150 // Show for ~3 seconds at 60fps
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case saveFailedMsg:
@@ -357,7 +358,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case deleteSuccessMsg:
@@ -371,20 +372,20 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		// Start tick to show the message and trigger UI refresh to show voted status
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		// Start tick to show the message and trigger UI refresh
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 
@@ -399,38 +400,35 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Show message
 			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
-			m.saveMessageTime = 300 // 5 seconds
+			m.saveMessageTime = messageDisplayMedium
 
 			// Return to station selection
 			m.state = playStateStationSelection
 			// Update the blocked status in the list
 			if m.stationListModel.Items() != nil {
-				items := m.stationListModel.Items()
-				for i, item := range items {
-					if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
-						si.isBlocked = true
-						items[i] = si
-						break
-					}
-				}
-				m.stationListModel.SetItems(items)
+			items := m.stationListModel.Items()
+			for i, item := range items {
+			if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
+			si.isBlocked = true
+			items[i] = si
+			break
+			}
+			}
+			m.stationListModel.SetItems(items)
 			}
 			m.selectedStation = nil
 
-			startTick := m.saveMessageTime == 0
-			if startTick {
-				return m, ticksEverySecond()
-			}
+			return m, tickEverySecond()
 		} else {
-			// Already blocked
-			m.saveMessage = msg.message
-			m.saveMessageTime = 150
+		// Already blocked
+		m.saveMessage = msg.message
+		m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
 
 	case undoBlockSuccessMsg:
 		m.saveMessage = "✓ Block undone"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		// Update blocked status in list
 		if m.stationListModel.Items() != nil {
 			items := m.stationListModel.Items()
@@ -450,7 +448,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case listsLoadedMsg:
@@ -497,7 +495,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = ""
 			}
 		}
-		return m, ticksEverySecond()
+		return m, tickEverySecond()
 
 	case trackHistoryMsg:
 		m.trackHistory = msg.tracks
@@ -649,9 +647,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// Resumed - show temporary message
 				m.saveMessage = "▶ Resumed"
 				startTick := m.saveMessageTime <= 0
-				m.saveMessageTime = 120
+				m.saveMessageTime = messageDisplayShort
 				if startTick {
-					return m, ticksEverySecond()
+				return m, tickEverySecond()
 				}
 			}
 		}
@@ -684,7 +682,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Save to a list (not implemented yet)
 		// TODO: Implement save to custom list
 		m.saveMessage = "Save to list feature coming soon"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 	case "v":
 		// Vote for this station
@@ -698,9 +696,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		m.saveMessageTime = messageDisplayShort
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 	case "*":
@@ -712,9 +710,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		m.saveMessageTime = messageDisplayShort
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 	case "m":
@@ -730,9 +728,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		m.saveMessageTime = messageDisplayShort
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 	case "b":
@@ -868,7 +866,7 @@ func (m PlayModel) blockStation() tea.Cmd {
 		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
 		if err != nil {
 			// Check if already blocked
-			if err == blocklist.ErrStationAlreadyBlocked {
+			if errors.Is(err, blocklist.ErrStationAlreadyBlocked) {
 				return stationBlockedMsg{
 					message:     "Station is already blocked",
 					stationUUID: m.selectedStation.StationUUID,

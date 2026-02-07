@@ -34,13 +34,7 @@ const (
 	luckyStateNewListInput
 )
 
-// Message display durations (in ticks at 60fps)
-const (
-	ticksPerSecond       = 60
-	messageDisplayShort  = 3 * ticksPerSecond  // 3 seconds (180 ticks)
-	messageDisplayMedium = 5 * ticksPerSecond  // 5 seconds (300 ticks)
-	messageDisplayLong   = 10 * ticksPerSecond // 10 seconds (600 ticks)
-)
+
 
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
@@ -170,7 +164,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string, blocklistManager 
 
 // Init initializes the lucky screen
 func (m LuckyModel) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, ticksEverySecond())
+	return tea.Batch(textinput.Blink, tickEverySecond())
 }
 
 // Update handles messages for the lucky screen
@@ -385,7 +379,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = ""
 			}
 		}
-		return m, ticksEverySecond()
+		return m, tickEverySecond()
 
 	case stationBlockedMsg:
 		m.lastBlockTime = time.Now()
@@ -1056,7 +1050,7 @@ func (m LuckyModel) viewInput() string {
 	// Save message if any
 	if m.saveMessage != "" {
 		content.WriteString("\n")
-		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "🚫") {
 			content.WriteString(successStyle().Render(m.saveMessage))
 		} else if strings.Contains(m.saveMessage, "✗") {
 			content.WriteString(errorStyle().Render(m.saveMessage))
@@ -1092,7 +1086,7 @@ func (m LuckyModel) viewSearching() string {
 	// Save message if any
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
-		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "🚫") {
 			content.WriteString(successStyle().Render(m.saveMessage))
 		} else if strings.Contains(m.saveMessage, "✗") {
 			content.WriteString(errorStyle().Render(m.saveMessage))

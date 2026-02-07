@@ -8,6 +8,13 @@ import (
 
 // Common message types used across UI components
 
+// Message display durations (in seconds, 1 tick = 1 second)
+const (
+	messageDisplayShort  = 3  // 3 seconds
+	messageDisplayMedium = 5  // 5 seconds
+	messageDisplayLong   = 10 // 10 seconds
+)
+
 // tickMsg is sent on a timer for countdown/animation purposes
 type tickMsg time.Time
 
