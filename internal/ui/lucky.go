@@ -34,8 +34,6 @@ const (
 	luckyStateNewListInput
 )
 
-
-
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
 	state           luckyState

@@ -406,23 +406,23 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = playStateStationSelection
 			// Update the blocked status in the list
 			if m.stationListModel.Items() != nil {
-			items := m.stationListModel.Items()
-			for i, item := range items {
-			if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
-			si.isBlocked = true
-			items[i] = si
-			break
-			}
-			}
-			m.stationListModel.SetItems(items)
+				items := m.stationListModel.Items()
+				for i, item := range items {
+					if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
+						si.isBlocked = true
+						items[i] = si
+						break
+					}
+				}
+				m.stationListModel.SetItems(items)
 			}
 			m.selectedStation = nil
 
 			return m, tickEverySecond()
 		} else {
-		// Already blocked
-		m.saveMessage = msg.message
-		m.saveMessageTime = messageDisplayShort
+			// Already blocked
+			m.saveMessage = msg.message
+			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
 
@@ -649,7 +649,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				startTick := m.saveMessageTime <= 0
 				m.saveMessageTime = messageDisplayShort
 				if startTick {
-				return m, tickEverySecond()
+					return m, tickEverySecond()
 				}
 			}
 		}
@@ -946,7 +946,7 @@ func (m PlayModel) viewListSelection() string {
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
 		var style lipgloss.Style
-		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "🚫") {
 			style = successStyle()
 		} else if strings.Contains(m.saveMessage, "✗") {
 			style = errorStyle()
@@ -1056,7 +1056,7 @@ func (m PlayModel) viewStationSelection() string {
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
 		var style lipgloss.Style
-		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+		if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "🚫") {
 			style = successStyle()
 		} else if strings.Contains(m.saveMessage, "✗") {
 			style = errorStyle()

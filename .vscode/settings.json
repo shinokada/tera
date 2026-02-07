@@ -1,5 +1,6 @@
 {
   "chat.tools.terminal.autoApprove": {
-    "mv": true
+    "mv": true,
+    "gofmt": true
   }
 }

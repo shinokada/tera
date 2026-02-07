@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -206,16 +207,11 @@ func (m SearchModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.loadQuickFavorites(),
 		m.spinner.Tick,
-		ticksEverySecond(), // For save message countdown
+		tickEverySecond(), // For save message countdown
 	)
 }
 
-// ticksEverySecond returns a command that ticks every 60th of a second
-func ticksEverySecond() tea.Cmd {
-	return tea.Tick(time.Second/60, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
-}
+// Note: tickEverySecond() is defined in messages.go and ticks once per second
 
 // loadQuickFavorites loads My-favorites.json for duplicate checking
 func (m SearchModel) loadQuickFavorites() tea.Cmd {
@@ -353,7 +349,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		m.state = searchStateResults
 		return m, nil
 
@@ -371,7 +367,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update local cache
 		m.quickFavorites = append(m.quickFavorites, *msg.station)
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case saveFailedMsg:
@@ -380,17 +376,17 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case tickMsg:
@@ -402,7 +398,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Continue ticking
-		return m, ticksEverySecond()
+		return m, tickEverySecond()
 
 	case listsLoadedMsg:
 		m.availableLists = msg.lists
@@ -421,7 +417,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		m.state = searchStatePlaying
 		return m, nil
 
@@ -436,7 +432,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Show message
 			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
-			m.saveMessageTime = 300 // 5 seconds
+			m.saveMessageTime = messageDisplayMedium
 
 			// Return to results
 			m.state = searchStateResults
@@ -457,13 +453,13 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Already blocked
 			m.saveMessage = msg.message
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
 
 	case undoBlockSuccessMsg:
 		m.saveMessage = "✓ Block undone"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		// Update blocked status in the list items
 		if m.resultsList.Items() != nil {
 			items := m.resultsList.Items()
@@ -483,7 +479,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 	}
 
@@ -982,7 +978,7 @@ func (m SearchModel) handlePlaybackStopped() (tea.Model, tea.Cmd) {
 		if isDuplicate {
 			// Don't show save prompt if already saved
 			m.saveMessage = "Already in Quick Favorites"
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayShort
 			m.state = searchStateResults
 			m.selectedStation = nil
 			return m, nil
@@ -1068,9 +1064,9 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		m.saveMessageTime = 2 // Show for 2 seconds
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 	case "*":
@@ -1082,9 +1078,9 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		m.saveMessageTime = 2 // Show for 2 seconds
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 	case "m":
@@ -1100,9 +1096,9 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		startTick := m.saveMessageTime == 0
-		m.saveMessageTime = 120 // Show for 2 seconds (60 ticks/sec)
+		m.saveMessageTime = 2 // Show for 2 seconds
 		if startTick {
-			return m, ticksEverySecond()
+			return m, tickEverySecond()
 		}
 		return m, nil
 	case "b":
@@ -1133,9 +1129,9 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// Resumed - show temporary message
 					m.saveMessage = "▶ Resumed"
 					startTick := m.saveMessageTime <= 0
-					m.saveMessageTime = 120
+					m.saveMessageTime = 2
 					if startTick {
-						return m, ticksEverySecond()
+						return m, tickEverySecond()
 					}
 				}
 			}
@@ -1948,7 +1944,7 @@ func (m SearchModel) blockStation() tea.Cmd {
 		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
 		if err != nil {
 			// Check if already blocked
-			if err == blocklist.ErrStationAlreadyBlocked {
+			if errors.Is(err, blocklist.ErrStationAlreadyBlocked) {
 				return stationBlockedMsg{
 					message:     "Station is already blocked",
 					stationUUID: m.selectedStation.StationUUID,

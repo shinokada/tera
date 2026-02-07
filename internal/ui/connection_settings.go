@@ -86,7 +86,7 @@ func NewConnectionSettingsModel() ConnectionSettingsModel {
 
 // Init initializes the connection settings model
 func (m ConnectionSettingsModel) Init() tea.Cmd {
-	return ticksEverySecond()
+	return tickEverySecond()
 }
 
 // Update handles messages for connection settings
@@ -115,7 +115,7 @@ func (m ConnectionSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.message = ""
 			}
 		}
-		return m, ticksEverySecond()
+		return m, tickEverySecond()
 	}
 
 	return m, nil
@@ -306,7 +306,7 @@ func (m *ConnectionSettingsModel) rebuildMenuList() {
 	if m.config.StreamBufferMB == 0 {
 		bufferLabel = "Set Stream Buffer (Disabled)"
 	}
-	
+
 	menuItems := []components.MenuItem{
 		components.NewMenuItem(
 			fmt.Sprintf("Toggle Auto-reconnect (%s)", boolToOnOff(m.config.AutoReconnect)),

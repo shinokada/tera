@@ -59,7 +59,7 @@ func NewShuffleSettingsModel() ShuffleSettingsModel {
 
 // Init initializes the shuffle settings model
 func (m ShuffleSettingsModel) Init() tea.Cmd {
-	return ticksEverySecond()
+	return tickEverySecond()
 }
 
 // Update handles messages for shuffle settings
@@ -88,7 +88,7 @@ func (m ShuffleSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.message = ""
 			}
 		}
-		return m, ticksEverySecond()
+		return m, tickEverySecond()
 	}
 
 	return m, nil

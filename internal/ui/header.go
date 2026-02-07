@@ -108,7 +108,7 @@ func (h *HeaderRenderer) createBaseStyle() lipgloss.Style {
 func (h *HeaderRenderer) styleASCII(art string) string {
 	// Trim only newline characters, preserving intentional leading spaces
 	art = strings.Trim(art, "\r\n")
-	
+
 	// Create style for each line
 	lineStyle := lipgloss.NewStyle().Width(h.config.Header.Width)
 	lineStyle = h.applyAlignment(lineStyle)
@@ -117,7 +117,7 @@ func (h *HeaderRenderer) styleASCII(art string) string {
 	// Split into lines and style each
 	lines := strings.Split(art, "\n")
 	var styledLines []string
-	
+
 	// Style each line
 	for _, line := range lines {
 		styledLines = append(styledLines, lineStyle.Render(line))
@@ -133,7 +133,7 @@ func (h *HeaderRenderer) styleASCII(art string) string {
 
 	// Styled content - join with newlines
 	result.WriteString(strings.Join(styledLines, "\n"))
-	
+
 	// Always end with a newline after content
 	result.WriteString("\n")
 
