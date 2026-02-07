@@ -40,6 +40,8 @@ func (m *Manager) Load(ctx context.Context) error {
 	// If file doesn't exist, start with empty blocklist
 	if _, err := os.Stat(m.blocklistPath); os.IsNotExist(err) {
 		m.blockedMap = make(map[string]BlockedStation)
+		m.blockRules = []BlockRule{}
+		m.lastBlock = nil
 		return nil
 	}
 
@@ -65,6 +67,9 @@ func (m *Manager) Load(ctx context.Context) error {
 	} else {
 		m.blockRules = []BlockRule{}
 	}
+
+	// Undo target can't be reconstructed from disk
+	m.lastBlock = nil
 
 	return nil
 }

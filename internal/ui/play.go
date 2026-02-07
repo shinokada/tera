@@ -436,7 +436,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items := m.stationListModel.Items()
 			for i, item := range items {
 				if si, ok := item.(stationListItem); ok {
-					if m.blocklistManager != nil && !m.blocklistManager.IsBlocked(si.station.StationUUID) {
+					if m.blocklistManager != nil && !m.blocklistManager.IsBlockedByAny(&si.station) {
 						if si.isBlocked {
 							si.isBlocked = false
 							items[i] = si
@@ -475,7 +475,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i, station := range msg.stations {
 			isBlocked := false
 			if m.blocklistManager != nil {
-				isBlocked = m.blocklistManager.IsBlocked(station.StationUUID)
+				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
 			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked}
 		}
@@ -860,6 +860,9 @@ func (m PlayModel) blockStation() tea.Cmd {
 		if m.selectedStation == nil {
 			return errMsg{fmt.Errorf("no station selected")}
 		}
+		if m.blocklistManager == nil {
+			return errMsg{fmt.Errorf("blocklist not available")}
+		}
 
 		ctx := context.Background()
 		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
@@ -886,6 +889,9 @@ func (m PlayModel) blockStation() tea.Cmd {
 // undoLastBlock undoes the last block operation
 func (m PlayModel) undoLastBlock() tea.Cmd {
 	return func() tea.Msg {
+		if m.blocklistManager == nil {
+			return undoBlockFailedMsg{}
+		}
 		ctx := context.Background()
 		undone, err := m.blocklistManager.UndoLastBlock(ctx)
 		if err != nil {

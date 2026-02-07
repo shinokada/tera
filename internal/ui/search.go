@@ -1940,6 +1940,9 @@ func (m SearchModel) blockStation() tea.Cmd {
 		if m.selectedStation == nil {
 			return searchErrorMsg{fmt.Errorf("no station selected")}
 		}
+		if m.blocklistManager == nil {
+			return searchErrorMsg{fmt.Errorf("blocklist not available")}
+		}
 
 		ctx := context.Background()
 		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
@@ -1966,6 +1969,9 @@ func (m SearchModel) blockStation() tea.Cmd {
 // undoLastBlock undoes the last block operation
 func (m SearchModel) undoLastBlock() tea.Cmd {
 	return func() tea.Msg {
+		if m.blocklistManager == nil {
+			return undoBlockFailedMsg{}
+		}
 		ctx := context.Background()
 		undone, err := m.blocklistManager.UndoLastBlock(ctx)
 		if err != nil {

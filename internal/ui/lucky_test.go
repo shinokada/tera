@@ -470,8 +470,8 @@ func TestLuckySaveSuccessMsg(t *testing.T) {
 		t.Error("Expected save message to be set")
 	}
 
-	if luckyModel.saveMessageTime != 150 {
-		t.Errorf("Expected saveMessageTime 150, got %d", luckyModel.saveMessageTime)
+	if luckyModel.saveMessageTime != 3 {
+		t.Errorf("Expected saveMessageTime 3, got %d", luckyModel.saveMessageTime)
 	}
 }
 
@@ -502,8 +502,8 @@ func TestLuckyVoteSuccessMsg(t *testing.T) {
 		t.Error("Expected message to be set")
 	}
 
-	if luckyModel.saveMessageTime != 150 {
-		t.Errorf("Expected saveMessageTime 150, got %d", luckyModel.saveMessageTime)
+	if luckyModel.saveMessageTime != 3 {
+		t.Errorf("Expected saveMessageTime 3, got %d", luckyModel.saveMessageTime)
 	}
 }
 

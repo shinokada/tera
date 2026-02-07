@@ -34,6 +34,13 @@ const (
 	luckyStateNewListInput
 )
 
+// Message display durations (in seconds, decremented by tickMsg)
+const (
+	messageDisplayShort  = 3  // Quick feedback: saves, votes, status changes
+	messageDisplayMedium = 5  // Important info: undo windows, confirmations
+	messageDisplayLong   = 10 // Errors, warnings, persistent info
+)
+
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
 	state           luckyState
@@ -265,7 +272,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.player.Stop()
 		}
 		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = 3 // 3 seconds
+		m.saveMessageTime = messageDisplayShort
 		m.state = luckyStateInput
 		m.selectedStation = nil
 		return m, nil
@@ -278,7 +285,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
-		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case saveFailedMsg:
@@ -287,17 +294,17 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
 	case listsLoadedMsg:
@@ -315,7 +322,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveToListSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to %s", msg.stationName, msg.listName)
-		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+		m.saveMessageTime = messageDisplayShort
 		m.state = luckyStatePlaying
 		return m, nil
 
@@ -325,7 +332,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
-		m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+		m.saveMessageTime = messageDisplayShort
 		m.state = luckyStatePlaying
 		return m, nil
 
@@ -354,7 +361,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 			if err != nil {
 				m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
-				m.saveMessageTime = 150
+				m.saveMessageTime = messageDisplayLong
 				return m, m.shuffleTimerTick()
 			}
 
@@ -390,7 +397,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Show message
 			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
-			m.saveMessageTime = 5 // 5 seconds (1 tick per second)
+			m.saveMessageTime = messageDisplayMedium
 
 			// If shuffle is active, advance to next station
 			if m.state == luckyStateShufflePlaying && m.shuffleManager != nil {
@@ -408,18 +415,18 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Already blocked
 			m.saveMessage = msg.message
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayMedium
 		}
 		return m, nil
 
 	case undoBlockSuccessMsg:
 		m.saveMessage = "✓ Block undone"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayMedium
 		return m, nil
 
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayMedium
 		return m, nil
 	}
 
@@ -650,7 +657,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Stop playback and return to I Feel Lucky input
 		if err := m.player.Stop(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 			return m, nil
 		}
 		m.state = luckyStateInput
@@ -663,7 +670,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Return to main menu (Level 2+ shortcut)
 		if err := m.player.Stop(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 			return m, nil
 		}
 		m.selectedStation = nil
@@ -685,20 +692,20 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle pause/play with space bar
 		if err := m.player.TogglePause(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Pause failed: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 		} else {
 			if m.player.IsPaused() {
 				m.saveMessage = "⏸ Paused"
 			} else {
 				m.saveMessage = "▶ Resumed"
 			}
-			m.saveMessageTime = 120
+			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
-			m.saveMessageTime = 120
+			m.saveMessageTime = messageDisplayShort
 			return m, nil
 		}
 	case "?":
@@ -1288,7 +1295,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if err := m.player.Stop(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 			return m, nil
 		}
 		m.state = luckyStateInput
@@ -1306,7 +1313,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if err := m.player.Stop(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 			return m, nil
 		}
 		m.selectedStation = nil
@@ -1325,7 +1332,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.shuffleManager = nil
 		m.state = luckyStatePlaying
 		m.saveMessage = "Shuffle stopped - continuing with current station"
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayMedium
 		return m, nil
 	case "n":
 		// Next shuffle station (manual advance)
@@ -1340,7 +1347,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 		if err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
-			m.saveMessageTime = 3 // 3 seconds (decremented once per second via tickMsg)
+			m.saveMessageTime = messageDisplayShort
 			return m, nil
 		}
 		m.selectedStation = nextStation
@@ -1370,7 +1377,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		prevStation, err := m.shuffleManager.Previous()
 		if err != nil {
 			m.saveMessage = fmt.Sprintf("✗ %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 			return m, nil
 		}
 		m.selectedStation = prevStation
@@ -1391,7 +1398,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = "▶ Auto-advance resumed"
 		}
-		m.saveMessageTime = 150
+		m.saveMessageTime = messageDisplayMedium
 		return m, nil
 	case "f":
 		// Save to Quick Favorites during shuffle
@@ -1407,20 +1414,20 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle pause/play with space bar
 		if err := m.player.TogglePause(); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Pause failed: %v", err)
-			m.saveMessageTime = 150
+			m.saveMessageTime = messageDisplayLong
 		} else {
 			if m.player.IsPaused() {
 				m.saveMessage = "⏸ Paused"
 			} else {
 				m.saveMessage = "▶ Resumed"
 			}
-			m.saveMessageTime = 120
+			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
-			m.saveMessageTime = 120
+			m.saveMessageTime = messageDisplayShort
 			return m, nil
 		}
 	case "?":
@@ -1541,7 +1548,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 			station := history[i]
 			isBlocked := false
 			if m.blocklistManager != nil {
-				isBlocked = m.blocklistManager.IsBlocked(station.StationUUID)
+				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
 			name := station.TrimName()
 			if isBlocked {
