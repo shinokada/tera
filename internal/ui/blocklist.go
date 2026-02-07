@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/blocklist"
-	"github.com/shinokada/tera/internal/ui/components"
+	"github.com/shinokada/tera/v2/internal/blocklist"
+	"github.com/shinokada/tera/v2/internal/ui/components"
 )
 
 // blocklistState represents the current state in the blocklist screen

@@ -3,7 +3,7 @@ package storage
 import (
 	"errors"
 
-	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/v2/internal/api"
 )
 
 // Errors

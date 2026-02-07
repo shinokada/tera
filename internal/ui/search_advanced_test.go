@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/blocklist"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/blocklist"
 )
 
 func TestBuildAdvancedSearchParams(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/theme"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/theme"
 )
 
 // Global header renderer instance (initialized in app.go)

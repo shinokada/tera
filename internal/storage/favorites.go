@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/v2/internal/api"
 )
 
 // System files that should not be treated as favorite lists

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/v2/internal/api"
 )
 
 // Manager handles blocklist operations with thread-safe access

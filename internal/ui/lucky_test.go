@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/blocklist"
-	"github.com/shinokada/tera/internal/ui/components"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/blocklist"
+	"github.com/shinokada/tera/v2/internal/ui/components"
 )
 
 func TestNewLuckyModel(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/v2/internal/api"
 )
 
 func TestNewSettingsModel(t *testing.T) {

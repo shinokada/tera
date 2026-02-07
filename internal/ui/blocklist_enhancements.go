@@ -10,7 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/blocklist"
+	"github.com/shinokada/tera/v2/internal/blocklist"
 )
 
 // ruleListItem wraps a BlockRule for list.Item interface

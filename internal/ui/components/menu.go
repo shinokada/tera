@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/internal/theme"
+	"github.com/shinokada/tera/v2/internal/theme"
 )
 
 // MenuItem represents a selectable menu item

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/storage"
 )
 
 // VoteSuccessMsg is sent when a vote is successful

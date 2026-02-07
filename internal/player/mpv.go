@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/storage"
 )
 
 // MPVPlayer manages the MPV process for playing radio streams
@@ -25,10 +25,10 @@ type MPVPlayer struct {
 	lastVolume   int // Volume before mute
 	mu           sync.Mutex
 	stopCh       chan struct{}
-	socketPath   string   // IPC socket path for runtime control
-	conn         net.Conn // Connection to IPC socket
-	trackHistory []string // Last 5 track names
-	currentTrack string   // Current playing track
+	socketPath   string     // IPC socket path for runtime control
+	conn         net.Conn   // Connection to IPC socket
+	trackHistory []string   // Last 5 track names
+	currentTrack string     // Current playing track
 	trackMu      sync.Mutex // Protect track history
 }
 

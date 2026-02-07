@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shinokada/tera/internal/ui/components"
+	"github.com/shinokada/tera/v2/internal/ui/components"
 )
 
 func TestListManagementModel_Creation(t *testing.T) {

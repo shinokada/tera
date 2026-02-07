@@ -8,10 +8,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/storage"
-	"github.com/shinokada/tera/internal/theme"
-	"github.com/shinokada/tera/internal/ui/components"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/storage"
+	"github.com/shinokada/tera/v2/internal/theme"
+	"github.com/shinokada/tera/v2/internal/ui/components"
 )
 
 // settingsState represents the current state in the settings screen

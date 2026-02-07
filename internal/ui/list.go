@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/storage"
-	"github.com/shinokada/tera/internal/ui/components"
+	"github.com/shinokada/tera/v2/internal/storage"
+	"github.com/shinokada/tera/v2/internal/ui/components"
 )
 
 // listManagementState represents the current state in the list management menu

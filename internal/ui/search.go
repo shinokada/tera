@@ -14,12 +14,12 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/internal/api"
-	"github.com/shinokada/tera/internal/blocklist"
-	"github.com/shinokada/tera/internal/player"
-	"github.com/shinokada/tera/internal/storage"
-	"github.com/shinokada/tera/internal/theme"
-	"github.com/shinokada/tera/internal/ui/components"
+	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v2/internal/blocklist"
+	"github.com/shinokada/tera/v2/internal/player"
+	"github.com/shinokada/tera/v2/internal/storage"
+	"github.com/shinokada/tera/v2/internal/theme"
+	"github.com/shinokada/tera/v2/internal/ui/components"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -1066,8 +1066,8 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
 		if m.selectedStation != nil && newVol >= 0 {
-		m.selectedStation.SetVolume(newVol)
-		m.saveStationVolume(m.selectedStation)
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
@@ -1080,8 +1080,8 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
 		if m.selectedStation != nil {
-		m.selectedStation.SetVolume(newVol)
-		m.saveStationVolume(m.selectedStation)
+			m.selectedStation.SetVolume(newVol)
+			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
 		startTick := m.saveMessageTime == 0
@@ -1094,13 +1094,13 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle mute
 		muted, vol := m.player.ToggleMute()
 		if muted {
-		m.saveMessage = "Volume: Muted"
+			m.saveMessage = "Volume: Muted"
 		} else {
-		m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 		}
 		if m.selectedStation != nil && !muted && vol >= 0 {
-		m.selectedStation.SetVolume(vol)
-		m.saveStationVolume(m.selectedStation)
+			m.selectedStation.SetVolume(vol)
+			m.saveStationVolume(m.selectedStation)
 		}
 		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = messageDisplayShort

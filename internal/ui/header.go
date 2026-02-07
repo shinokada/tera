@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/internal/storage"
+	"github.com/shinokada/tera/v2/internal/storage"
 )
 
 // HeaderRenderer handles rendering the app header based on configuration

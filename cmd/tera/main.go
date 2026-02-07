@@ -28,8 +28,8 @@ import (
 	"runtime/debug"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/internal/theme"
-	"github.com/shinokada/tera/internal/ui"
+	"github.com/shinokada/tera/v2/internal/theme"
+	"github.com/shinokada/tera/v2/internal/ui"
 )
 
 // Version is set at build time via -ldflags "-X main.version=v1.0.0"
