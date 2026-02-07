@@ -73,35 +73,7 @@ func (m *Manager) Load(ctx context.Context) error {
 func (m *Manager) Save(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Ensure directory exists
-	dir := filepath.Dir(m.blocklistPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create blocklist directory: %w", err)
-	}
-
-	// Convert map to slice
-	stations := make([]BlockedStation, 0, len(m.blockedMap))
-	for _, station := range m.blockedMap {
-		stations = append(stations, station)
-	}
-
-	blocklist := Blocklist{
-		Version:         "1.0",
-		BlockedStations: stations,
-		BlockRules:      m.blockRules,
-	}
-
-	data, err := json.MarshalIndent(blocklist, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal blocklist: %w", err)
-	}
-
-	if err := os.WriteFile(m.blocklistPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write blocklist: %w", err)
-	}
-
-	return nil
+	return m.save()
 }
 
 // Block adds a station to the blocklist
@@ -133,17 +105,18 @@ func (m *Manager) Block(ctx context.Context, station *api.Station) (string, erro
 		BlockedAt:   time.Now(),
 	}
 
-	// Add to map
+	// Save to map
 	m.blockedMap[station.StationUUID] = blocked
 
 	// Save last block for undo
+	prevLastBlock := m.lastBlock
 	m.lastBlock = &blocked
 
 	// Save to disk
 	if err := m.save(); err != nil {
 		// Rollback on error
 		delete(m.blockedMap, station.StationUUID)
-		m.lastBlock = nil
+		m.lastBlock = prevLastBlock
 		return "", err
 	}
 
@@ -302,8 +275,33 @@ func (m *Manager) save() error {
 		return fmt.Errorf("failed to marshal blocklist: %w", err)
 	}
 
-	if err := os.WriteFile(m.blocklistPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write blocklist: %w", err)
+	// Atomic write using temp file and rename
+	tmpFile, err := os.CreateTemp(dir, "blocklist-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpName := tmpFile.Name()
+	defer func() {
+		_ = tmpFile.Close()
+		if err != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpName, m.blocklistPath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 
 	return nil
@@ -393,11 +391,20 @@ func (m *Manager) IsBlockedByAny(station *api.Station) bool {
 		return false
 	}
 
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	// Check individual block first
-	if m.IsBlocked(station.StationUUID) {
+	if _, exists := m.blockedMap[station.StationUUID]; exists {
 		return true
 	}
 
 	// Check rules
-	return m.IsBlockedByRule(station)
+	for _, rule := range m.blockRules {
+		if rule.Matches(station) {
+			return true
+		}
+	}
+
+	return false
 }

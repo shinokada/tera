@@ -208,6 +208,13 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case blockRulesLoadedMsg:
 		m.rules = msg.rules
 		m.rulesListModel = createRulesListModel(msg.rules)
+		if m.width > 0 && m.height > 0 {
+			h := m.height - 8
+			if h < 10 {
+				h = 10
+			}
+			m.rulesListModel.SetSize(m.width-4, h)
+		}
 		if len(msg.rules) > 0 {
 			m.rulesListModel.Select(0)
 		}
@@ -624,8 +631,8 @@ func (m BlocklistModel) viewPlaceholder(title string) string {
 	}, m.height)
 }
 
-// handleBlockByCountryInput handles input for blocking by country
-func (m BlocklistModel) handleBlockByCountryInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleBlockRuleInput is a shared helper for blocking by country, language, or tag
+func (m BlocklistModel) handleBlockRuleInput(msg tea.KeyMsg, ruleType blocklist.BlockRuleType, emptyMsg string) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.state = blocklistRulesMenu
@@ -634,63 +641,32 @@ func (m BlocklistModel) handleBlockByCountryInput(msg tea.KeyMsg) (tea.Model, te
 	case "enter":
 		value := strings.TrimSpace(m.textInput.Value())
 		if value == "" {
-			m.message = "Country cannot be empty"
+			m.message = emptyMsg
 			m.messageTime = 150
 			return m, nil
 		}
-		newM, cmd := m.addBlockRuleWithConfirmation(blocklist.BlockRuleCountry, value)
+		newM, cmd := m.addBlockRuleWithConfirmation(ruleType, value)
 		return newM, cmd
 	}
 
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd
+}
+
+// handleBlockByCountryInput handles input for blocking by country
+func (m BlocklistModel) handleBlockByCountryInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	return m.handleBlockRuleInput(msg, blocklist.BlockRuleCountry, "Country cannot be empty")
 }
 
 // handleBlockByLanguageInput handles input for blocking by language
 func (m BlocklistModel) handleBlockByLanguageInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.state = blocklistRulesMenu
-		m.textInput.Blur()
-		return m, nil
-	case "enter":
-		value := strings.TrimSpace(m.textInput.Value())
-		if value == "" {
-			m.message = "Language cannot be empty"
-			m.messageTime = 150
-			return m, nil
-		}
-		newM, cmd := m.addBlockRuleWithConfirmation(blocklist.BlockRuleLanguage, value)
-		return newM, cmd
-	}
-
-	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
+	return m.handleBlockRuleInput(msg, blocklist.BlockRuleLanguage, "Language cannot be empty")
 }
 
 // handleBlockByTagInput handles input for blocking by tag
 func (m BlocklistModel) handleBlockByTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.state = blocklistRulesMenu
-		m.textInput.Blur()
-		return m, nil
-	case "enter":
-		value := strings.TrimSpace(m.textInput.Value())
-		if value == "" {
-			m.message = "Tag cannot be empty"
-			m.messageTime = 150
-			return m, nil
-		}
-		newM, cmd := m.addBlockRuleWithConfirmation(blocklist.BlockRuleTag, value)
-		return newM, cmd
-	}
-
-	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
+	return m.handleBlockRuleInput(msg, blocklist.BlockRuleTag, "Tag cannot be empty")
 }
 
 // handleViewRulesInput handles input when viewing active rules

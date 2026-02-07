@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -349,7 +350,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.blocklistManager == nil {
 					return true
 				}
-				return !m.blocklistManager.IsBlocked(s.StationUUID)
+				return !m.blocklistManager.IsBlockedByAny(&s)
 			})
 			if err != nil {
 				m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
@@ -852,7 +853,7 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 		if m.blocklistManager != nil {
 			filtered := make([]api.Station, 0, len(stations))
 			for _, s := range stations {
-				if !m.blocklistManager.IsBlocked(s.StationUUID) {
+				if !m.blocklistManager.IsBlockedByAny(&s) {
 					filtered = append(filtered, s)
 				}
 			}
@@ -1335,7 +1336,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.blocklistManager == nil {
 				return true
 			}
-			return !m.blocklistManager.IsBlocked(s.StationUUID)
+			return !m.blocklistManager.IsBlockedByAny(&s)
 		})
 		if err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Shuffle error: %v", err)
@@ -1453,7 +1454,7 @@ func (m LuckyModel) searchForShuffle(keyword string) tea.Cmd {
 		if m.blocklistManager != nil {
 			filtered := make([]api.Station, 0, len(stations))
 			for _, s := range stations {
-				if !m.blocklistManager.IsBlocked(s.StationUUID) {
+				if !m.blocklistManager.IsBlockedByAny(&s) {
 					filtered = append(filtered, s)
 				}
 			}
@@ -1608,7 +1609,7 @@ func (m LuckyModel) blockStation() tea.Cmd {
 		msg, err := m.blocklistManager.Block(ctx, m.selectedStation)
 		if err != nil {
 			// Check if already blocked
-			if err == blocklist.ErrStationAlreadyBlocked {
+			if errors.Is(err, blocklist.ErrStationAlreadyBlocked) {
 				return stationBlockedMsg{
 					message:     "Station is already blocked",
 					stationUUID: m.selectedStation.StationUUID,
