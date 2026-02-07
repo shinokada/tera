@@ -633,6 +633,18 @@ func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 // updatePlaying handles input during playback
 func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "b":
+		// Block current station
+		if m.selectedStation != nil {
+			return m, m.blockStation()
+		}
+		return m, nil
+	case "u":
+		// Undo last block (within 5 seconds)
+		if time.Since(m.lastBlockTime) < 5*time.Second {
+			return m, m.undoLastBlock()
+		}
+		return m, nil
 	case "esc":
 		// Stop playback and return to I Feel Lucky input
 		if err := m.player.Stop(); err != nil {

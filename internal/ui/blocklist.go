@@ -168,6 +168,7 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mainMenu.SetSize(msg.Width-4, h)
 		m.rulesMenu.SetSize(msg.Width-4, h)
 		m.listModel.SetSize(msg.Width-4, h)
+		m.rulesListModel.SetSize(msg.Width-4, h)
 		return m, nil
 
 	case blocklistLoadedMsg:
@@ -232,6 +233,8 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		m.err = msg.err
+		m.message = fmt.Sprintf("✗ %v", msg.err)
+		m.messageTime = 150
 		return m, nil
 	}
 

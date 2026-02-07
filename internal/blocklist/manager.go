@@ -225,10 +225,20 @@ func (m *Manager) Clear(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Save for rollback
+	oldMap := m.blockedMap
+	oldLastBlock := m.lastBlock
+
 	m.blockedMap = make(map[string]BlockedStation)
 	m.lastBlock = nil
 
-	return m.save()
+	if err := m.save(); err != nil {
+		// Rollback on error
+		m.blockedMap = oldMap
+		m.lastBlock = oldLastBlock
+		return err
+	}
+	return nil
 }
 
 // GetLastBlocked returns the last blocked station (for undo feature)
@@ -319,7 +329,12 @@ func (m *Manager) AddBlockRule(ctx context.Context, ruleType BlockRuleType, valu
 	m.blockRules = append(m.blockRules, newRule)
 
 	// Save to disk
-	return m.save()
+	if err := m.save(); err != nil {
+		// Rollback: remove the appended rule
+		m.blockRules = m.blockRules[:len(m.blockRules)-1]
+		return err
+	}
+	return nil
 }
 
 // RemoveBlockRule removes a blocking rule
@@ -330,10 +345,18 @@ func (m *Manager) RemoveBlockRule(ctx context.Context, ruleType BlockRuleType, v
 	// Find and remove rule
 	for i, rule := range m.blockRules {
 		if rule.Type == ruleType && strings.EqualFold(rule.Value, value) {
+			// Save original for rollback
+			removed := rule
+			idx := i
 			// Remove rule from slice
 			m.blockRules = append(m.blockRules[:i], m.blockRules[i+1:]...)
 			// Save to disk
-			return m.save()
+			if err := m.save(); err != nil {
+				// Rollback: re-insert at original position
+				m.blockRules = append(m.blockRules[:idx], append([]BlockRule{removed}, m.blockRules[idx:]...)...)
+				return err
+			}
+			return nil
 		}
 	}
 
