@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
@@ -82,21 +84,10 @@ func (m ListManagementModel) Init() tea.Cmd {
 // loadLists loads all available lists
 func (m ListManagementModel) loadLists() tea.Cmd {
 	return func() tea.Msg {
-		entries, err := os.ReadDir(m.favoritePath)
+		store := storage.NewStorage(m.favoritePath)
+		lists, err := store.GetAllLists(context.Background())
 		if err != nil {
 			return errMsg{err}
-		}
-
-		var lists []string
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			if strings.HasSuffix(name, ".json") {
-				listName := strings.TrimSuffix(name, ".json")
-				lists = append(lists, listName)
-			}
 		}
 
 		return listManagementListsLoadedMsg{lists}
@@ -154,14 +145,14 @@ func (m ListManagementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case listManagementOperationSuccessMsg:
 		m.message = msg.message
-		m.messageTime = 150 // ~3 seconds
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		m.state = listManagementMenu
 		return m, m.loadLists()
 
 	case listManagementOperationErrorMsg:
 		m.err = msg.err
 		m.message = msg.err.Error()
-		m.messageTime = 150
+		m.messageTime = 180 // 3 seconds (at ~60fps)
 		return m, nil
 
 	case errMsg:
@@ -687,10 +678,10 @@ func (m ListManagementModel) viewMenu() string {
 
 	content.WriteString(m.listModel.View())
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
-	})
+	}, m.height)
 }
 
 // viewCreate renders the create list view
@@ -770,10 +761,10 @@ func (m ListManagementModel) viewSelectListToDelete() string {
 		maxNum = 9
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
-	})
+	}, m.height)
 }
 
 // viewConfirmDelete renders the delete confirmation view
@@ -843,10 +834,10 @@ func (m ListManagementModel) viewSelectListToEdit() string {
 		maxNum = 9
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
-	})
+	}, m.height)
 }
 
 // viewEnterNewName renders the new name input view
@@ -886,11 +877,11 @@ func (m ListManagementModel) viewShowAll() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "All Favorite Lists",
 		Content: content.String(),
 		Help:    "Esc: Back • Ctrl+C: Quit",
-	})
+	}, m.height)
 }
 
 // Messages

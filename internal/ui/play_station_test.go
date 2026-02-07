@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 )
 
 func TestStationListItem(t *testing.T) {
@@ -38,18 +39,32 @@ func TestStationListItem(t *testing.T) {
 	}
 }
 
+func TestStationListItem_Blocked(t *testing.T) {
+	station := api.Station{
+		Name: "Blocked Station",
+	}
+
+	item := stationListItem{station: station, isBlocked: true}
+
+	// Title should include the 🚫 icon
+	expectedTitle := "🚫 Blocked Station"
+	if item.Title() != expectedTitle {
+		t.Errorf("Expected Title '%s', got '%s'", expectedTitle, item.Title())
+	}
+}
+
 func TestStationListItem_EmptyFields(t *testing.T) {
 	station := api.Station{
 		Name: "Test Station",
 	}
 
 	item := stationListItem{station: station}
-	
+
 	// Title should just be the name when no other fields present
 	if item.Title() != "Test Station" {
 		t.Errorf("Expected Title 'Test Station', got '%s'", item.Title())
 	}
-	
+
 	desc := item.Description()
 	if desc != "" {
 		t.Errorf("Expected empty description, got '%s'", desc)
@@ -75,7 +90,8 @@ func TestGetStationsFromList(t *testing.T) {
 	}
 
 	// Test loading
-	model := NewPlayModel(tmpDir)
+	blocklistManager := blocklist.NewManager(filepath.Join(tmpDir, "blocklist.json"))
+	model := NewPlayModel(tmpDir, blocklistManager)
 	loaded, err := model.getStationsFromList("test")
 
 	if err != nil {
@@ -108,7 +124,8 @@ func TestGetStationsFromList_EmptyList(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	model := NewPlayModel(tmpDir)
+	blocklistManager := blocklist.NewManager(filepath.Join(tmpDir, "blocklist.json"))
+	model := NewPlayModel(tmpDir, blocklistManager)
 	loaded, err := model.getStationsFromList("empty")
 
 	if err != nil {
@@ -123,7 +140,8 @@ func TestGetStationsFromList_EmptyList(t *testing.T) {
 func TestGetStationsFromList_NonexistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	model := NewPlayModel(tmpDir)
+	blocklistManager := blocklist.NewManager(filepath.Join(tmpDir, "blocklist.json"))
+	model := NewPlayModel(tmpDir, blocklistManager)
 	_, err := model.getStationsFromList("nonexistent")
 
 	if err == nil {
@@ -132,7 +150,8 @@ func TestGetStationsFromList_NonexistentFile(t *testing.T) {
 }
 
 func TestPlayModel_Update_StationsLoaded(t *testing.T) {
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	model.width = 80
 	model.height = 24
 	model.selectedList = "test"
@@ -173,7 +192,8 @@ func TestPlayModel_Update_StationSelectionNavigation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			model := NewPlayModel("/tmp/favorites")
+			blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+			model := NewPlayModel("/tmp/favorites", blocklistManager)
 			model.width = 80
 			model.height = 24
 			model.state = playStateStationSelection
@@ -217,7 +237,8 @@ func TestPlayModel_Update_StationSelectionNavigation(t *testing.T) {
 }
 
 func TestPlayModel_View_StationSelection(t *testing.T) {
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	model.width = 80
 	model.height = 24
 	model.state = playStateStationSelection
@@ -244,7 +265,8 @@ func TestPlayModel_View_StationSelection(t *testing.T) {
 }
 
 func TestPlayModel_View_NoStations(t *testing.T) {
-	model := NewPlayModel("/tmp/favorites")
+	blocklistManager := blocklist.NewManager("/tmp/blocklist.json")
+	model := NewPlayModel("/tmp/favorites", blocklistManager)
 	model.state = playStateStationSelection
 	model.selectedList = "Empty"
 
@@ -278,7 +300,7 @@ func TestNoStationsView(t *testing.T) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && 
+	return len(s) > 0 && len(substr) > 0 &&
 		(s == substr || len(s) >= len(substr) && findSubstring(s, substr))
 }
 

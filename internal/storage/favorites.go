@@ -10,6 +10,11 @@ import (
 	"github.com/shinokada/tera/internal/api"
 )
 
+// System files that should not be treated as favorite lists
+const (
+	SystemFileSearchHistory = "search-history.json"
+)
+
 type Storage struct {
 	favoritePath string
 	mu           sync.Mutex // Protects concurrent access to favorites operations
@@ -97,6 +102,10 @@ func (s *Storage) GetAllLists(ctx context.Context) ([]string, error) {
 		}
 		name := entry.Name()
 		if filepath.Ext(name) == ".json" {
+			// Skip system files that are not favorite lists
+			if name == SystemFileSearchHistory {
+				continue
+			}
 			// Remove .json extension
 			listName := name[:len(name)-5]
 			lists = append(lists, listName)

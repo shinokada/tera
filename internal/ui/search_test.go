@@ -6,11 +6,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/internal/api"
+	"github.com/shinokada/tera/internal/blocklist"
 )
 
 func TestSearchModelInit(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	if model.state != searchStateMenu {
 		t.Errorf("Expected initial state to be searchStateMenu, got %v", model.state)
@@ -27,7 +28,7 @@ func TestSearchModelInit(t *testing.T) {
 
 func TestSearchMenuNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	tests := []struct {
 		name          string
@@ -72,7 +73,7 @@ func TestSearchMenuNavigation(t *testing.T) {
 
 func TestSearchBackNavigation(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	tests := []struct {
 		name         string
@@ -127,7 +128,7 @@ func TestSearchBackNavigation(t *testing.T) {
 
 func TestSearchTextInput(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = searchStateInput
 	model.searchType = api.SearchByTag
 	model.textInput.Focus()
@@ -174,7 +175,7 @@ func TestSearchTextInput(t *testing.T) {
 
 func TestSearchEmptyQuery(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = searchStateInput
 	model.textInput.Focus()
 
@@ -195,7 +196,7 @@ func TestSearchEmptyQuery(t *testing.T) {
 
 func TestSearchResults(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	// Simulate search results
 	stations := []api.Station{
@@ -232,7 +233,7 @@ func TestSearchResults(t *testing.T) {
 
 func TestSearchError(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.state = searchStateLoading
 
 	// Simulate search error
@@ -251,7 +252,7 @@ func TestSearchError(t *testing.T) {
 
 func TestSearchStationSelection(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 	model.width = 80
 	model.height = 24
 
@@ -291,7 +292,7 @@ func TestSearchStationSelection(t *testing.T) {
 
 func TestSearchTypeLabels(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	tests := []struct {
 		searchType    api.SearchType
@@ -318,7 +319,7 @@ func TestSearchTypeLabels(t *testing.T) {
 
 func TestStationInfoMenu(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	station := api.Station{
 		StationUUID: "test-1",
@@ -362,7 +363,7 @@ func TestStationInfoMenu(t *testing.T) {
 
 func TestWindowResize(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
 	updatedModel, _ := model.Update(msg)
@@ -379,7 +380,7 @@ func TestWindowResize(t *testing.T) {
 
 func TestQuickFavoritesLoading(t *testing.T) {
 	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test")
+	model := NewSearchModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
 
 	stations := []api.Station{
 		{StationUUID: "fav-1", Name: "Favorite 1"},

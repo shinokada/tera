@@ -16,17 +16,20 @@ import (
 
 // MPVPlayer manages the MPV process for playing radio streams
 type MPVPlayer struct {
-	cmd        *exec.Cmd
-	playing    bool
-	paused     bool // Pause state
-	station    *api.Station
-	volume     int // Current volume (0-100)
-	muted      bool
-	lastVolume int // Volume before mute
-	mu         sync.Mutex
-	stopCh     chan struct{}
-	socketPath string   // IPC socket path for runtime control
-	conn       net.Conn // Connection to IPC socket
+	cmd          *exec.Cmd
+	playing      bool
+	paused       bool // Pause state
+	station      *api.Station
+	volume       int // Current volume (0-100)
+	muted        bool
+	lastVolume   int // Volume before mute
+	mu           sync.Mutex
+	stopCh       chan struct{}
+	socketPath   string   // IPC socket path for runtime control
+	conn         net.Conn // Connection to IPC socket
+	trackHistory []string // Last 5 track names
+	currentTrack string   // Current playing track
+	trackMu      sync.Mutex // Protect track history
 }
 
 // NewMPVPlayer creates a new MPV player instance
@@ -140,6 +143,9 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	// Monitor the process in a goroutine
 	go p.monitor()
 
+	// Monitor metadata for track changes
+	go p.monitorMetadata()
+
 	return nil
 }
 
@@ -206,6 +212,154 @@ func (p *MPVPlayer) sendCommand(command []interface{}) error {
 	return err
 }
 
+// getProperty retrieves a property value from mpv via IPC
+func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.conn == nil {
+		return nil, fmt.Errorf("not connected to mpv")
+	}
+
+	msg := map[string]interface{}{
+		"command": []interface{}{"get_property", name},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	data = append(data, '\n')
+
+	// Set deadline for write and read
+	_ = p.conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
+	defer func() { _ = p.conn.SetDeadline(time.Time{}) }()
+
+	if _, err := p.conn.Write(data); err != nil {
+		return nil, err
+	}
+
+	// Read response
+	buf := make([]byte, 1024)
+	n, err := p.conn.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Data  interface{} `json:"data"`
+		Error string      `json:"error"`
+	}
+	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+		return nil, err
+	}
+
+	if resp.Error != "success" {
+		return nil, fmt.Errorf("mpv error: %s", resp.Error)
+	}
+
+	return resp.Data, nil
+}
+
+// GetAudioBitrate returns the current audio bitrate (useful for checking signal)
+func (p *MPVPlayer) GetAudioBitrate() (int, error) {
+	val, err := p.getProperty("audio-bitrate")
+	if err != nil {
+		return 0, err
+	}
+
+	// mpv returns bitrate as float64 via JSON
+	if bitrate, ok := val.(float64); ok {
+		return int(bitrate), nil
+	}
+
+	return 0, nil
+}
+
+// GetCurrentTrack returns the current track title from stream metadata
+func (p *MPVPlayer) GetCurrentTrack() (string, error) {
+	val, err := p.getProperty("media-title")
+	if err != nil {
+		return "", err
+	}
+
+	if title, ok := val.(string); ok {
+		return title, nil
+	}
+
+	return "", nil
+}
+
+// GetTrackHistory returns the last 5 track names
+func (p *MPVPlayer) GetTrackHistory() []string {
+	p.trackMu.Lock()
+	defer p.trackMu.Unlock()
+
+	// Return a copy
+	history := make([]string, len(p.trackHistory))
+	copy(history, p.trackHistory)
+	return history
+}
+
+// addToTrackHistory adds a new track to history
+func (p *MPVPlayer) addToTrackHistory(track string) {
+	p.trackMu.Lock()
+	defer p.trackMu.Unlock()
+
+	// Skip if same as current track
+	if track == p.currentTrack {
+		return
+	}
+
+	// Skip empty or very short tracks (likely station name, not song)
+	if len(track) < 3 {
+		return
+	}
+
+	p.currentTrack = track
+
+	// Add to history (newest first)
+	p.trackHistory = append([]string{track}, p.trackHistory...)
+
+	// Keep only last 5
+	if len(p.trackHistory) > 5 {
+		p.trackHistory = p.trackHistory[:5]
+	}
+}
+
+// monitorMetadata monitors for metadata changes (track info)
+func (p *MPVPlayer) monitorMetadata() {
+	// Capture stopCh to avoid data race with Play() reassigning it
+	p.mu.Lock()
+	stopCh := p.stopCh
+	p.mu.Unlock()
+
+	ticker := time.NewTicker(5 * time.Second) // Check every 5 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			p.mu.Lock()
+			playing := p.playing
+			p.mu.Unlock()
+
+			if !playing {
+				return
+			}
+
+			// Get current track
+			track, err := p.GetCurrentTrack()
+			if err == nil && track != "" {
+				p.addToTrackHistory(track)
+			}
+
+		case <-stopCh:
+			return
+		}
+	}
+}
+
 // Stop stops the current playback
 func (p *MPVPlayer) Stop() error {
 	p.mu.Lock()
@@ -248,6 +402,12 @@ func (p *MPVPlayer) stopInternal() error {
 	p.paused = false
 	p.station = nil
 	p.cmd = nil
+
+	// Clear track history
+	p.trackMu.Lock()
+	p.trackHistory = []string{}
+	p.currentTrack = ""
+	p.trackMu.Unlock()
 
 	return nil
 }

@@ -225,7 +225,8 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Update list sizes
-		listHeight := m.height - 10
+		// Reserve lines for: title/subtitle (2) + message area (2) + help bar (1) + padding (~9)
+		listHeight := m.height - 14
 		m.menuList.SetSize(m.width-4, listHeight)
 		m.modeList.SetSize(m.width-4, listHeight)
 		m.alignmentList.SetSize(m.width-4, listHeight)
@@ -509,7 +510,7 @@ func (m *AppearanceSettingsModel) saveConfig() (AppearanceSettingsModel, tea.Cmd
 func (m *AppearanceSettingsModel) showMessage(msg string, success bool) {
 	m.message = msg
 	m.messageSuccess = success
-	m.messageTime = 2 // Show for 2 seconds
+	m.messageTime = 3 // 3 seconds (decremented once per second via tickMsg)
 }
 
 func (m AppearanceSettingsModel) View() string {
