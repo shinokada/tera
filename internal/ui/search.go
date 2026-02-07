@@ -1290,7 +1290,7 @@ func (m SearchModel) View() string {
 
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
-			if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "blocked") {
+			if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "🚫") {
 				content.WriteString(successStyle().Render(m.saveMessage))
 			} else if strings.Contains(m.saveMessage, "✗") {
 				content.WriteString(errorStyle().Render(m.saveMessage))
