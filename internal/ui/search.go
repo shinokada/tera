@@ -302,7 +302,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, station := range m.results {
 			isBlocked := false
 			if m.blocklistManager != nil {
-				isBlocked = m.blocklistManager.IsBlocked(station.StationUUID)
+				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
 			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked})
 		}
@@ -469,7 +469,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items := m.resultsList.Items()
 			for i, item := range items {
 				if si, ok := item.(stationListItem); ok {
-					if m.blocklistManager != nil && !m.blocklistManager.IsBlocked(si.station.StationUUID) {
+					if m.blocklistManager != nil && !m.blocklistManager.IsBlockedByAny(&si.station) {
 						if si.isBlocked {
 							si.isBlocked = false
 							items[i] = si

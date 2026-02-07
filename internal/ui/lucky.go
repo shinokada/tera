@@ -34,11 +34,12 @@ const (
 	luckyStateNewListInput
 )
 
-// Message display durations (in seconds, decremented by tickMsg)
+// Message display durations (in ticks at 60fps)
 const (
-	messageDisplayShort  = 3  // Quick feedback: saves, votes, status changes
-	messageDisplayMedium = 5  // Important info: undo windows, confirmations
-	messageDisplayLong   = 10 // Errors, warnings, persistent info
+	ticksPerSecond       = 60
+	messageDisplayShort  = 3 * ticksPerSecond  // 3 seconds (180 ticks)
+	messageDisplayMedium = 5 * ticksPerSecond  // 5 seconds (300 ticks)
+	messageDisplayLong   = 10 * ticksPerSecond // 10 seconds (600 ticks)
 )
 
 // LuckyModel represents the I Feel Lucky screen
