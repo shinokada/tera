@@ -39,8 +39,14 @@ func (r BlockRule) Matches(station *api.Station) bool {
 			strings.EqualFold(station.CountryCode, r.Value)
 
 	case BlockRuleLanguage:
-		// Match against Language (case-insensitive)
-		return strings.EqualFold(station.Language, r.Value)
+		// Match if language is present in comma-separated languages (case-insensitive)
+		languages := strings.Split(station.Language, ",")
+		for _, lang := range languages {
+			if strings.EqualFold(strings.TrimSpace(lang), r.Value) {
+				return true
+			}
+		}
+		return false
 
 	case BlockRuleTag:
 		// Match if tag is present in comma-separated tags (case-insensitive)

@@ -225,6 +225,7 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Update list sizes
+		// Reserve lines for: title/subtitle (2) + message area (2) + help bar (1) + padding (~9)
 		listHeight := m.height - 14
 		m.menuList.SetSize(m.width-4, listHeight)
 		m.modeList.SetSize(m.width-4, listHeight)

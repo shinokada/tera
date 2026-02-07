@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/internal/storage"
 	"github.com/shinokada/tera/internal/ui/components"
 )
 
@@ -95,7 +96,7 @@ func (m ListManagementModel) loadLists() tea.Cmd {
 			name := entry.Name()
 			if strings.HasSuffix(name, ".json") {
 				// Skip system files that are not favorite lists
-				if name == "search-history.json" {
+				if name == storage.SystemFileSearchHistory {
 					continue
 				}
 				listName := strings.TrimSuffix(name, ".json")

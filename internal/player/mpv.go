@@ -215,10 +215,9 @@ func (p *MPVPlayer) sendCommand(command []interface{}) error {
 // getProperty retrieves a property value from mpv via IPC
 func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	p.mu.Lock()
-	conn := p.conn
-	p.mu.Unlock()
+	defer p.mu.Unlock()
 
-	if conn == nil {
+	if p.conn == nil {
 		return nil, fmt.Errorf("not connected to mpv")
 	}
 
@@ -233,16 +232,16 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	data = append(data, '\n')
 
 	// Set deadline for write and read
-	_ = conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
-	defer func() { _ = conn.SetDeadline(time.Time{}) }()
+	_ = p.conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
+	defer func() { _ = p.conn.SetDeadline(time.Time{}) }()
 
-	if _, err := conn.Write(data); err != nil {
+	if _, err := p.conn.Write(data); err != nil {
 		return nil, err
 	}
 
 	// Read response
 	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
+	n, err := p.conn.Read(buf)
 	if err != nil {
 		return nil, err
 	}

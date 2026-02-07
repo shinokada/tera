@@ -386,7 +386,9 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 | ----- | ------------------------------------- |
 | `t`   | Toggle shuffle mode (in input screen) |
 | `n`   | Next shuffle station (manual skip)    |
-| `b`   | Previous station (from history)       |
+| `[`   | Previous station (from history)       |
+| `b`   | Block current station                 |
+| `u`   | Undo block (5 sec window)             |
 | `p`   | Pause/resume auto-advance timer       |
 | `h`   | Stop shuffle, keep playing current    |
 | `f`   | Save to My-favorites                  |

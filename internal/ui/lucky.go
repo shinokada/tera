@@ -861,19 +861,20 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 
 // startPlayback initiates playback of the selected station
 func (m LuckyModel) startPlayback() tea.Cmd {
+	if m.selectedStation == nil {
+		return func() tea.Msg {
+			return playbackErrorMsg{fmt.Errorf("no station selected")}
+		}
+	}
+	station := *m.selectedStation
 	return tea.Batch(
 		func() tea.Msg {
-			if m.selectedStation == nil {
-				return playbackErrorMsg{fmt.Errorf("no station selected")}
-			}
-
-			if err := m.player.Play(m.selectedStation); err != nil {
+			if err := m.player.Play(&station); err != nil {
 				return playbackErrorMsg{err}
 			}
-
 			return playbackStartedMsg{}
 		},
-		m.checkPlaybackSignal(*m.selectedStation, 1),
+		m.checkPlaybackSignal(station, 1),
 	)
 }
 

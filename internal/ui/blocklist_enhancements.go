@@ -106,13 +106,13 @@ func (m *BlocklistModel) confirmAddBlockRule() tea.Cmd {
 // nolint:unused
 func (m *BlocklistModel) exportBlocklist(filename string) tea.Cmd {
 	return func() tea.Msg {
-		homeDir, err := os.UserHomeDir()
+		configDir, err := os.UserConfigDir()
 		if err != nil {
-			return blockRuleErrorMsg{err: fmt.Errorf("failed to get home directory: %w", err)}
+			return blockRuleErrorMsg{err: fmt.Errorf("failed to get config directory: %w", err)}
 		}
 
 		// Create exports directory
-		exportDir := filepath.Join(homeDir, ".tera", "exports")
+		exportDir := filepath.Join(configDir, "tera", "exports")
 		if err := os.MkdirAll(exportDir, 0755); err != nil {
 			return blockRuleErrorMsg{err: fmt.Errorf("failed to create export directory: %w", err)}
 		}
@@ -155,10 +155,10 @@ func (m *BlocklistModel) exportBlocklist(filename string) tea.Cmd {
 // importBlocklist imports a blocklist from a JSON file
 // TODO: Implement export/import UI flow
 // nolint:unused
-func (m *BlocklistModel) importBlocklist(filepath string, merge bool) tea.Cmd {
+func (m *BlocklistModel) importBlocklist(importPath string, merge bool) tea.Cmd {
 	return func() tea.Msg {
 		// Read file
-		data, err := os.ReadFile(filepath)
+		data, err := os.ReadFile(importPath)
 		if err != nil {
 			return blockRuleErrorMsg{err: fmt.Errorf("failed to read import file: %w", err)}
 		}
@@ -182,12 +182,13 @@ func (m *BlocklistModel) importBlocklist(filepath string, merge bool) tea.Cmd {
 		rulesCount := 0
 		for _, rule := range imported.BlockRules {
 			// AddBlockRule handles duplicates
-			_ = m.manager.AddBlockRule(ctx, rule.Type, rule.Value)
-			rulesCount++
+			if err := m.manager.AddBlockRule(ctx, rule.Type, rule.Value); err == nil {
+				rulesCount++
+			}
 		}
 
-		// Import stations would require manager enhancement
-		stationsCount := len(imported.BlockedStations)
+		// TODO: Station import not yet implemented
+		stationsCount := 0
 
 		return blocklistImportedMsg{
 			rulesCount:    rulesCount,
