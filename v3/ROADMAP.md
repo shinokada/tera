@@ -10,6 +10,8 @@ v3/
 ├── internal/
 │   ├── api/                   # Radio Browser API client
 │   ├── blocklist/             # Station blocking
+│   ├── config/                # NEW: Unified configuration
+│   ├── credentials/           # Secure token storage
 │   ├── gist/                  # GitHub Gist sync
 │   ├── player/                # MPV integration
 │   ├── shuffle/               # Shuffle mode manager
@@ -29,7 +31,8 @@ Config scattered across multiple files:
 - `appearance_config.yaml`
 - `connection_config.yaml`
 - `shuffle.yaml`
-- `blocklist.json`
+
+**Note:** `blocklist.json`, `voted_stations.json`, and `favorites/*.json` are **user data**, not configuration. They should remain separate from system config.
 
 ### Solution Architecture
 
@@ -43,7 +46,7 @@ type Config struct {
     Player  PlayerConfig `yaml:"player"`
     UI      UIConfig `yaml:"ui"`
     Network NetworkConfig `yaml:"network"`
-    Data    DataConfig `yaml:"data"`
+    Shuffle ShuffleConfig `yaml:"shuffle"`
 }
 
 type PlayerConfig struct {
@@ -75,8 +78,11 @@ type NetworkConfig struct {
     BufferSizeMB   int  `yaml:"buffer_size_mb"`
 }
 
-type DataConfig struct {
-    BlockedStations []string `yaml:"blocked_stations"`
+type ShuffleConfig struct {
+    AutoAdvance      bool `yaml:"auto_advance"`
+    IntervalMinutes  int  `yaml:"interval_minutes"`
+    RememberHistory  bool `yaml:"remember_history"`
+    MaxHistory       int  `yaml:"max_history"`
 }
 ```
 
@@ -110,8 +116,11 @@ network:
   reconnect_delay: 5
   buffer_size_mb: 50
 
-data:
-  blocked_stations: []
+shuffle:
+  auto_advance: true
+  interval_minutes: 5
+  remember_history: true
+  max_history: 7
 ```
 
 ### Implementation Steps
@@ -150,11 +159,6 @@ func MigrateFromV2(v2ConfigDir string) (*Config, error) {
         cfg.Shuffle = shuffle
     }
     
-    // Read old blocklist.json
-    if blocked, err := readV2Blocklist(v2ConfigDir); err == nil {
-        cfg.Data.BlockedStations = blocked
-    }
-    
     // Backup old files
     backupV2Configs(v2ConfigDir)
     
@@ -188,6 +192,399 @@ func MigrateFromV2(v2ConfigDir string) (*Config, error) {
 - `v3/cmd/tera/main.go` (auto-migrate check)
 
 ---
+
+## User Data Organization
+
+### Distinction: Config vs. User Data
+
+**System Configuration** (config.yaml):
+- How the application behaves
+- Default settings
+- Theme and appearance preferences
+- Network settings
+
+**User Data** (separate files):
+- What the user has done
+- User-created content
+- Usage history
+- Caching and state
+
+### New Directory Structure
+
+```
+~/.config/tera/              # Config directory (os.UserConfigDir())
+├── config.yaml              # Unified system configuration
+└── data/                    # User data directory
+    ├── blocklist.json       # User-blocked stations
+    ├── voted_stations.json  # User voting history
+    ├── favorites/           # User playlists
+    │   ├── Blues.json
+    │   ├── Jazz.json
+    │   └── My-favorites.json
+    └── cache/               # Temporary data
+        ├── gist_metadata.json
+        └── search-history.json
+```
+
+### Migration from v2
+
+```go
+// v3/internal/storage/migrate.go
+func MigrateDataFromV2(v2ConfigDir string) error {
+    v3DataDir := filepath.Join(os.UserConfigDir(), "tera", "data")
+    
+    // Migrate user data (not config)
+    filesToMove := map[string]string{
+        "blocklist.json":      "blocklist.json",
+        "voted_stations.json": "voted_stations.json",
+        "favorites":           "favorites",
+        "gist_metadata.json":  "cache/gist_metadata.json",
+    }
+    
+    for oldFile, newFile := range filesToMove {
+        oldPath := filepath.Join(v2ConfigDir, oldFile)
+        newPath := filepath.Join(v3DataDir, newFile)
+        if err := moveIfExists(oldPath, newPath); err != nil {
+            return err
+        }
+    }
+    
+    return nil
+}
+```
+
+---
+
+## Secure Credential Storage
+
+### Current Problem
+`tokens/github_token` stored as plain text file - insecure and platform-specific.
+
+### Solution: OS Keychain Integration
+
+Use platform-native secure storage:
+- **macOS**: Keychain
+- **Linux**: Secret Service (gnome-keyring, KWallet)
+- **Windows**: Credential Manager
+
+### Implementation
+
+**Add dependency:**
+```bash
+go get github.com/zalando/go-keyring
+```
+
+**New package:**
+```go
+// v3/internal/credentials/credentials.go
+package credentials
+
+import (
+    "fmt"
+    "os"
+    "path/filepath"
+    "strings"
+    "github.com/zalando/go-keyring"
+)
+
+const (
+    serviceName = "tera"
+    tokenKey    = "github_token"
+)
+
+// SetGitHubToken stores the GitHub token securely
+func SetGitHubToken(token string) error {
+    return keyring.Set(serviceName, tokenKey, token)
+}
+
+// GetGitHubToken retrieves the GitHub token
+// Falls back to TERA_GITHUB_TOKEN env var for headless environments
+func GetGitHubToken() (string, error) {
+    // Try OS keychain first
+    token, err := keyring.Get(serviceName, tokenKey)
+    if err == nil {
+        return token, nil
+    }
+    
+    // Fallback to environment variable (for CI/CD, headless servers)
+    if envToken := os.Getenv("TERA_GITHUB_TOKEN"); envToken != "" {
+        return envToken, nil
+    }
+    
+    if err == keyring.ErrNotFound {
+        return "", fmt.Errorf("github token not configured. Run: tera config set-token")
+    }
+    
+    return "", fmt.Errorf("failed to retrieve github token: %w", err)
+}
+
+// DeleteGitHubToken removes the GitHub token
+func DeleteGitHubToken() error {
+    return keyring.Delete(serviceName, tokenKey)
+}
+
+// MigrateFromFile migrates token from v2 file storage to keychain
+func MigrateFromFile(v2ConfigDir string) error {
+    oldPath := filepath.Join(v2ConfigDir, "tokens", "github_token")
+    
+    data, err := os.ReadFile(oldPath)
+    if err != nil {
+        if os.IsNotExist(err) {
+            return nil // No token to migrate
+        }
+        return fmt.Errorf("failed to read old token: %w", err)
+    }
+    
+    token := strings.TrimSpace(string(data))
+    if token == "" {
+        return nil
+    }
+    
+    // Store in keychain
+    if err := SetGitHubToken(token); err != nil {
+        return fmt.Errorf("failed to store token in keychain: %w", err)
+    }
+    
+    // Remove old file
+    os.Remove(oldPath)
+    
+    // Remove tokens/ directory if empty
+    tokensDir := filepath.Dir(oldPath)
+    if isEmpty, _ := isDirEmpty(tokensDir); isEmpty {
+        os.Remove(tokensDir)
+    }
+    
+    fmt.Println("✓ Migrated GitHub token to secure storage")
+    return nil
+}
+
+func isDirEmpty(dir string) (bool, error) {
+    entries, err := os.ReadDir(dir)
+    if err != nil {
+        return false, err
+    }
+    return len(entries) == 0, nil
+}
+```
+
+**Settings UI Integration:**
+```go
+// v3/internal/ui/settings.go
+package ui
+
+type TokenSettingsModel struct {
+    tokenInput    textinput.Model
+    mode          string // "view", "edit", "confirm"
+    showToken     bool
+    currentToken  string
+    errorMessage  string
+    successMessage string
+}
+
+func (m *TokenSettingsModel) View() string {
+    switch m.mode {
+    case "view":
+        return m.viewMode()
+    case "edit":
+        return m.editMode()
+    case "confirm":
+        return m.confirmMode()
+    }
+    return ""
+}
+
+func (m *TokenSettingsModel) viewMode() string {
+    var token string
+    if m.showToken {
+        token = m.currentToken
+    } else {
+        token = strings.Repeat("•", min(len(m.currentToken), 20))
+    }
+    
+    status := "❌ No token configured"
+    if m.currentToken != "" {
+        status = "✓ Token configured"
+    }
+    
+    return fmt.Sprintf(`
+  Settings > GitHub Token
+
+
+GitHub Token: %s   [%s]
+                                     
+Current Status: %s
+
+Commands:
+  e: Edit token
+  d: Delete token
+  s: Show/Hide token
+  Esc: Back to Settings
+
+`, 
+        token,
+        ternary(m.showToken, "Hide", "Show"),
+        status,
+    )
+}
+
+func (m *TokenSettingsModel) editMode() string {
+    return fmt.Sprintf(`
+  Settings > GitHub Token > Edit
+
+
+Enter GitHub Token:
+%s
+
+Commands:
+  Enter: Save token
+  Ctrl+U: Clear input
+  Esc: Cancel
+
+`,
+        m.tokenInput.View(),
+    )
+}
+
+func (m *TokenSettingsModel) confirmMode() string {
+    return fmt.Sprintf(`
+  Confirm Token
+
+
+Token: %s
+
+Save this token to secure storage?
+
+  y: Yes, save token
+  n: No, go back and edit
+
+`,
+        m.tokenInput.Value(),
+    )
+}
+
+func (m *TokenSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+    case tea.KeyMsg:
+        switch m.mode {
+        case "view":
+            return m.handleViewKeys(msg)
+        case "edit":
+            return m.handleEditKeys(msg)
+        case "confirm":
+            return m.handleConfirmKeys(msg)
+        }
+    }
+    return m, nil
+}
+
+func (m *TokenSettingsModel) handleViewKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+    switch msg.String() {
+    case "e":
+        m.mode = "edit"
+        m.tokenInput.SetValue(m.currentToken)
+        m.tokenInput.Focus()
+    case "d":
+        return m, m.deleteToken()
+    case "s":
+        m.showToken = !m.showToken
+    case "esc":
+        return m, navigateToSettings
+    }
+    return m, nil
+}
+
+func (m *TokenSettingsModel) handleEditKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+    switch msg.String() {
+    case "enter":
+        m.mode = "confirm"
+        return m, nil
+    case "ctrl+u":
+        m.tokenInput.SetValue("")
+    case "esc":
+        m.mode = "view"
+        return m, nil
+    }
+    
+    var cmd tea.Cmd
+    m.tokenInput, cmd = m.tokenInput.Update(msg)
+    return m, cmd
+}
+
+func (m *TokenSettingsModel) handleConfirmKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+    switch msg.String() {
+    case "y":
+        return m, m.saveToken()
+    case "n":
+        m.mode = "edit"
+        return m, nil
+    }
+    return m, nil
+}
+
+func (m *TokenSettingsModel) saveToken() tea.Cmd {
+    return func() tea.Msg {
+        token := m.tokenInput.Value()
+        if err := credentials.SetGitHubToken(token); err != nil {
+            return tokenErrorMsg{err: err}
+        }
+        return tokenSuccessMsg{message: "✓ GitHub token saved securely"}
+    }
+}
+
+func (m *TokenSettingsModel) deleteToken() tea.Cmd {
+    return func() tea.Msg {
+        if err := credentials.DeleteGitHubToken(); err != nil {
+            return tokenErrorMsg{err: err}
+        }
+        return tokenSuccessMsg{message: "✓ GitHub token deleted"}
+    }
+}
+```
+
+**User Experience:**
+
+1. **Interactive Users (TUI):**
+   - Navigate to Settings > GitHub Token
+   - Press `e` to edit
+   - Enter token (visible by default, can verify correctness)
+   - Press `Enter` to proceed to confirmation
+   - Press `y` to save to OS keychain
+   - Token is automatically saved to secure storage
+
+2. **Headless Environments (CI/CD, servers):**
+   ```bash
+   export TERA_GITHUB_TOKEN=ghp_xxxxx
+   tera sync
+   ```
+
+
+### Benefits
+
+✅ More secure than plain text files  
+✅ Cross-platform (macOS/Linux/Windows using `os.UserConfigDir()` principle)  
+✅ Standard practice (same as browsers, Docker, Git)  
+✅ No `tokens/` directory needed  
+✅ Automatic encryption by OS  
+✅ Environment variable fallback for headless systems  
+
+### Migration Timeline
+
+**v3.0.0:**
+1. Auto-migrate token from `tokens/github_token` to keychain on first run
+2. Keep reading from file as fallback (deprecated, warning shown)
+3. Document new token management via Settings UI
+
+**v3.1.0:**
+1. Remove file fallback completely
+2. Only support keychain + environment variable
+
+---
+
+## v3.1.0: New features
+
+### (fzf like) Sort function in Favorites list
+### Recent search with station name
+
 
 ## v3.1.0: Station Metadata
 
@@ -487,6 +884,9 @@ Current dependencies (keep minimal):
 - `gopkg.in/yaml.v3` - YAML parsing
 - `golang.org/x/text` - Text processing
 
+New dependencies for v3:
+- `github.com/zalando/go-keyring` - Secure credential storage
+
 Consider adding for v4:
 - `golang.org/x/sync/errgroup` - Concurrent operations
 - `github.com/stretchr/testify` - Testing utilities
@@ -504,4 +904,4 @@ Each release should include:
 ---
 
 **Last Updated:** February 2026  
-**In Development:** v3.0.0  (Unified Config)
+**In Development:** v3.0.0 (Unified Config + Secure Credentials)
