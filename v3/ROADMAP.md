@@ -125,13 +125,13 @@ shuffle:
 
 ### Implementation Steps
 
-**Week 1: Config package**
+**1: Config package**
 1. Create `v3/internal/config/` package
 2. Define `Config` struct hierarchy
 3. Implement `Load()` and `Save()` functions
 4. Write unit tests
 
-**Week 2: Migration logic**
+**2: Migration logic**
 ```go
 // v3/internal/config/migrate.go
 package config
@@ -166,12 +166,12 @@ func MigrateFromV2(v2ConfigDir string) (*Config, error) {
 }
 ```
 
-**Week 3: Integration**
+**3: Integration**
 1. Update `internal/storage/config.go` to use new config package
 2. Update all packages that read config (theme, player, ui)
 3. Add migration check in `cmd/tera/main.go`
 
-**Week 4: Testing & Release**
+**4: Testing & Release**
 1. Test migration on all platforms
 2. Update documentation
 3. Tag v3.0.0
@@ -228,6 +228,77 @@ func MigrateFromV2(v2ConfigDir string) (*Config, error) {
 
 ### Migration from v2
 
+Migration should be done automatically on first run.
+
+```go
+// v3/cmd/tera/main.go
+func main() {
+    // 1. Detect if migration is needed
+    configPath := filepath.Join(os.UserConfigDir(), "tera", "config.yaml")
+    
+    if !fileExists(configPath) {
+        // No v3 config exists - check for v2 config
+        v2ConfigDir := filepath.Join(os.UserConfigDir(), "tera")
+        if hasV2Config(v2ConfigDir) {
+            // Auto-migrate with user notification
+            fmt.Println("🔄 Migrating from Tera v2 to v3...")
+            
+            if err := migrateFromV2(v2ConfigDir); err != nil {
+                fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
+                fmt.Println("Your v2 config has been backed up.")
+                fmt.Println("Please report this issue: https://github.com/...")
+                os.Exit(1)
+            }
+            
+            fmt.Println("✓ Migration complete!")
+            fmt.Println("  - Config unified → ~/.config/tera/config.yaml")
+            fmt.Println("  - User data → ~/.config/tera/data/")
+            fmt.Println("  - GitHub token → OS keychain")
+            fmt.Println("")
+        }
+    }
+    
+    // 2. Continue normal startup
+    app.Run()
+}
+
+func migrateFromV2(v2ConfigDir string) error {
+    // Create backup first
+    backupDir := v2ConfigDir + ".v2-backup-" + time.Now().Format("20060102-150405")
+    if err := copyDir(v2ConfigDir, backupDir); err != nil {
+        return fmt.Errorf("backup failed: %w", err)
+    }
+    
+    // Migrate config files
+    cfg, err := config.MigrateFromV2(v2ConfigDir)
+    if err != nil {
+        return fmt.Errorf("config migration failed: %w", err)
+    }
+    
+    // Migrate user data
+    if err := storage.MigrateDataFromV2(v2ConfigDir); err != nil {
+        return fmt.Errorf("data migration failed: %w", err)
+    }
+    
+    // Migrate GitHub token to keychain
+    if err := credentials.MigrateFromFile(v2ConfigDir); err != nil {
+        // Non-fatal - user can set token later in Settings
+        fmt.Printf("⚠️  Could not migrate GitHub token: %v\n", err)
+        fmt.Println("   You can set it later in Settings > GitHub Token")
+    }
+    
+    // Save new config
+    if err := cfg.Save(); err != nil {
+        return fmt.Errorf("save config failed: %w", err)
+    }
+    
+    // Clean up old config files (optional - keep backup)
+    // removeOldV2Files(v2ConfigDir)
+    
+    return nil
+}
+```
+
 ```go
 // v3/internal/storage/migrate.go
 func MigrateDataFromV2(v2ConfigDir string) error {
@@ -251,6 +322,26 @@ func MigrateDataFromV2(v2ConfigDir string) error {
     
     return nil
 }
+```
+
+### Testing Migration
+```sh
+# Hidden command for testing/debugging
+tera debug migrate-check
+
+# Output:
+# V2 Config detected:
+#   ✓ theme.yaml
+#   ✓ appearance_config.yaml
+#   ✓ shuffle.yaml
+#   ✓ blocklist.json (37 stations)
+#   ✓ favorites/ (5 playlists)
+#   ✓ tokens/github_token
+# 
+# Migration would:
+#   - Unified config → config.yaml
+#   - Move user data → data/
+#   - Migrate token → keychain
 ```
 
 ---
