@@ -1,0 +1,166 @@
+# GoReleaser configuration for TERA
+# Documentation: https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: tera
+    main: ./cmd/tera
+    binary: tera
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Inject version at build time
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: tera-archive
+    ids:
+      - tera
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Use zip for Windows
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+# Debian and RPM packages
+nfpms:
+  - id: tera-nfpm
+    package_name: tera
+    ids:
+      - tera
+    vendor: shinokada
+    homepage: https://github.com/shinokada/tera
+    maintainer: shinokada <shinokada@users.noreply.github.com>
+    description: Terminal-based internet radio player
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    dependencies:
+      - mpv
+    bindir: /usr/bin
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/tera/LICENSE
+      - src: ./README.md
+        dst: /usr/share/doc/tera/README.md
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+# Homebrew tap (uncomment when you create the tap repository)
+brews:
+  - repository:
+      owner: shinokada
+      name: homebrew-tera
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/shinokada/tera
+    description: Terminal-based internet radio player
+    license: MIT
+    dependencies:
+      - name: mpv
+        type: required
+    install: |
+      bin.install "tera"
+    test: |
+      system "#{bin}/tera", "--version"
+
+# Scoop bucket (uncomment when you create the scoop bucket repository)
+scoops:
+  - repository:
+      owner: shinokada
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    homepage: https://github.com/shinokada/tera
+    description: Terminal-based internet radio player
+    license: MIT
+
+release:
+  github:
+    owner: shinokada
+    name: tera
+  # Mark prereleases appropriately
+  prerelease: auto
+  # Release name template
+  name_template: "TERA {{.Version}}"
+  # Release notes header
+  header: |
+    ## TERA {{.Version}}
+    
+    ### Prerequisites
+    - [mpv](https://mpv.io/) must be installed on your system
+    
+    ### Installation
+
+    #### Homebrew (macOS/Linux)
+    ```sh
+    # update and upgrade
+    brew update && brew upgrade
+    brew install shinokada/tera/tera
+    # Upgrade existing installation
+    brew upgrade shinokada/tera/tera
+    ```
+    
+    ### Debian/Ubuntu
+    ```sh
+    sudo dpkg -i tera_1.x.x_linux_amd64.deb
+    sudo apt-get install -f  # Install mpv dependency if needed
+    ```
+
+    ### Fedora/RHEL
+    ```sh
+    sudo rpm -i tera_1.x.x_linux_amd64.rpm
+    ```
+
+    ### Windows Scoop
+    ```sh
+    scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
+    scoop install tera
+    ```
+
+    #### Manual Installation
+    ```sh
+    # macOS/Linux - Download and extract, then move to PATH
+    tar -xzf tera_{{.Version}}_<os>_<arch>.tar.gz
+    sudo mv tera /usr/local/bin/
+    
+    # Or install via Go
+    go install github.com/shinokada/tera/v2/cmd/tera@{{.Version}}
+    ```
+  footer: |
+    ---
+    **Full Changelog**: https://github.com/shinokada/tera/compare/{{ .PreviousTag }}...{{ .Tag }}

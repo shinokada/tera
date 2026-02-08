@@ -1,0 +1,10 @@
+.DS_Store
+
+# Local Netlify folder
+.netlify
+
+# Environment variables (contains secrets)
+.env
+
+# AI development documents
+ai-documents
