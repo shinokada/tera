@@ -54,6 +54,7 @@ type App struct {
 	apiClient                *api.Client
 	blocklistManager         *blocklist.Manager
 	favoritePath             string
+	cachePath                string
 	quickFavorites           []api.Station
 	quickFavPlayer           *player.MPVPlayer
 	playingFromMain          bool
@@ -89,6 +90,18 @@ func NewApp() *App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
 	}
 
+	// Get cache path from environment or use default
+	cachePath := os.Getenv("TERA_CACHE_PATH")
+	if cachePath == "" {
+		configDir, _ := os.UserConfigDir()
+		cachePath = filepath.Join(configDir, "tera", "data", "cache")
+	}
+
+	// Ensure cache directory exists
+	if err := os.MkdirAll(cachePath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create cache directory: %v\n", err)
+	}
+
 	// Initialize blocklist manager
 	configDir, _ := os.UserConfigDir()
 	blocklistPath := filepath.Join(configDir, "tera", "data", "blocklist.json")
@@ -100,6 +113,7 @@ func NewApp() *App {
 	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
+		cachePath:        cachePath,
 		apiClient:        api.NewClient(),
 		quickFavPlayer:   player.NewMPVPlayer(),
 		helpModel:        components.NewHelpModel(components.CreateMainMenuHelp()),

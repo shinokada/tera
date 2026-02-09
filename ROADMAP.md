@@ -66,7 +66,7 @@ os.UserConfigDir()
 └── tokens/
 ```
 
-**New state (v3.1):**
+**New state (v3.x.x):**
 ```
 os.UserConfigDir()
 ├── config.yaml          # Everything in one file!

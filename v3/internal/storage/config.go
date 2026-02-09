@@ -160,6 +160,11 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 		return false, fmt.Errorf("failed to save migrated config: %w", err)
 	}
 
+	// Migrate user data from v2 to v3 structure
+	if err := MigrateDataFromV2(v2ConfigDir); err != nil {
+		return false, fmt.Errorf("data migration failed: %w", err)
+	}
+
 	// Backup v2 configs - only remove originals if backup succeeds
 	backupErr := config.BackupV2Configs(v2ConfigDir)
 	if backupErr != nil {
