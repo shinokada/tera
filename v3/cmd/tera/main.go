@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"syscall"
 
@@ -77,7 +78,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Starting with default configuration...")
 	} else if migrated {
 		fmt.Println("🔄 Migrated TERA configuration from v2 to v3")
-		fmt.Println("✓ Config unified → ~/.config/tera/config.yaml")
+		if configPath, err := config.GetConfigPath(); err == nil {
+			fmt.Printf("✓ Config unified → %s\n", configPath)
+		} else {
+			fmt.Println("✓ Config unified into config.yaml")
+		}
 		fmt.Println("✓ Old configs backed up with timestamp")
 		fmt.Println()
 	}
@@ -155,7 +160,7 @@ func handleConfigCommand() {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
-		v2ConfigDir := configDir + "/tera"
+		v2ConfigDir := filepath.Join(configDir, "tera")
 
 		if !config.HasV2Config(v2ConfigDir) {
 			fmt.Println("No v2 configuration found.")
@@ -166,23 +171,23 @@ func handleConfigCommand() {
 		fmt.Println("V2 configuration detected:")
 		// Iterate in deterministic order for consistent output
 		for _, file := range []string{"theme.yaml", "appearance_config.yaml", "connection_config.yaml", "shuffle.yaml"} {
-		if detected[file] {
-		 fmt.Printf("  ✓ %s\n", file)
-		 }
+			if detected[file] {
+				fmt.Printf("  ✓ %s\n", file)
+			}
 		}
 
 		if len(os.Args) > 3 && os.Args[3] == "--force" {
-		migrated, err := storage.CheckAndMigrateV2Config()
-		if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-		}
-		if migrated {
-		fmt.Println("\n✓ Migration complete!")
-		}
+			migrated, err := storage.CheckAndMigrateV2Config()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			if migrated {
+				fmt.Println("\n✓ Migration complete!")
+			}
 		} else {
-		fmt.Println("\nRun TERA normally to auto-migrate, or use 'tera config migrate --force' to migrate now.")
-	}
+			fmt.Println("\nRun TERA normally to auto-migrate, or use 'tera config migrate --force' to migrate now.")
+		}
 
 	default:
 		printConfigHelp()

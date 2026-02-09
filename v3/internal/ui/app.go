@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -66,6 +67,8 @@ type App struct {
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
 	updateChecked   bool   // True if version check completed
+	// Cleanup guard
+	cleanupOnce sync.Once // Ensures Cleanup is only called once
 }
 
 // navigateMsg is sent when changing screens
@@ -172,19 +175,22 @@ func (a App) Init() tea.Cmd {
 }
 
 // Cleanup stops all players and releases resources for graceful shutdown
+// This function is idempotent and safe to call multiple times
 func (a *App) Cleanup() {
-	if a.quickFavPlayer != nil {
-		_ = a.quickFavPlayer.Stop()
-	}
-	if a.playScreen.player != nil {
-		_ = a.playScreen.player.Stop()
-	}
-	if a.searchScreen.player != nil {
-		_ = a.searchScreen.player.Stop()
-	}
-	if a.luckyScreen.player != nil {
-		_ = a.luckyScreen.player.Stop()
-	}
+	a.cleanupOnce.Do(func() {
+		if a.quickFavPlayer != nil {
+			_ = a.quickFavPlayer.Stop()
+		}
+		if a.playScreen.player != nil {
+			_ = a.playScreen.player.Stop()
+		}
+		if a.searchScreen.player != nil {
+			_ = a.searchScreen.player.Stop()
+		}
+		if a.luckyScreen.player != nil {
+			_ = a.luckyScreen.player.Stop()
+		}
+	})
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

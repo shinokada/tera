@@ -464,8 +464,7 @@ tera            # Should start normally with old config
 If automatic migration fails, you can migrate manually:
 
 ### Step 1: Create config.yaml
-Replace `~/.config` with your OS specific, e.g. macOS `~/Library/Application Support`, Windows `C:\Users\<username>\AppData\Roaming
-`, etc.
+Replace `~/.config` with your OS-specific path, e.g. macOS `~/Library/Application Support`, Windows `C:\Users\<username>\AppData\Roaming`, etc.
 
 ```sh
 # Create new config
