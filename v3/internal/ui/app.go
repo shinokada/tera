@@ -171,6 +171,22 @@ func (a App) Init() tea.Cmd {
 	return checkForUpdates()
 }
 
+// Cleanup stops all players and releases resources for graceful shutdown
+func (a *App) Cleanup() {
+	if a.quickFavPlayer != nil {
+		_ = a.quickFavPlayer.Stop()
+	}
+	if a.playScreen.player != nil {
+		_ = a.playScreen.player.Stop()
+	}
+	if a.searchScreen.player != nil {
+		_ = a.searchScreen.player.Stop()
+	}
+	if a.luckyScreen.player != nil {
+		_ = a.luckyScreen.player.Stop()
+	}
+}
+
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case versionCheckMsg:
@@ -187,16 +203,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			// Stop any playing stations before quitting
-			if a.quickFavPlayer != nil {
-				_ = a.quickFavPlayer.Stop()
-			}
-			if a.screen == screenPlay && a.playScreen.player != nil {
-				_ = a.playScreen.player.Stop()
-			} else if a.screen == screenSearch && a.searchScreen.player != nil {
-				_ = a.searchScreen.player.Stop()
-			} else if a.screen == screenLucky && a.luckyScreen.player != nil {
-				_ = a.luckyScreen.player.Stop()
-			}
+			a.Cleanup()
 			return a, tea.Quit
 		}
 

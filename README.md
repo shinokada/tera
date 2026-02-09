@@ -12,10 +12,22 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
-- 🎨 **Themes** - Choose from predefined themes or customize via YAML config
+- 🎨 **Themes** - Choose from predefined themes or customize via unified config
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 - ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
+
+## What's New in v3.0.0
+
+🎉 **Unified Configuration System** - All settings now in one `config.yaml` file!
+
+- **Simpler Configuration** - One file instead of multiple YAML files
+- **Automatic Migration** - v2 configs automatically converted on first run
+- **Secure Token Storage** - GitHub tokens now stored in OS keychain (optional)
+- **Better Organization** - Clear separation of config vs user data
+- **Easier to Edit** - All settings in one place with validation
+
+See [MIGRATION.md](v3/docs/MIGRATION.md) for upgrade details and [CHANGELOG.md](CHANGELOG.md) for full changes.
 
 ## Requirements
 
@@ -25,7 +37,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 
 ### Homebrew (macOS/Linux)
 ```sh
-# update and upgrade
+# Install or update
 brew update && brew upgrade
 brew install shinokada/tera/tera
 # Upgrade existing installation
@@ -34,18 +46,18 @@ brew upgrade shinokada/tera/tera
 
 ### Golang
 ```sh
-go install github.com/shinokada/tera/v2/cmd/tera@latest
+go install github.com/shinokada/tera/v3/cmd/tera@latest
 ```
 
 ### Debian/Ubuntu
 ```sh
-sudo dpkg -i tera_2.x.x_linux_amd64.deb
+sudo dpkg -i tera_3.x.x_linux_amd64.deb
 sudo apt-get install -f  # Install mpv dependency if needed
 ```
 
 ### Fedora/RHEL
 ```sh
-sudo rpm -i tera_2.x.x_linux_amd64.rpm
+sudo rpm -i tera_3.x.x_linux_amd64.rpm
 ```
 
 ### Windows Scoop
@@ -67,18 +79,18 @@ Download the latest binary for your platform from the [releases page](https://gi
 
 | Platform | Architecture  | File                             |
 | -------- | ------------- | -------------------------------- |
-| macOS    | Intel         | `tera_2.x.x_darwin_amd64.tar.gz` |
-| macOS    | Apple Silicon | `tera_2.x.x_darwin_arm64.tar.gz` |
-| Linux    | x86_64        | `tera_2.x.x_linux_amd64.tar.gz`  |
-| Linux    | ARM64         | `tera_2.x.x_linux_arm64.tar.gz`  |
-| Windows  | x86_64        | `tera_2.x.x_windows_amd64.zip`   |
-| Windows  | ARM64         | `tera_2.x.x_windows_arm64.zip`   |
+| macOS    | Intel         | `tera_3.x.x_darwin_amd64.tar.gz` |
+| macOS    | Apple Silicon | `tera_3.x.x_darwin_arm64.tar.gz` |
+| Linux    | x86_64        | `tera_3.x.x_linux_amd64.tar.gz`  |
+| Linux    | ARM64         | `tera_3.x.x_linux_arm64.tar.gz`  |
+| Windows  | x86_64        | `tera_3.x.x_windows_amd64.zip`   |
+| Windows  | ARM64         | `tera_3.x.x_windows_arm64.zip`   |
 
 #### macOS/Linux
 
 ```sh
 # Download and extract (example for macOS Apple Silicon)
-tar -xzf tera_2.x.x_darwin_arm64.tar.gz
+tar -xzf tera_3.x.x_darwin_arm64.tar.gz
 
 # Move to a directory in your PATH
 sudo mv tera /usr/local/bin/
@@ -90,18 +102,17 @@ sudo mv tera /usr/local/bin/
 2. Extract the archive
 3. Add the extracted directory to your PATH or move `tera.exe` to a directory already in your PATH
 
-## Migration from v1 to v2
+## Upgrading from v2 to v3
 
-If you are upgrading from TERA v1 to v2, you need to move your configuration files to the new platform-specific directory.
+**Good news!** Migration is automatic. When you first run TERA v3:
 
-1. Locate your old configuration directory: `~/.config/tera`
-2. Move all files and folders (including `favorites`, `tokens`, and `.yaml` files) to the new location:
+1. ✅ Your v2 config files are automatically detected
+2. ✅ Settings are migrated to the new unified `config.yaml`
+3. ✅ Your favorites and data remain untouched
+4. ✅ Old config files are backed up with timestamp
+5. ✅ You're ready to go!
 
-| Operating System | New Config Directory                  |
-| ---------------- | ------------------------------------- |
-| **Linux**        | `~/.config/tera/` (No change)         |
-| **macOS**        | `~/Library/Application Support/tera/` |
-| **Windows**      | `%APPDATA%\tera\`                     |
+See the [Migration Guide](v3/docs/MIGRATION.md) for details.
 
 ## Quick Start
 
@@ -122,6 +133,42 @@ tera
 # Type 10-99+ to instantly play stations from "My-favorites"
 
 # Need help? Press ? anytime to see keyboard shortcuts!
+```
+
+## Configuration Management (v3)
+
+TERA v3 introduces new command-line tools for managing your configuration:
+
+### Config Commands
+
+```sh
+# View config file location
+tera config path
+
+# Reset all settings to defaults
+tera config reset
+
+# Validate config file
+tera config validate
+
+# Check migration status
+tera config migrate
+```
+
+### Theme Commands
+
+```sh
+# Reset theme to defaults
+tera theme reset
+
+# Show config file location
+tera theme path
+
+# Show where to edit theme
+tera theme edit
+
+# Export theme as standalone file
+tera theme export
 ```
 
 ## Main Features
@@ -176,9 +223,9 @@ From main menu, select "4. Block List" to:
 | Block List | `c` | Clear all blocks          |
 
 **Storage Location:**
-- Linux: `~/.config/tera/blocklist.json`
-- macOS: `~/Library/Application Support/tera/blocklist.json`
-- Windows: `%APPDATA%\tera\blocklist.json`
+- Linux: `~/.config/tera/data/blocklist.json`
+- macOS: `~/Library/Application Support/tera/data/blocklist.json`
+- Windows: `%APPDATA%\tera\data\blocklist.json`
 
 ### I Feel Lucky
 
@@ -222,12 +269,12 @@ Customize how the TERA header appears at the top of the application:
 - **Width** - Header width (10-120 characters)
 - **Color** - Auto, hex code (#FF0000), or ANSI code (0-255)
 - **Bold** - Enable/disable bold text
-- **Padding** - Top and bottom spacing (0-5 lines)
+- **Padding** - Top and bottom spacing (0-10 lines)
 
 **Tips:**
 - Preview changes before saving
 - Use [TAAG](https://patorjk.com/software/taag/) or `figlet` to generate ASCII art
-- Settings stored in the config directory (see [File Locations](#file-locations))
+- All settings stored in unified `config.yaml` (see [File Locations](#file-locations))
 
 ### Connection Settings
 
@@ -237,7 +284,7 @@ For users on unstable networks (mobile data, GPRS, 4G), configure automatic reco
 - **Reconnect delay** - Wait time between attempts: 1-30 seconds (default: 5s)
 - **Stream buffer** - Cache size to handle brief signal drops: 10-200 MB (default: 50MB)
 
-Settings stored in the config directory (see [File Locations](#file-locations)).
+Settings stored in unified `config.yaml` (see [File Locations](#file-locations)).
 
 ### Quick Play from Main Menu
 
@@ -290,23 +337,25 @@ The easiest way to change themes is through the Settings menu:
 
 ### Manual Configuration
 
-You can also customize colors and padding by editing the theme config file:
+You can also customize colors and padding by editing the unified config file:
 
 ```sh
-tera theme path   # Show config file location
+tera config path  # Show config file location
+tera theme edit   # Show where to edit theme
 tera theme reset  # Reset to defaults
 ```
 
 The config file includes an ANSI color reference (0-15 standard colors, 16-255 extended colors). Example:
 
 ```yaml
-colors:
-  primary: "6"      # Cyan
-  highlight: "3"    # Yellow
-  error: "9"        # Bright Red
-  
-padding:
-  list_item_left: 2
+ui:
+  theme:
+    colors:
+      primary: "6"      # Cyan
+      highlight: "3"    # Yellow
+      error: "9"        # Bright Red
+    padding:
+      list_item_left: 2
 ```
 
 ## Update Checker
@@ -329,7 +378,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 TERA detects how you installed it and provides the correct update command. For example:
 - If installed via Homebrew: Shows `brew upgrade shinokada/tera/tera`
-- If installed via Go: Shows `go install github.com/shinokada/tera/v2/cmd/tera@latest`
+- If installed via Go: Shows `go install github.com/shinokada/tera/v3/cmd/tera@latest`
 - If installed via Scoop: Shows `scoop update tera`
 - If installed via Winget: Shows `winget upgrade tera`
 
@@ -338,7 +387,7 @@ TERA detects how you installed it and provides the correct update command. For e
 | Installation Method | Update Command                                                            |
 | ------------------- | ------------------------------------------------------------------------- |
 | Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
-| Go install          | `go install github.com/shinokada/tera/v2/cmd/tera@latest`                 |
+| Go install          | `go install github.com/shinokada/tera/v3/cmd/tera@latest`                 |
 | Scoop               | `scoop update tera`                                                       |
 | Winget              | `winget upgrade tera`                                                     |
 | APT/DEB             | `sudo apt update && sudo apt install --only-upgrade tera`                 |
@@ -440,9 +489,9 @@ Codec: AAC • Bitrate: 128 kbps
 f: Fav • s: List • v: Vote • n: Next • [: Prev • b: Block • p: Pause timer • h: Stop shuffle
 ```
 
-### Configuration File
+### Configuration
 
-Shuffle settings are stored in the config directory as `shuffle.yaml`:
+Shuffle settings are stored in the unified `config.yaml`:
 
 ```yaml
 shuffle:
@@ -567,12 +616,12 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 - Delete old backups
 
 **Documentation:**
-- [Gist Setup Guide](GIST_SETUP.md) - Token setup and security
-- [Gist Management Guide](GIST_CRUD_GUIDE.md) - Complete feature guide
+- [Gist Setup Guide](v3/docs/GIST_SETUP.md) - Token setup and security
+- [Gist Management Guide](v3/docs/GIST_CRUD_GUIDE.md) - Complete feature guide
 
-## File Locations
+## File Locations (v3)
 
-TERA stores its configuration files in the OS-standard config directory:
+TERA v3 organizes files more clearly with unified config and separate user data:
 
 | Operating System | Location                              |
 | ---------------- | ------------------------------------- |
@@ -580,24 +629,29 @@ TERA stores its configuration files in the OS-standard config directory:
 | **macOS**        | `~/Library/Application Support/tera/` |
 | **Windows**      | `%APPDATA%\tera\`                     |
 
-### Configuration Files
+### v3 File Structure
 
 ```
 tera/
-├── theme.yaml              # Color and padding customization
-├── appearance_config.yaml  # Header customization (text, ASCII art, etc.)
-├── connection_config.yaml  # Auto-reconnect and buffering settings
-├── shuffle.yaml            # Shuffle mode settings
-├── blocklist.json          # Blocked radio stations
-├── voted_stations.json     # Voting history (prevents duplicate votes)
-├── gist_metadata.json      # Your gist history
-├── tokens/
-│   └── github_token        # GitHub Personal Access Token
-└── favorites/
-    ├── My-favorites.json   # Quick play list (main menu 10+)
-    ├── Rock.json           # Your custom lists
-    └── Jazz.json
+├── config.yaml             # 🆕 Unified configuration (all settings)
+├── data/                   # 🆕 User data directory
+│   ├── blocklist.json      # Blocked radio stations
+│   ├── voted_stations.json # Voting history
+│   ├── favorites/          # Your station lists
+│   │   ├── My-favorites.json
+│   │   ├── Rock.json
+│   │   └── Jazz.json
+│   └── cache/              # Temporary data
+│       ├── gist_metadata.json
+│       └── search-history.json
+└── .v2-backup-YYYYMMDD-HHMMSS/  # 🆕 Automatic v2 config backup
 ```
+
+**What changed from v2:**
+- ✅ One `config.yaml` instead of multiple YAML files
+- ✅ User data organized under `data/` directory
+- ✅ Automatic backup of old v2 configs
+- ✅ GitHub token optionally stored in OS keychain
 
 **Environment Variable Override:**
 You can set a custom favorites directory:
@@ -634,6 +688,19 @@ pkill -9 mpv
 TERA creates it automatically at first launch. Check the favorites directory in your OS-specific config location (see [File Locations](#file-locations)).
 
 If missing, restart TERA and it will be created.
+
+### Config migration issues
+If automatic migration fails:
+
+```sh
+# Check migration status
+tera config migrate
+
+# Reset to defaults if needed
+tera config reset
+```
+
+Your favorites and user data are never touched during migration.
 
 ## Development
 
@@ -675,3 +742,5 @@ Contributions are welcome! Please:
 - [GitHub Repository](https://github.com/shinokada/tera)
 - [Issue Tracker](https://github.com/shinokada/tera/issues)
 - [Radio Browser](https://www.radio-browser.info/) - Station database
+- [Migration Guide](v3/docs/MIGRATION.md) - Upgrading from v2 to v3
+- [Changelog](CHANGELOG.md) - Version history
