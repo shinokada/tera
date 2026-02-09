@@ -182,7 +182,7 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 	}
 
 	// Migrate token from file to keychain (v3 feature)
-	// This is separate from v2 migration and runs even on existing v3 installs
+	// This only runs during v2→v3 migration or when force=true
 	tokenMigrated, tokenErr := migrateTokenToKeychain()
 	if tokenErr != nil {
 		// Log warning but don't fail migration
@@ -195,14 +195,14 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 	return true, nil
 }
 
-// migrateTokenToKeychain attempts to migrate token from file storage to keychain
-// Returns true if migration was performed, false if no migration needed
-func migrateTokenToKeychain() (bool, error) {
+// MigrateTokenToKeychain migrates token from file storage to OS keychain.
+// Used by CLI commands and the v2→v3 migration flow.
+// Returns true if migration was performed, false if no migration needed.
+func MigrateTokenToKeychain() (bool, error) {
 	return gist.MigrateFileTokenToKeychain()
 }
 
-// MigrateTokenToKeychain is the exported version of migrateTokenToKeychain
-// for use by CLI commands
-func MigrateTokenToKeychain() (bool, error) {
-	return migrateTokenToKeychain()
+// migrateTokenToKeychain is the internal version used by CheckAndMigrateV2Config
+func migrateTokenToKeychain() (bool, error) {
+	return MigrateTokenToKeychain()
 }

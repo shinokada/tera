@@ -27,7 +27,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - **Better Organization** - Clear separation of config vs user data
 - **Easier to Edit** - All settings in one place with validation
 
-See [MIGRATION.md](v3/docs/MIGRATION.md) for upgrade details and [CHANGELOG.md](CHANGELOG.md) for full changes.
+See [MIGRATION.md](/docs/MIGRATION.md) for upgrade details and [CHANGELOG.md](CHANGELOG.md) for full changes.
 
 ## Requirements
 
@@ -112,7 +112,7 @@ sudo mv tera /usr/local/bin/
 4. ✅ Old config files are backed up with timestamp
 5. ✅ You're ready to go!
 
-See the [Migration Guide](v3/docs/MIGRATION.md) for details.
+See the [Migration Guide](/docs/MIGRATION.md) for details.
 
 ## Quick Start
 

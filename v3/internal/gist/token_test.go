@@ -11,9 +11,7 @@ import (
 func TestTokenCRUD(t *testing.T) {
 	// Setup temp home
 	tmpDir := t.TempDir()
-	if err := os.Setenv("HOME", tmpDir); err != nil {
-		t.Fatalf("Failed to set HOME: %v", err)
-	}
+	t.Setenv("HOME", tmpDir)
 
 	// Clean up keychain before test
 	_ = keyring.Delete(keychainService, keychainUser)
@@ -148,9 +146,7 @@ func TestEnvironmentVariableToken(t *testing.T) {
 func TestFileTokenFallback(t *testing.T) {
 	// Setup temp home
 	tmpDir := t.TempDir()
-	if err := os.Setenv("HOME", tmpDir); err != nil {
-		t.Fatalf("Failed to set HOME: %v", err)
-	}
+	t.Setenv("HOME", tmpDir)
 
 	// Clean environment and keychain
 	_ = os.Unsetenv(envVarName)

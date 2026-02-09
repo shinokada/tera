@@ -52,11 +52,15 @@ func MigrateDataFromV2(v2ConfigDir string) error {
 		filepath.Join(v2ConfigDir, "search-history.json"),
 		filepath.Join(newFavoritesDir, "search-history.json"), // Also check if it got moved with favorites
 	}
+	newPath := filepath.Join(cacheDir, "search-history.json")
 	for _, oldPath := range searchHistoryPaths {
-		newPath := filepath.Join(cacheDir, "search-history.json")
-		if err := moveFileIfExists(oldPath, newPath); err == nil {
-			// Successfully moved, stop trying other paths
-			break
+		// Check if source file exists
+		if _, err := os.Stat(oldPath); err == nil {
+			// File exists, try to move it
+			if err := moveFileIfExists(oldPath, newPath); err == nil {
+				// Successfully moved, stop trying other paths
+				break
+			}
 		}
 		// Don't fail migration if search history move fails - just continue to next path
 	}
@@ -156,10 +160,10 @@ func moveDirIfExists(src, dst string) error {
 }
 
 // copyFile copies a file from src to dst
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
+func copyFile(src, dst string) (err error) {
+	srcFile, openErr := os.Open(src)
+	if openErr != nil {
+		return openErr
 	}
 	defer func() {
 		if closeErr := srcFile.Close(); closeErr != nil && err == nil {
@@ -167,9 +171,9 @@ func copyFile(src, dst string) error {
 		}
 	}()
 
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
+	dstFile, createErr := os.Create(dst)
+	if createErr != nil {
+		return createErr
 	}
 	defer func() {
 		if closeErr := dstFile.Close(); closeErr != nil && err == nil {
@@ -177,7 +181,7 @@ func copyFile(src, dst string) error {
 		}
 	}()
 
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
+	if _, err = io.Copy(dstFile, srcFile); err != nil {
 		return err
 	}
 

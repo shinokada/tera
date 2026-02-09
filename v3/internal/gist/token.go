@@ -78,7 +78,7 @@ func LoadToken() (string, error) {
 // GetTokenSource returns where the token is currently stored/available
 func GetTokenSource() (TokenSource, error) {
 	// Check environment variable
-	if envToken := os.Getenv(envVarName); envToken != "" {
+	if envToken := strings.TrimSpace(os.Getenv(envVarName)); envToken != "" {
 		return SourceEnvironment, nil
 	}
 

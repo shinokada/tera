@@ -168,9 +168,7 @@ func TestKeychainTokenStorage(t *testing.T) {
 func TestTokenMigration(t *testing.T) {
 	// Setup temp directory for file token
 	tmpDir := t.TempDir()
-	if err := os.Setenv("HOME", tmpDir); err != nil {
-		t.Fatalf("Failed to set HOME: %v", err)
-	}
+	t.Setenv("HOME", tmpDir)
 	
 	// Cleanup keychain
 	defer func() {
@@ -212,8 +210,8 @@ func TestTokenMigration(t *testing.T) {
 		}
 
 		// Verify file token is deleted
-		_, err = loadFileToken()
-		if err == nil {
+		fileTokenAfter, _ := loadFileToken()
+		if fileTokenAfter != "" {
 			t.Error("File token should be deleted after migration")
 		}
 
