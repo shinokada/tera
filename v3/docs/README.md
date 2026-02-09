@@ -34,18 +34,18 @@ brew upgrade shinokada/tera/tera
 
 ### Golang
 ```sh
-go install github.com/shinokada/tera/v2/cmd/tera@latest
+go install github.com/shinokada/tera/v3/cmd/tera@latest
 ```
 
 ### Debian/Ubuntu
 ```sh
-sudo dpkg -i tera_2.x.x_linux_amd64.deb
+sudo dpkg -i tera_3.x.x_linux_amd64.deb
 sudo apt-get install -f  # Install mpv dependency if needed
 ```
 
 ### Fedora/RHEL
 ```sh
-sudo rpm -i tera_2.x.x_linux_amd64.rpm
+sudo rpm -i tera_3.x.x_linux_amd64.rpm
 ```
 
 ### Windows Scoop
@@ -67,18 +67,18 @@ Download the latest binary for your platform from the [releases page](https://gi
 
 | Platform | Architecture  | File                             |
 | -------- | ------------- | -------------------------------- |
-| macOS    | Intel         | `tera_2.x.x_darwin_amd64.tar.gz` |
-| macOS    | Apple Silicon | `tera_2.x.x_darwin_arm64.tar.gz` |
-| Linux    | x86_64        | `tera_2.x.x_linux_amd64.tar.gz`  |
-| Linux    | ARM64         | `tera_2.x.x_linux_arm64.tar.gz`  |
-| Windows  | x86_64        | `tera_2.x.x_windows_amd64.zip`   |
-| Windows  | ARM64         | `tera_2.x.x_windows_arm64.zip`   |
+| macOS    | Intel         | `tera_3.x.x_darwin_amd64.tar.gz` |
+| macOS    | Apple Silicon | `tera_3.x.x_darwin_arm64.tar.gz` |
+| Linux    | x86_64        | `tera_3.x.x_linux_amd64.tar.gz`  |
+| Linux    | ARM64         | `tera_3.x.x_linux_arm64.tar.gz`  |
+| Windows  | x86_64        | `tera_3.x.x_windows_amd64.zip`   |
+| Windows  | ARM64         | `tera_3.x.x_windows_arm64.zip`   |
 
 #### macOS/Linux
 
 ```sh
 # Download and extract (example for macOS Apple Silicon)
-tar -xzf tera_2.x.x_darwin_arm64.tar.gz
+tar -xzf tera_3.x.x_darwin_arm64.tar.gz
 
 # Move to a directory in your PATH
 sudo mv tera /usr/local/bin/
@@ -89,19 +89,6 @@ sudo mv tera /usr/local/bin/
 1. Download the `.zip` file for your architecture
 2. Extract the archive
 3. Add the extracted directory to your PATH or move `tera.exe` to a directory already in your PATH
-
-## Migration from v1 to v2
-
-If you are upgrading from TERA v1 to v2, you need to move your configuration files to the new platform-specific directory.
-
-1. Locate your old configuration directory: `~/.config/tera`
-2. Move all files and folders (including `favorites`, `tokens`, and `.yaml` files) to the new location:
-
-| Operating System | New Config Directory                  |
-| ---------------- | ------------------------------------- |
-| **Linux**        | `~/.config/tera/` (No change)         |
-| **macOS**        | `~/Library/Application Support/tera/` |
-| **Windows**      | `%APPDATA%\tera\`                     |
 
 ## Quick Start
 
@@ -329,7 +316,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 TERA detects how you installed it and provides the correct update command. For example:
 - If installed via Homebrew: Shows `brew upgrade shinokada/tera/tera`
-- If installed via Go: Shows `go install github.com/shinokada/tera/v2/cmd/tera@latest`
+- If installed via Go: Shows `go install github.com/shinokada/tera/v3/cmd/tera@latest`
 - If installed via Scoop: Shows `scoop update tera`
 - If installed via Winget: Shows `winget upgrade tera`
 
@@ -338,7 +325,7 @@ TERA detects how you installed it and provides the correct update command. For e
 | Installation Method | Update Command                                                            |
 | ------------------- | ------------------------------------------------------------------------- |
 | Homebrew            | `brew upgrade shinokada/tera/tera`                                        |
-| Go install          | `go install github.com/shinokada/tera/v2/cmd/tera@latest`                 |
+| Go install          | `go install github.com/shinokada/tera/v3/cmd/tera@latest`                 |
 | Scoop               | `scoop update tera`                                                       |
 | Winget              | `winget upgrade tera`                                                     |
 | APT/DEB             | `sudo apt update && sudo apt install --only-upgrade tera`                 |
