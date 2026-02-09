@@ -576,13 +576,26 @@ func (m GistModel) View() string {
 		})
 	case gistStateTokenView:
 		masked := gist.GetMaskedToken(m.token)
+		sourceInfo := ""
 		if m.token == "" {
 			masked = "No token configured"
+		} else {
+			// Get token source
+			if source, err := gist.GetTokenSource(); err == nil {
+				switch source {
+				case gist.SourceKeychain:
+					sourceInfo = "\nStorage: OS Keychain (secure)"
+				case gist.SourceEnvironment:
+					sourceInfo = "\nStorage: Environment Variable (TERA_GITHUB_TOKEN)"
+				case gist.SourceFile:
+					sourceInfo = "\nStorage: File (legacy, consider migrating with 'tera config migrate')"
+				}
+			}
 		}
 		return RenderPage(PageLayout{
 			Title:    "Current Token",
 			Subtitle: "View Token Status",
-			Content:  fmt.Sprintf("Token: %s", masked) + "\n\n" + m.renderMessage(),
+			Content:  fmt.Sprintf("Token: %s%s", masked, sourceInfo) + "\n\n" + m.renderMessage(),
 			Help:     "Enter/Esc: Back",
 		})
 	case gistStateUpdateInput:

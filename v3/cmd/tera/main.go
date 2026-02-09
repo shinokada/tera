@@ -154,6 +154,20 @@ func handleConfigCommand() {
 			fmt.Println("✓ Configuration is valid")
 		}
 
+	case "migrate-token":
+		// Manually migrate token to keychain
+		migrated, err := storage.MigrateTokenToKeychain()
+		if err != nil {
+			fmt.Printf("Token migration failed: %v\n", err)
+			os.Exit(1)
+		}
+		if migrated {
+			fmt.Println("✓ Token successfully migrated to OS keychain")
+			fmt.Println("✓ File-based token removed")
+		} else {
+			fmt.Println("No migration needed (token already in keychain or not found)")
+		}
+
 	case "migrate":
 		configDir, err := os.UserConfigDir()
 		if err != nil {
@@ -256,16 +270,22 @@ func printConfigHelp() {
 Usage: tera config <command>
 
 Commands:
-  path       Show path to config file
-  reset      Reset all settings to defaults
-  validate   Check configuration for errors
-  migrate    Check for v2 config and show migration status
+  path           Show path to config file
+  reset          Reset all settings to defaults
+  validate       Check configuration for errors
+  migrate        Check for v2 config and show migration status
+  migrate-token  Migrate GitHub token from file to OS keychain
 
 The config file (config.yaml) contains:
   - player: playback settings (volume, buffer)
   - ui: theme colors and appearance
   - network: connection and streaming
   - shuffle: shuffle mode behavior
+
+Token Storage:
+  Tokens are stored in OS keychain by default for security.
+  Environment variable TERA_GITHUB_TOKEN takes precedence.
+  Use 'tera config migrate-token' to move file-based tokens to keychain.
 
 Example: Run 'tera config path' to find your config file location.`)
 }

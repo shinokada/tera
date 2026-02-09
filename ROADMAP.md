@@ -18,11 +18,11 @@ The folder strategy provides:
 
 ## Version Support Policy
 
-| Version  | Status             | Support Level            | Timeline       |
-| -------- | ------------------ | ------------------------ | -------------- |
-| **v3.x** | Active Development | New features + bug fixes | Now - Ongoing  |
-| **v2.x** | Maintenance Mode   | Bug fixes only           | Until May 2026 |
-| **v1.x** | Archived           | No support               | -              |
+| Version  | Status             | Support Level            | Timeline         |
+| -------- | ------------------ | ------------------------ | ---------------- |
+| **v3.x** | Active Development | New features + bug fixes | Now - Ongoing    |
+| **v2.x** | Maintenance Mode   | Bug fixes only           | Until March 2026 |
+| **v1.x** | Archived           | No support               | -                |
 
 ### What Goes Where?
 

@@ -616,8 +616,8 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 - Delete old backups
 
 **Documentation:**
-- [Gist Setup Guide](v3/docs/GIST_SETUP.md) - Token setup and security
-- [Gist Management Guide](v3/docs/GIST_CRUD_GUIDE.md) - Complete feature guide
+- [Gist Setup Guide](/docs/GIST_SETUP.md) - Token setup and security
+- [Gist Management Guide](/docs/GIST_CRUD_GUIDE.md) - Complete feature guide
 
 ## File Locations (v3)
 
