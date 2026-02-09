@@ -76,7 +76,7 @@ type navigateMsg struct {
 	screen Screen
 }
 
-func NewApp() App {
+func NewApp() *App {
 	// Get favorite path from environment or use default
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
@@ -97,7 +97,7 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist: %v\n", err)
 	}
 
-	app := App{
+	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
 		apiClient:        api.NewClient(),
@@ -169,7 +169,7 @@ func (a *App) loadQuickFavorites() {
 	a.quickFavorites = list.Stations
 }
 
-func (a App) Init() tea.Cmd {
+func (a *App) Init() tea.Cmd {
 	// Check for updates in the background on startup
 	return checkForUpdates()
 }
@@ -193,7 +193,7 @@ func (a *App) Cleanup() {
 	})
 }
 
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case versionCheckMsg:
 		// Handle version check result (from startup or settings)
@@ -470,7 +470,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
 		// Handle volume display countdown (only for positive values, not persistent -1)
@@ -682,7 +682,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
+func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	// Stop any currently playing quick favorite before navigating
 	if a.playingFromMain && a.quickFavPlayer != nil {
 		_ = a.quickFavPlayer.Stop()
@@ -724,7 +724,7 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 }
 
 // playQuickFavorite plays a station from the quick favorites list
-func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
+func (a *App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	if index >= len(a.quickFavorites) {
 		return a, nil
 	}
@@ -749,7 +749,7 @@ func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a App) View() string {
+func (a *App) View() string {
 	switch a.screen {
 	case screenMainMenu:
 		return a.viewMainMenu()
@@ -804,7 +804,7 @@ func (a *App) saveStationVolume(station *api.Station) {
 	a.loadQuickFavorites()
 }
 
-func (a App) viewMainMenu() string {
+func (a *App) viewMainMenu() string {
 	var content strings.Builder
 
 	// Add "Choose an option:" with number buffer display
