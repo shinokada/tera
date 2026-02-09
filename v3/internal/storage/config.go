@@ -124,14 +124,15 @@ func SaveShuffleConfigToUnified(shuffle ShuffleConfig) error {
 
 // CheckAndMigrateV2Config checks for v2 config and migrates if found
 // Returns true if migration was performed, false otherwise
-func CheckAndMigrateV2Config() (bool, error) {
+// If force is true, migration runs even if v3 config already exists
+func CheckAndMigrateV2Config(force bool) (bool, error) {
 	// Check if v3 config already exists
 	exists, err := config.Exists()
 	if err != nil {
 		return false, err
 	}
-	if exists {
-		// v3 config exists, no migration needed
+	if exists && !force {
+		// v3 config exists and not forcing, no migration needed
 		return false, nil
 	}
 

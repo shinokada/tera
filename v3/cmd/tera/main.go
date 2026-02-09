@@ -72,7 +72,7 @@ func main() {
 	}
 
 	// Check and migrate v2 config if needed
-	migrated, err := storage.CheckAndMigrateV2Config()
+	migrated, err := storage.CheckAndMigrateV2Config(false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Config migration failed: %v\n", err)
 		fmt.Fprintln(os.Stderr, "Starting with default configuration...")
@@ -177,7 +177,7 @@ func handleConfigCommand() {
 		}
 
 		if len(os.Args) > 3 && os.Args[3] == "--force" {
-			migrated, err := storage.CheckAndMigrateV2Config()
+			migrated, err := storage.CheckAndMigrateV2Config(true)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -242,7 +242,8 @@ func handleThemeCommand() {
 			fmt.Printf("Error exporting theme: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("✓ Theme exported to %s\n", outputPath)
+		absPath, _ := filepath.Abs(outputPath)
+		fmt.Printf("✓ Theme exported to %s\n", absPath)
 
 	default:
 		printThemeHelp()
@@ -266,7 +267,7 @@ The config file (config.yaml) contains:
   - network: connection and streaming
   - shuffle: shuffle mode behavior
 
-Example: Edit config.yaml in ~/.config/tera/ to customize settings.`)
+Example: Run 'tera config path' to find your config file location.`)
 }
 
 func printThemeHelp() {
@@ -289,7 +290,7 @@ Color values can be:
   - ANSI color numbers (0-255)
   - Hex colors (#FF5733 or #F53)
 
-Example: Edit config.yaml's ui.theme section to customize your theme.`)
+Example: Run 'tera config path' to find your config file, then edit the ui.theme section.`)
 }
 
 func printHelp() {
@@ -308,7 +309,7 @@ Options:
 Run without arguments to start the interactive radio player.
 
 Version 3.0 introduces unified configuration:
-  - All settings in one file: ~/.config/tera/config.yaml
+  - All settings in one config.yaml (run 'tera config path' to find it)
   - Automatic migration from v2
   - Better organization and validation`)
 }

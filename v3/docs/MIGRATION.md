@@ -150,7 +150,7 @@ These are moved to `data/` but otherwise untouched:
 - ✅ **Playback Controls** - Identical behavior
 - ✅ **Search Functions** - Same as v2
 - ✅ **Theme Selection** - Same themes available
-- ✅ **File Locations** - Same OS-specific directories
+- ✅ **File Locations** - Base directory unchanged (config files move to `data/` subdirectory)
 
 ### Backwards Compatibility
 
@@ -220,7 +220,7 @@ version: "3.0"
 
 player:
   default_volume: 100
-  buffer_size_mb: 50
+  buffer_size_mb: 50  # Playback buffer (affects latency/smoothness)
 
 ui:
   theme:
@@ -256,7 +256,7 @@ ui:
 network:
   auto_reconnect: true
   reconnect_delay: 5
-  buffer_size_mb: 50
+  buffer_size_mb: 50  # Stream download buffer (affects initial load time)
 
 shuffle:
   auto_advance: false
@@ -268,13 +268,13 @@ shuffle:
 ### How to Edit
 
 ```sh
-# Show config location
+# Show config location (works on all platforms)
 tera config path
 
-# Open in your editor
-vi ~/.config/tera/config.yaml  # Linux
-vi ~/Library/Application\ Support/tera/config.yaml  # macOS
-notepad %APPDATA%\tera\config.yaml  # Windows
+# Open in your editor (use the path from 'tera config path')
+# Linux example: vi ~/.config/tera/config.yaml
+# macOS example: vi ~/Library/Application\ Support/tera/config.yaml
+# Windows example: notepad %APPDATA%\tera\config.yaml
 
 # Validate after editing
 tera config validate
@@ -464,11 +464,15 @@ tera            # Should start normally with old config
 If automatic migration fails, you can migrate manually:
 
 ### Step 1: Create config.yaml
-Replace `~/.config` with your OS-specific path, e.g. macOS `~/Library/Application Support`, Windows `C:\Users\<username>\AppData\Roaming`, etc.
 
 ```sh
-# Create new config
-cat > ~/.config/tera/config.yaml << 'EOF'
+# First, find your config directory
+# Linux: ~/.config/tera/
+# macOS: ~/Library/Application Support/tera/
+# Windows: %APPDATA%\tera\
+
+# Create new config (adjust path for your OS)
+cat > ~/.config/tera/config.yaml << 'EOF'  # Linux example
 version: "3.0"
 
 player:
