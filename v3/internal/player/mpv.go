@@ -2,11 +2,13 @@ package player
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -70,11 +72,16 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		volumeToUse = 100
 	}
 
-	// Create unique socket path for IPC
-	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
-
-	// Remove any existing socket file
-	_ = os.Remove(p.socketPath)
+	// Create unique socket path for IPC (platform-specific)
+	if runtime.GOOS == "windows" {
+		// Windows: Use TCP socket for IPC (more reliable than named pipes)
+		p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+os.Getpid()%50000)
+	} else {
+		// Unix/Linux/macOS use Unix sockets
+		p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
+		// Remove any existing socket file (Unix only)
+		_ = os.Remove(p.socketPath)
+	}
 
 	// Load connection configuration
 	connConfig, err := storage.LoadConnectionConfig()
@@ -163,7 +170,16 @@ func (p *MPVPlayer) connectToSocket() {
 		socketPath := p.socketPath
 		p.mu.Unlock()
 
-		conn, err := net.Dial("unix", socketPath)
+		// Platform-specific connection
+		var conn net.Conn
+		var err error
+		if runtime.GOOS == "windows" {
+			// On Windows, connect via TCP
+			conn, err = net.Dial("tcp", socketPath)
+		} else {
+			// On Unix-like systems, connect via Unix socket
+			conn, err = net.Dial("unix", socketPath)
+		}
 		if err == nil {
 			p.mu.Lock()
 			// Guard against stale IPC connections when Play restarts quickly
@@ -380,19 +396,38 @@ func (p *MPVPlayer) stopInternal() error {
 		p.conn = nil
 	}
 
-	// Remove socket file
-	if p.socketPath != "" {
+	// Remove socket file (Unix only, Windows named pipes auto-cleanup)
+	if p.socketPath != "" && runtime.GOOS != "windows" {
 		_ = os.Remove(p.socketPath)
-		p.socketPath = ""
 	}
+	p.socketPath = ""
 
 	if p.cmd != nil && p.cmd.Process != nil {
 		// Send termination signal
+		// On Windows, Process.Kill() should work, but we add a timeout
 		if err := p.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to stop mpv: %w", err)
+			// Process may have already exited
+			if !errors.Is(err, os.ErrProcessDone) {
+				return fmt.Errorf("failed to stop mpv: %w", err)
+			}
 		}
-		// Wait for process to finish
-		_ = p.cmd.Wait()
+
+		// Wait for process to finish (with timeout to prevent hanging)
+		done := make(chan error, 1)
+		go func() {
+			done <- p.cmd.Wait()
+		}()
+
+		select {
+		case <-done:
+			// Process exited cleanly
+		case <-time.After(2 * time.Second):
+			// Process didn't exit in time, force kill on Windows
+			if runtime.GOOS == "windows" {
+				// Use taskkill as last resort on Windows
+				_ = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", p.cmd.Process.Pid)).Run()
+			}
+		}
 	}
 
 	// Signal monitoring goroutine to stop

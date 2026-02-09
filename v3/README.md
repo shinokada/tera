@@ -582,7 +582,7 @@ TERA stores its configuration files in the OS-standard config directory:
 
 ### Configuration Files
 
-```
+```text
 tera/
 ├── theme.yaml              # Color and padding customization
 ├── appearance_config.yaml  # Header customization (text, ASCII art, etc.)
@@ -644,7 +644,7 @@ If missing, restart TERA and it will be created.
 ### Run from source
 ```sh
 git clone https://github.com/shinokada/tera.git
-cd tera
+cd tera/v3
 go run cmd/tera/main.go
 ```
 
@@ -655,6 +655,7 @@ go test ./... -v
 
 ### Build
 ```sh
+cd v3
 go build -o tera cmd/tera/main.go
 ```
 

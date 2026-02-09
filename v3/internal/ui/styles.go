@@ -204,8 +204,8 @@ func RenderPage(layout PageLayout) string {
 func assemblePageContent(layout PageLayout) string {
 	var b strings.Builder
 
-	// Add consistent spacing after TERA header if needed
-	// (But we removed it to save vertical space for ASCII art)
+	// Add one blank line after TERA header for breathing room
+	b.WriteString("\n")
 
 	// Title section - always takes up one line (empty or not) for consistency
 	if layout.Title != "" {

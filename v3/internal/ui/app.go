@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -66,6 +67,8 @@ type App struct {
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
 	updateChecked   bool   // True if version check completed
+	// Cleanup guard
+	cleanupOnce sync.Once // Ensures Cleanup is only called once
 }
 
 // navigateMsg is sent when changing screens
@@ -73,12 +76,12 @@ type navigateMsg struct {
 	screen Screen
 }
 
-func NewApp() App {
+func NewApp() *App {
 	// Get favorite path from environment or use default
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
 		configDir, _ := os.UserConfigDir()
-		favPath = filepath.Join(configDir, "tera", "favorites")
+		favPath = filepath.Join(configDir, "tera", "data", "favorites")
 	}
 
 	// Ensure favorites directory exists
@@ -88,13 +91,13 @@ func NewApp() App {
 
 	// Initialize blocklist manager
 	configDir, _ := os.UserConfigDir()
-	blocklistPath := filepath.Join(configDir, "tera", "blocklist.json")
+	blocklistPath := filepath.Join(configDir, "tera", "data", "blocklist.json")
 	blocklistMgr := blocklist.NewManager(blocklistPath)
 	if err := blocklistMgr.Load(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist: %v\n", err)
 	}
 
-	app := App{
+	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
 		apiClient:        api.NewClient(),
@@ -166,12 +169,31 @@ func (a *App) loadQuickFavorites() {
 	a.quickFavorites = list.Stations
 }
 
-func (a App) Init() tea.Cmd {
+func (a *App) Init() tea.Cmd {
 	// Check for updates in the background on startup
 	return checkForUpdates()
 }
 
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Cleanup stops all players and releases resources for graceful shutdown
+// This function is idempotent and safe to call multiple times
+func (a *App) Cleanup() {
+	a.cleanupOnce.Do(func() {
+		if a.quickFavPlayer != nil {
+			_ = a.quickFavPlayer.Stop()
+		}
+		if a.playScreen.player != nil {
+			_ = a.playScreen.player.Stop()
+		}
+		if a.searchScreen.player != nil {
+			_ = a.searchScreen.player.Stop()
+		}
+		if a.luckyScreen.player != nil {
+			_ = a.luckyScreen.player.Stop()
+		}
+	})
+}
+
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case versionCheckMsg:
 		// Handle version check result (from startup or settings)
@@ -187,16 +209,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			// Stop any playing stations before quitting
-			if a.quickFavPlayer != nil {
-				_ = a.quickFavPlayer.Stop()
-			}
-			if a.screen == screenPlay && a.playScreen.player != nil {
-				_ = a.playScreen.player.Stop()
-			} else if a.screen == screenSearch && a.searchScreen.player != nil {
-				_ = a.searchScreen.player.Stop()
-			} else if a.screen == screenLucky && a.luckyScreen.player != nil {
-				_ = a.luckyScreen.player.Stop()
-			}
+			a.Cleanup()
 			return a, tea.Quit
 		}
 
@@ -457,7 +470,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
 		// Handle volume display countdown (only for positive values, not persistent -1)
@@ -509,7 +522,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Decrease volume
 				newVol := a.quickFavPlayer.DecreaseVolume(5)
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
-				startTick := a.volumeDisplayFrames == 0
+				startTick := a.volumeDisplayFrames <= 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil && newVol >= 0 {
@@ -525,7 +538,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Increase volume
 				newVol := a.quickFavPlayer.IncreaseVolume(5)
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
-				startTick := a.volumeDisplayFrames == 0
+				startTick := a.volumeDisplayFrames <= 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil {
@@ -545,7 +558,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					a.volumeDisplay = fmt.Sprintf("Volume: %d%%", vol)
 				}
-				startTick := a.volumeDisplayFrames == 0
+				startTick := a.volumeDisplayFrames <= 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil && !muted && vol >= 0 {
@@ -669,7 +682,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
+func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	// Stop any currently playing quick favorite before navigating
 	if a.playingFromMain && a.quickFavPlayer != nil {
 		_ = a.quickFavPlayer.Stop()
@@ -711,7 +724,7 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 }
 
 // playQuickFavorite plays a station from the quick favorites list
-func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
+func (a *App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	if index >= len(a.quickFavorites) {
 		return a, nil
 	}
@@ -736,7 +749,7 @@ func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a App) View() string {
+func (a *App) View() string {
 	switch a.screen {
 	case screenMainMenu:
 		return a.viewMainMenu()
@@ -791,7 +804,7 @@ func (a *App) saveStationVolume(station *api.Station) {
 	a.loadQuickFavorites()
 }
 
-func (a App) viewMainMenu() string {
+func (a *App) viewMainMenu() string {
 	var content strings.Builder
 
 	// Add "Choose an option:" with number buffer display

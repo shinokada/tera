@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
-	"gopkg.in/yaml.v3"
+	"github.com/shinokada/tera/v3/internal/config"
 )
 
 // Theme holds all theme configuration
@@ -74,49 +74,69 @@ func GetConfigDir() (string, error) {
 }
 
 // GetConfigPath returns the theme config file path
+// In v3, this points to the unified config.yaml
 func GetConfigPath() (string, error) {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, "theme.yaml"), nil
+	return config.GetConfigPath()
 }
 
-// Load loads the theme from config file, or returns default if not found
+// colorOrDefault returns the color value from the map, or the default if missing/empty
+func colorOrDefault(colors map[string]string, key, defaultValue string) string {
+	if value, ok := colors[key]; ok && value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// LoadFromUnifiedConfig loads theme from the unified v3 config
+func LoadFromUnifiedConfig() (*Theme, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get defaults for fallback
+	defaults := DefaultTheme()
+
+	theme := &Theme{
+		Colors: ColorConfig{
+			Primary:   colorOrDefault(cfg.UI.Theme.Colors, "primary", defaults.Colors.Primary),
+			Secondary: colorOrDefault(cfg.UI.Theme.Colors, "secondary", defaults.Colors.Secondary),
+			Highlight: colorOrDefault(cfg.UI.Theme.Colors, "highlight", defaults.Colors.Highlight),
+			Error:     colorOrDefault(cfg.UI.Theme.Colors, "error", defaults.Colors.Error),
+			Success:   colorOrDefault(cfg.UI.Theme.Colors, "success", defaults.Colors.Success),
+			Muted:     colorOrDefault(cfg.UI.Theme.Colors, "muted", defaults.Colors.Muted),
+			Text:      colorOrDefault(cfg.UI.Theme.Colors, "text", defaults.Colors.Text),
+		},
+		Padding: PaddingConfig{
+			PageHorizontal: cfg.UI.Theme.Padding.PageHorizontal,
+			PageVertical:   cfg.UI.Theme.Padding.PageVertical,
+			ListItemLeft:   cfg.UI.Theme.Padding.ListItemLeft,
+			BoxHorizontal:  cfg.UI.Theme.Padding.BoxHorizontal,
+			BoxVertical:    cfg.UI.Theme.Padding.BoxVertical,
+		},
+	}
+
+	return theme, nil
+}
+
+// Load loads the theme from unified config, or returns default if not found
 func Load() (*Theme, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	configPath, err := GetConfigPath()
+	theme, err := LoadFromUnifiedConfig()
 	if err != nil {
-		theme := DefaultTheme()
-		current = &theme
+		// If unified config fails, return default
+		defaultTheme := DefaultTheme()
+		current = &defaultTheme
 		return current, nil
 	}
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Config doesn't exist, create default
-			theme := DefaultTheme()
-			current = &theme
-			// Save default config for user reference
-			_ = saveInternal(&theme)
-			return current, nil
-		}
-		return nil, err
-	}
-
-	var theme Theme
-	if err := yaml.Unmarshal(data, &theme); err != nil {
-		return nil, err
-	}
-
-	current = &theme
+	current = theme
 	return current, nil
 }
 
-// Save saves the theme to config file
+// Save saves the theme to unified config
 func Save(theme *Theme) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -125,20 +145,29 @@ func Save(theme *Theme) error {
 
 // saveInternal saves theme without lock (caller must hold lock)
 func saveInternal(theme *Theme) error {
-	configPath, err := GetConfigPath()
+	// Load current unified config
+	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 
-	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return err
-	}
+	// Update theme portion
+	cfg.UI.Theme.Colors["primary"] = theme.Colors.Primary
+	cfg.UI.Theme.Colors["secondary"] = theme.Colors.Secondary
+	cfg.UI.Theme.Colors["highlight"] = theme.Colors.Highlight
+	cfg.UI.Theme.Colors["error"] = theme.Colors.Error
+	cfg.UI.Theme.Colors["success"] = theme.Colors.Success
+	cfg.UI.Theme.Colors["muted"] = theme.Colors.Muted
+	cfg.UI.Theme.Colors["text"] = theme.Colors.Text
 
-	// Generate YAML with color reference comments
-	content := generateThemeYAML(theme)
+	cfg.UI.Theme.Padding.PageHorizontal = theme.Padding.PageHorizontal
+	cfg.UI.Theme.Padding.PageVertical = theme.Padding.PageVertical
+	cfg.UI.Theme.Padding.ListItemLeft = theme.Padding.ListItemLeft
+	cfg.UI.Theme.Padding.BoxHorizontal = theme.Padding.BoxHorizontal
+	cfg.UI.Theme.Padding.BoxVertical = theme.Padding.BoxVertical
 
-	return os.WriteFile(configPath, []byte(content), 0644)
+	// Save unified config
+	return config.Save(cfg)
 }
 
 // Reset resets the theme to default values
@@ -165,6 +194,8 @@ func Current() *Theme {
 }
 
 // generateThemeYAML creates a YAML string with helpful comments
+// This is now deprecated in v3 as theme is part of unified config
+// Kept for backward compatibility with theme.yaml export if needed
 func generateThemeYAML(theme *Theme) string {
 	return `# TERA Theme Configuration
 # Edit this file to customize the appearance of TERA
@@ -222,6 +253,19 @@ padding:
   # Vertical padding inside boxes
   box_vertical: ` + strconv.Itoa(theme.Padding.BoxVertical) + `
 `
+}
+
+// ExportLegacyThemeFile exports current theme as standalone theme.yaml
+// This is for users who want to share or backup their theme separately
+func ExportLegacyThemeFile(outputPath string) error {
+	theme := Current()
+	if theme == nil {
+		d := DefaultTheme()
+		theme = &d
+	}
+
+	content := generateThemeYAML(theme)
+	return os.WriteFile(outputPath, []byte(content), 0644)
 }
 
 // Color helper methods for lipgloss integration
