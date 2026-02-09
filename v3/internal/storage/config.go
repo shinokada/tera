@@ -44,7 +44,8 @@ func LoadAppearanceConfigFromUnified() (AppearanceConfig, error) {
 	}, nil
 }
 
-// SaveAppearanceConfigToUnified saves appearance settings to unified config
+// SaveAppearanceConfigToUnified saves appearance settings to unified config.
+// NOTE: This performs non-atomic read-modify-write. Currently safe because Bubble Tea's Update loop is single-threaded, but would need a mutex if concurrent config modifications are added in the future.
 func SaveAppearanceConfigToUnified(appearance AppearanceConfig) error {
 	cfg, err := config.Load()
 	if err != nil {

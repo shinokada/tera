@@ -81,7 +81,7 @@ func NewApp() *App {
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
 		configDir, _ := os.UserConfigDir()
-		favPath = filepath.Join(configDir, "tera", "favorites")
+		favPath = filepath.Join(configDir, "tera", "data", "favorites")
 	}
 
 	// Ensure favorites directory exists
@@ -91,7 +91,7 @@ func NewApp() *App {
 
 	// Initialize blocklist manager
 	configDir, _ := os.UserConfigDir()
-	blocklistPath := filepath.Join(configDir, "tera", "blocklist.json")
+	blocklistPath := filepath.Join(configDir, "tera", "data", "blocklist.json")
 	blocklistMgr := blocklist.NewManager(blocklistPath)
 	if err := blocklistMgr.Load(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist: %v\n", err)
