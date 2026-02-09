@@ -29,7 +29,7 @@ This guide helps you upgrade from TERA v2 to v3.
 The biggest change in v3 is configuration consolidation. Instead of managing multiple YAML files, everything is now in one place.
 
 **Before (v2):**
-```
+```text
 ~/.config/tera/
 ├── theme.yaml              # Theme colors and padding
 ├── appearance_config.yaml  # Header customization
@@ -44,7 +44,7 @@ The biggest change in v3 is configuration consolidation. Instead of managing mul
 ```
 
 **After (v3):**
-```
+```text
 ~/.config/tera/
 ├── config.yaml              # 🆕 All settings in one file!
 ├── data/                    # 🆕 User data directory
@@ -119,13 +119,13 @@ That's it! TERA is now running v3 with all your settings preserved.
 
 All your v2 settings are preserved:
 
-| v2 File                    | → | v3 Location           | What's Migrated                                       |
-| -------------------------- | - | --------------------- | ----------------------------------------------------- |
-| `theme.yaml`               | → | `config.yaml` (ui.theme) | Colors, padding, theme name                           |
-| `appearance_config.yaml`   | → | `config.yaml` (ui.appearance) | Header mode, alignment, width, color, padding         |
-| `connection_config.yaml`   | → | `config.yaml` (network) | Auto-reconnect, delay, buffer size                    |
-| `shuffle.yaml`             | → | `config.yaml` (shuffle) | Auto-advance, interval, history settings              |
-| `tokens/github_token`      | → | OS Keychain (optional) | GitHub personal access token                          |
+| v2 File                  | →   | v3 Location                   | What's Migrated                               |
+| ------------------------ | --- | ----------------------------- | --------------------------------------------- |
+| `theme.yaml`             | →   | `config.yaml` (ui.theme)      | Colors, padding, theme name                   |
+| `appearance_config.yaml` | →   | `config.yaml` (ui.appearance) | Header mode, alignment, width, color, padding |
+| `connection_config.yaml` | →   | `config.yaml` (network)       | Auto-reconnect, delay, buffer size            |
+| `shuffle.yaml`           | →   | `config.yaml` (shuffle)       | Auto-advance, interval, history settings      |
+| `tokens/github_token`    | →   | OS Keychain (optional)        | GitHub personal access token                  |
 
 ### ✅ Your Data (Stays Unchanged)
 
@@ -166,7 +166,7 @@ v3 is **100% backwards compatible** with v2 user data:
 
 ### macOS Example
 
-```
+```text
 Before (v2):
 ~/Library/Application Support/tera/
 ├── theme.yaml
@@ -335,7 +335,7 @@ If keychain storage fails, you can:
 tera config migrate
 
 # Force migration
-tera config migrate --force  # (if this flag exists)
+tera config migrate --force
 
 # Or reset and reconfigure
 tera config reset
@@ -388,7 +388,7 @@ mv ~/.config/tera/favorites ~/.config/tera/data/
 - Token prompt appears
 
 **Solution 1 - UI:**
-```
+```text
 1. Open TERA
 2. Go to Settings → GitHub Token
 3. Press 'e' to edit
@@ -464,6 +464,8 @@ tera            # Should start normally with old config
 If automatic migration fails, you can migrate manually:
 
 ### Step 1: Create config.yaml
+Replace `~/.config` with your OS specific, e.g. macOS `~/Library/Application Support`, Windows `C:\Users\<username>\AppData\Roaming
+`, etc.
 
 ```sh
 # Create new config
@@ -533,14 +535,14 @@ If you had customized settings, manually copy them:
 # Create data directory
 mkdir -p ~/.config/tera/data/
 
+# Create cache directory
+mkdir -p ~/.config/tera/data/cache/
+
 # Move user data
 mv ~/.config/tera/favorites ~/.config/tera/data/
 mv ~/.config/tera/blocklist.json ~/.config/tera/data/
 mv ~/.config/tera/voted_stations.json ~/.config/tera/data/
 mv ~/.config/tera/gist_metadata.json ~/.config/tera/data/cache/
-
-# Create cache directory
-mkdir -p ~/.config/tera/data/cache/
 ```
 
 ### Step 4: Backup Old Configs

@@ -164,23 +164,25 @@ func handleConfigCommand() {
 
 		detected := config.DetectV2Config(v2ConfigDir)
 		fmt.Println("V2 configuration detected:")
-		for file, exists := range detected {
-			if exists {
-				fmt.Printf("  ✓ %s\n", file)
-			}
+		// Iterate in deterministic order for consistent output
+		for _, file := range []string{"theme.yaml", "appearance_config.yaml", "connection_config.yaml", "shuffle.yaml"} {
+		if detected[file] {
+		 fmt.Printf("  ✓ %s\n", file)
+		 }
 		}
-		fmt.Println("\nRun TERA normally to auto-migrate, or use 'tera config migrate --force' to migrate now.")
 
 		if len(os.Args) > 3 && os.Args[3] == "--force" {
-			migrated, err := storage.CheckAndMigrateV2Config()
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-				os.Exit(1)
-			}
-			if migrated {
-				fmt.Println("\n✓ Migration complete!")
-			}
+		migrated, err := storage.CheckAndMigrateV2Config()
+		if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 		}
+		if migrated {
+		fmt.Println("\n✓ Migration complete!")
+		}
+		} else {
+		fmt.Println("\nRun TERA normally to auto-migrate, or use 'tera config migrate --force' to migrate now.")
+	}
 
 	default:
 		printConfigHelp()

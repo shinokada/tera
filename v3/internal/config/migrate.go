@@ -10,6 +10,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// v2ConfigFiles is the list of known v2 configuration files
+var v2ConfigFiles = []string{
+	"theme.yaml",
+	"appearance_config.yaml",
+	"connection_config.yaml",
+	"shuffle.yaml",
+}
+
 // V2Theme represents the old v2 theme structure
 type V2Theme struct {
 	Colors struct {
@@ -110,14 +118,25 @@ func readV2Theme(path string) (map[string]string, error) {
 		return nil, err
 	}
 
+	// Get defaults for fallback
+	defaults := DefaultConfig().UI.Theme.Colors
+
+	// Helper to use default if value is empty
+	colorOrDefault := func(value, key string) string {
+		if value == "" {
+			return defaults[key]
+		}
+		return value
+	}
+
 	colors := make(map[string]string)
-	colors["primary"] = v2Theme.Colors.Primary
-	colors["secondary"] = v2Theme.Colors.Secondary
-	colors["highlight"] = v2Theme.Colors.Highlight
-	colors["error"] = v2Theme.Colors.Error
-	colors["success"] = v2Theme.Colors.Success
-	colors["muted"] = v2Theme.Colors.Muted
-	colors["text"] = v2Theme.Colors.Text
+	colors["primary"] = colorOrDefault(v2Theme.Colors.Primary, "primary")
+	colors["secondary"] = colorOrDefault(v2Theme.Colors.Secondary, "secondary")
+	colors["highlight"] = colorOrDefault(v2Theme.Colors.Highlight, "highlight")
+	colors["error"] = colorOrDefault(v2Theme.Colors.Error, "error")
+	colors["success"] = colorOrDefault(v2Theme.Colors.Success, "success")
+	colors["muted"] = colorOrDefault(v2Theme.Colors.Muted, "muted")
+	colors["text"] = colorOrDefault(v2Theme.Colors.Text, "text")
 
 	return colors, nil
 }
@@ -218,14 +237,7 @@ func readV2Shuffle(path string) (ShuffleConfig, error) {
 // HasV2Config checks if v2 config files exist
 func HasV2Config(v2ConfigDir string) bool {
 	// Check for at least one v2 config file
-	v2Files := []string{
-		"theme.yaml",
-		"appearance_config.yaml",
-		"connection_config.yaml",
-		"shuffle.yaml",
-	}
-
-	for _, file := range v2Files {
+	for _, file := range v2ConfigFiles {
 		path := filepath.Join(v2ConfigDir, file)
 		if _, err := os.Stat(path); err == nil {
 			return true
@@ -244,15 +256,8 @@ func BackupV2Configs(v2ConfigDir string) error {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	v2Files := []string{
-		"theme.yaml",
-		"appearance_config.yaml",
-		"connection_config.yaml",
-		"shuffle.yaml",
-	}
-
 	backedUp := false
-	for _, file := range v2Files {
+	for _, file := range v2ConfigFiles {
 		srcPath := filepath.Join(v2ConfigDir, file)
 		dstPath := filepath.Join(backupDir, file)
 
@@ -284,15 +289,8 @@ func BackupV2Configs(v2ConfigDir string) error {
 
 // RemoveV2Configs removes old v2 config files (after successful migration)
 func RemoveV2Configs(v2ConfigDir string) error {
-	v2Files := []string{
-		"theme.yaml",
-		"appearance_config.yaml",
-		"connection_config.yaml",
-		"shuffle.yaml",
-	}
-
 	var errs []string
-	for _, file := range v2Files {
+	for _, file := range v2ConfigFiles {
 		path := filepath.Join(v2ConfigDir, file)
 		if err := os.Remove(path); err != nil {
 			if !os.IsNotExist(err) {
@@ -310,15 +308,8 @@ func RemoveV2Configs(v2ConfigDir string) error {
 
 // DetectV2Config returns information about v2 config files
 func DetectV2Config(v2ConfigDir string) map[string]bool {
-	v2Files := []string{
-		"theme.yaml",
-		"appearance_config.yaml",
-		"connection_config.yaml",
-		"shuffle.yaml",
-	}
-
 	detected := make(map[string]bool)
-	for _, file := range v2Files {
+	for _, file := range v2ConfigFiles {
 		path := filepath.Join(v2ConfigDir, file)
 		_, err := os.Stat(path)
 		detected[file] = (err == nil)

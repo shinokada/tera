@@ -274,7 +274,7 @@ Customize how the TERA header appears at the top of the application:
 **Tips:**
 - Preview changes before saving
 - Use [TAAG](https://patorjk.com/software/taag/) or `figlet` to generate ASCII art
-- All settings stored in unified `config.yaml` (see [File Locations](#file-locations))
+- All settings stored in unified `config.yaml` (see [File Locations](#file-locations-v3))
 
 ### Connection Settings
 
@@ -284,7 +284,7 @@ For users on unstable networks (mobile data, GPRS, 4G), configure automatic reco
 - **Reconnect delay** - Wait time between attempts: 1-30 seconds (default: 5s)
 - **Stream buffer** - Cache size to handle brief signal drops: 10-200 MB (default: 50MB)
 
-Settings stored in unified `config.yaml` (see [File Locations](#file-locations)).
+Settings stored in unified `config.yaml` (see [File Locations](#file-locations-v3)).
 
 ### Quick Play from Main Menu
 
@@ -631,7 +631,7 @@ TERA v3 organizes files more clearly with unified config and separate user data:
 
 ### v3 File Structure
 
-```
+```text
 tera/
 ├── config.yaml             # 🆕 Unified configuration (all settings)
 ├── data/                   # 🆕 User data directory
@@ -685,7 +685,7 @@ pkill -9 mpv
 ```
 
 ### Can't find My-favorites.json
-TERA creates it automatically at first launch. Check the favorites directory in your OS-specific config location (see [File Locations](#file-locations)).
+TERA creates it automatically at first launch. Check the favorites directory in your OS-specific config location (see [File Locations](#file-locations-v3)).
 
 If missing, restart TERA and it will be created.
 
@@ -711,7 +711,7 @@ Your favorites and user data are never touched during migration.
 ### Run from source
 ```sh
 git clone https://github.com/shinokada/tera.git
-cd tera
+cd tera/v3
 go run cmd/tera/main.go
 ```
 
@@ -722,6 +722,7 @@ go test ./... -v
 
 ### Build
 ```sh
+cd v3
 go build -o tera cmd/tera/main.go
 ```
 

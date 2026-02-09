@@ -168,6 +168,20 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// validateBufferSize validates and clamps buffer size to [10, 200] MB when non-zero
+func validateBufferSize(bufferMB *int, fieldName string, errs *[]string) {
+	if *bufferMB != 0 {
+		if *bufferMB < 10 {
+			*bufferMB = 10
+			*errs = append(*errs, fmt.Sprintf("%s must be >= 10 or 0, set to 10", fieldName))
+		}
+		if *bufferMB > 200 {
+			*bufferMB = 200
+			*errs = append(*errs, fmt.Sprintf("%s must be <= 200, set to 200", fieldName))
+		}
+	}
+}
+
 // Validate validates PlayerConfig
 func (p *PlayerConfig) Validate() error {
 	var errs []string
@@ -183,16 +197,7 @@ func (p *PlayerConfig) Validate() error {
 	}
 
 	// Validate buffer size (0 or 10-200 MB)
-	if p.BufferSizeMB != 0 {
-		if p.BufferSizeMB < 10 {
-			p.BufferSizeMB = 10
-			errs = append(errs, "buffer_size_mb must be >= 10 or 0, set to 10")
-		}
-		if p.BufferSizeMB > 200 {
-			p.BufferSizeMB = 200
-			errs = append(errs, "buffer_size_mb must be <= 200, set to 200")
-		}
-	}
+	validateBufferSize(&p.BufferSizeMB, "buffer_size_mb", &errs)
 
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
@@ -337,9 +342,9 @@ func (a *AppearanceConfig) Validate() error {
 		errs = append(errs, "header_width must be <= 120, set to 120")
 	}
 
-	// Validate custom text length
-	if len(a.CustomText) > 100 {
-		a.CustomText = a.CustomText[:100]
+	// Validate custom text length (use runes to avoid breaking UTF-8 characters)
+	if runes := []rune(a.CustomText); len(runes) > 100 {
+		a.CustomText = string(runes[:100])
 		errs = append(errs, "custom_text truncated to 100 characters")
 	}
 
@@ -391,16 +396,7 @@ func (n *NetworkConfig) Validate() error {
 	}
 
 	// Validate buffer size (0 or 10-200 MB)
-	if n.BufferSizeMB != 0 {
-		if n.BufferSizeMB < 10 {
-			n.BufferSizeMB = 10
-			errs = append(errs, "buffer_size_mb must be >= 10 or 0, set to 10")
-		}
-		if n.BufferSizeMB > 200 {
-			n.BufferSizeMB = 200
-			errs = append(errs, "buffer_size_mb must be <= 200, set to 200")
-		}
-	}
+	validateBufferSize(&n.BufferSizeMB, "buffer_size_mb", &errs)
 
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))

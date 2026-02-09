@@ -2,6 +2,7 @@ package player
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -406,7 +407,7 @@ func (p *MPVPlayer) stopInternal() error {
 		// On Windows, Process.Kill() should work, but we add a timeout
 		if err := p.cmd.Process.Kill(); err != nil {
 			// Process may have already exited
-			if err.Error() != "os: process already finished" {
+			if !errors.Is(err, os.ErrProcessDone) {
 				return fmt.Errorf("failed to stop mpv: %w", err)
 			}
 		}

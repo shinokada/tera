@@ -5,7 +5,7 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - 2025-02-09
+## [3.0.0] - 2026-02-09
 
 ### 🎉 Major Changes
 
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The biggest change in v3 is the consolidation of all configuration into a single `config.yaml` file. This makes TERA easier to configure and maintain.
 
 **Before (v2):**
-```
+```text
 ~/.config/tera/
 ├── theme.yaml
 ├── appearance_config.yaml
@@ -23,7 +23,7 @@ The biggest change in v3 is the consolidation of all configuration into a single
 ```
 
 **After (v3):**
-```
+```text
 ~/.config/tera/
 ├── config.yaml              # All settings in one file
 └── data/                    # User data separated
@@ -133,7 +133,7 @@ tera theme export      # Export theme as standalone file
 
 **Rollback:**
 If you need to rollback to v2, your backed-up configs are in:
-```
+```text
 ~/.config/tera/.v2-backup-YYYYMMDD-HHMMSS/
 ```
 
@@ -198,7 +198,7 @@ TERA follows [Semantic Versioning](https://semver.org/):
 ### Version Number Format: MAJOR.MINOR.PATCH
 
 Examples:
-- `3.0.0` - Major release with breaking changes (but v3 is actually fully compatible!)
+- `3.0.0` - Major release with configuration overhaul (fully backward compatible)
 - `3.1.0` - Minor release with new features
 - `3.0.1` - Patch release with bug fixes
 

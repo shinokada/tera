@@ -158,16 +158,19 @@ func CheckAndMigrateV2Config() (bool, error) {
 		return false, fmt.Errorf("failed to save migrated config: %w", err)
 	}
 
-	// Backup v2 configs
-	if err := config.BackupV2Configs(v2ConfigDir); err != nil {
-		// Log warning but don't fail
-		fmt.Fprintf(os.Stderr, "Warning: Could not backup v2 configs: %v\n", err)
+	// Backup v2 configs - only remove originals if backup succeeds
+	backupErr := config.BackupV2Configs(v2ConfigDir)
+	if backupErr != nil {
+		// Log warning but don't fail migration
+		fmt.Fprintf(os.Stderr, "Warning: Could not backup v2 configs: %v\n", backupErr)
 	}
 
-	// Remove old v2 config files (optional - can be skipped if backup succeeded)
-	if err := config.RemoveV2Configs(v2ConfigDir); err != nil {
-		// Log warning but don't fail
-		fmt.Fprintf(os.Stderr, "Warning: Could not remove old v2 configs: %v\n", err)
+	// Remove old v2 config files only if backup was successful
+	if backupErr == nil {
+		if err := config.RemoveV2Configs(v2ConfigDir); err != nil {
+			// Log warning but don't fail
+			fmt.Fprintf(os.Stderr, "Warning: Could not remove old v2 configs: %v\n", err)
+		}
 	}
 
 	return true, nil

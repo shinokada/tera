@@ -79,6 +79,14 @@ func GetConfigPath() (string, error) {
 	return config.GetConfigPath()
 }
 
+// colorOrDefault returns the color value from the map, or the default if missing/empty
+func colorOrDefault(colors map[string]string, key, defaultValue string) string {
+	if value, ok := colors[key]; ok && value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 // LoadFromUnifiedConfig loads theme from the unified v3 config
 func LoadFromUnifiedConfig() (*Theme, error) {
 	cfg, err := config.Load()
@@ -86,15 +94,18 @@ func LoadFromUnifiedConfig() (*Theme, error) {
 		return nil, err
 	}
 
+	// Get defaults for fallback
+	defaults := DefaultTheme()
+
 	theme := &Theme{
 		Colors: ColorConfig{
-			Primary:   cfg.UI.Theme.Colors["primary"],
-			Secondary: cfg.UI.Theme.Colors["secondary"],
-			Highlight: cfg.UI.Theme.Colors["highlight"],
-			Error:     cfg.UI.Theme.Colors["error"],
-			Success:   cfg.UI.Theme.Colors["success"],
-			Muted:     cfg.UI.Theme.Colors["muted"],
-			Text:      cfg.UI.Theme.Colors["text"],
+			Primary:   colorOrDefault(cfg.UI.Theme.Colors, "primary", defaults.Colors.Primary),
+			Secondary: colorOrDefault(cfg.UI.Theme.Colors, "secondary", defaults.Colors.Secondary),
+			Highlight: colorOrDefault(cfg.UI.Theme.Colors, "highlight", defaults.Colors.Highlight),
+			Error:     colorOrDefault(cfg.UI.Theme.Colors, "error", defaults.Colors.Error),
+			Success:   colorOrDefault(cfg.UI.Theme.Colors, "success", defaults.Colors.Success),
+			Muted:     colorOrDefault(cfg.UI.Theme.Colors, "muted", defaults.Colors.Muted),
+			Text:      colorOrDefault(cfg.UI.Theme.Colors, "text", defaults.Colors.Text),
 		},
 		Padding: PaddingConfig{
 			PageHorizontal: cfg.UI.Theme.Padding.PageHorizontal,
@@ -249,8 +260,8 @@ padding:
 func ExportLegacyThemeFile(outputPath string) error {
 	theme := Current()
 	if theme == nil {
-		theme = &Theme{}
-		*theme = DefaultTheme()
+		d := DefaultTheme()
+		theme = &d
 	}
 
 	content := generateThemeYAML(theme)
