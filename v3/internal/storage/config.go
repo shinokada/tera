@@ -183,7 +183,7 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 
 	// Migrate token from file to keychain (v3 feature)
 	// This only runs during v2→v3 migration or when force=true
-	tokenMigrated, tokenErr := migrateTokenToKeychain()
+	tokenMigrated, tokenErr := MigrateTokenToKeychain()
 	if tokenErr != nil {
 		// Log warning but don't fail migration
 		fmt.Fprintf(os.Stderr, "Warning: Token migration to keychain failed: %v\n", tokenErr)
@@ -200,9 +200,4 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 // Returns true if migration was performed, false if no migration needed.
 func MigrateTokenToKeychain() (bool, error) {
 	return gist.MigrateFileTokenToKeychain()
-}
-
-// migrateTokenToKeychain is the internal version used by CheckAndMigrateV2Config
-func migrateTokenToKeychain() (bool, error) {
-	return MigrateTokenToKeychain()
 }

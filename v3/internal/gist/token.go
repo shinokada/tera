@@ -1,6 +1,7 @@
 package gist
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -83,8 +84,8 @@ func GetTokenSource() (TokenSource, error) {
 	}
 
 	// Check keychain
-	_, err := keyring.Get(keychainService, keychainUser)
-	if err == nil {
+	keychainToken, err := keyring.Get(keychainService, keychainUser)
+	if err == nil && strings.TrimSpace(keychainToken) != "" {
 		return SourceKeychain, nil
 	}
 
@@ -106,21 +107,21 @@ func HasToken() bool {
 // DeleteToken removes the stored token from keychain and file
 // Does not remove environment variable (user must unset it themselves)
 func DeleteToken() error {
-	var errors []string
+	var errList []string
 
 	// Delete from keychain
 	err := keyring.Delete(keychainService, keychainUser)
-	if err != nil && err != keyring.ErrNotFound {
-		errors = append(errors, fmt.Sprintf("keychain: %v", err))
+	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		errList = append(errList, fmt.Sprintf("keychain: %v", err))
 	}
 
 	// Delete from file
 	if err := deleteFileToken(); err != nil {
-		errors = append(errors, fmt.Sprintf("file: %v", err))
+		errList = append(errList, fmt.Sprintf("file: %v", err))
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("token deletion errors: %s", strings.Join(errors, "; "))
+	if len(errList) > 0 {
+		return fmt.Errorf("token deletion errors: %s", strings.Join(errList, "; "))
 	}
 
 	return nil
@@ -130,8 +131,8 @@ func DeleteToken() error {
 // Returns true if migration was performed, false if no migration needed
 func MigrateFileTokenToKeychain() (bool, error) {
 	// Check if token exists in keychain already
-	_, err := keyring.Get(keychainService, keychainUser)
-	if err == nil {
+	existingToken, err := keyring.Get(keychainService, keychainUser)
+	if err == nil && strings.TrimSpace(existingToken) != "" {
 		// Token already in keychain, no migration needed
 		return false, nil
 	}

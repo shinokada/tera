@@ -72,8 +72,11 @@ func MigrateDataFromV2(v2ConfigDir string) error {
 // If dst already exists, it will be overwritten
 func moveFileIfExists(src, dst string) error {
 	// Check if source exists
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return nil // Source doesn't exist, nothing to do
+	if _, err := os.Stat(src); err != nil {
+		if os.IsNotExist(err) {
+			return nil // Source doesn't exist, nothing to do
+		}
+		return fmt.Errorf("failed to stat source file %s: %w", src, err)
 	}
 
 	// Check if destination already exists
