@@ -76,33 +76,30 @@ os.UserConfigDir()
 
 ---
 
-### v3.2.x Series - Station Metadata 
+### v3.1.x Series - Station Metadata 
 
-**v3.2.0** - Play Count & Last Played
+**v3.1.0** - Play Count & Last Played
 - Track how many times you've played each station
 - Show when you last played a station
 - "Most Played" list view
-- **Timeline:** 2-3 weeks
 
 ---
 
-### v3.3.x Series - User Ratings
+### v3.2.x Series - User Ratings
 
-**v3.3.0** - Star Ratings
+**v3.2.0** - Star Ratings
 - Rate stations 1-5 stars
 - Filter/sort by rating
 - "Top Rated" list view
-- **Timeline:** 1-2 weeks
 
 ---
 
-### v3.4.x Series - Custom Tags
+### v3.3.x Series - Custom Tags
 
-**v3.4.0** - Personal Tags
+**v3.3.0** - Personal Tags
 - Add custom tags to stations (e.g., "workout", "coding", "relaxing")
 - Filter stations by custom tags
 - Tag-based playlists
-- **Timeline:** 1-2 weeks
 
 ---
 

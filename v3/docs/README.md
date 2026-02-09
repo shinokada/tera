@@ -16,6 +16,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 - ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
+- **Auto-migration** - Migration from v2 to v3 is done automatically when you install v3
 
 ## Requirements
 
