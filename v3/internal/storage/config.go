@@ -183,13 +183,16 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 
 	// Migrate token from file to keychain (v3 feature)
 	// This only runs during v2→v3 migration or when force=true
-	tokenMigrated, tokenErr := MigrateTokenToKeychain()
+	result, tokenErr := MigrateTokenToKeychain()
 	if tokenErr != nil {
 		// Log warning but don't fail migration
 		fmt.Fprintf(os.Stderr, "Warning: Token migration to keychain failed: %v\n", tokenErr)
 		fmt.Fprintf(os.Stderr, "Token will remain in file storage.\n")
-	} else if tokenMigrated {
+	} else if result.Migrated {
 		fmt.Fprintf(os.Stderr, "✓ GitHub token migrated to OS keychain\n")
+		if result.Warning != nil {
+			fmt.Fprintf(os.Stderr, "Note: %v\n", result.Warning)
+		}
 	}
 
 	return true, nil
@@ -197,7 +200,7 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 
 // MigrateTokenToKeychain migrates token from file storage to OS keychain.
 // Used by CLI commands and the v2→v3 migration flow.
-// Returns true if migration was performed, false if no migration needed.
-func MigrateTokenToKeychain() (bool, error) {
+// Returns MigrationResult with migration status and any non-fatal warnings.
+func MigrateTokenToKeychain() (*gist.MigrationResult, error) {
 	return gist.MigrateFileTokenToKeychain()
 }

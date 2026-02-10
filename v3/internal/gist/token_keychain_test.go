@@ -35,7 +35,7 @@ func TestKeychainTokenStorage(t *testing.T) {
 		}
 
 		// Cleanup
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 	})
 
 	t.Run("EnvironmentVariableTakesPrecedence", func(t *testing.T) {
@@ -71,12 +71,12 @@ func TestKeychainTokenStorage(t *testing.T) {
 
 		// Cleanup
 		_ = os.Unsetenv(envVarName)
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 	})
 
 	t.Run("GetTokenSource", func(t *testing.T) {
 		// Clean state
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 		_ = os.Unsetenv(envVarName)
 
 		// No token
@@ -114,7 +114,7 @@ func TestKeychainTokenStorage(t *testing.T) {
 
 		// Cleanup
 		_ = os.Unsetenv(envVarName)
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 	})
 
 	t.Run("DeleteToken", func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestKeychainTokenStorage(t *testing.T) {
 		}
 
 		// Delete token
-		err = DeleteToken()
+		_, err = DeleteToken()
 		if err != nil {
 			t.Fatalf("Failed to delete token: %v", err)
 		}
@@ -141,7 +141,7 @@ func TestKeychainTokenStorage(t *testing.T) {
 
 	t.Run("HasTokenWithKeychain", func(t *testing.T) {
 		// Clean state
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 		_ = os.Unsetenv(envVarName)
 
 		// Should not have token
@@ -161,7 +161,7 @@ func TestKeychainTokenStorage(t *testing.T) {
 		}
 
 		// Cleanup
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 	})
 }
 
@@ -191,12 +191,12 @@ func TestTokenMigration(t *testing.T) {
 		}
 
 		// Migrate to keychain
-		migrated, err := MigrateFileTokenToKeychain()
+		result, err := MigrateFileTokenToKeychain()
 		if err != nil {
 			t.Skipf("Keychain not available for migration: %v", err)
 		}
 
-		if !migrated {
+		if !result.Migrated {
 			t.Error("Expected migration to occur")
 		}
 
@@ -216,7 +216,7 @@ func TestTokenMigration(t *testing.T) {
 		}
 
 		// Cleanup
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 	})
 
 	t.Run("NoMigrationIfAlreadyInKeychain", func(t *testing.T) {
@@ -227,16 +227,16 @@ func TestTokenMigration(t *testing.T) {
 		}
 
 		// Try to migrate
-		migrated, err := MigrateFileTokenToKeychain()
+		result, err := MigrateFileTokenToKeychain()
 		if err != nil {
 			t.Fatalf("Migration check failed: %v", err)
 		}
 
-		if migrated {
+		if result.Migrated {
 			t.Error("Should not migrate if token already in keychain")
 		}
 
 		// Cleanup
-		_ = DeleteToken()
+		_, _ = DeleteToken()
 	})
 }

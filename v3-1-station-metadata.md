@@ -69,11 +69,10 @@ type StationMetadata struct {
     TotalDurationSeconds int64     `json:"total_duration_seconds"`
 }
 
-// MetadataStore holds all station metadata
+// MetadataStore holds all station metadata (no mutex - protected by manager)
 type MetadataStore struct {
     Stations map[string]*StationMetadata `json:"stations"`
     Version  int                         `json:"version"`
-    mu       sync.RWMutex                `json:"-"`
 }
 ```
 
@@ -89,58 +88,118 @@ type MetadataStore struct {
 package storage
 
 type MetadataManager struct {
-    dataPath string
-    store    *MetadataStore
-    mu       sync.RWMutex
+    dataPath      string
+    store         *MetadataStore
+    mu            sync.RWMutex
+    savePending   atomic.Bool
+    lastSave      time.Time
+    currentPlay   string  // Track current playing station to prevent duplicates
+    playStartTime time.Time
 }
 
 // Core operations
 func NewMetadataManager(dataPath string) (*MetadataManager, error)
 func (m *MetadataManager) Load() error
 func (m *MetadataManager) Save() error
-func (m *MetadataManager) RecordPlay(stationUUID string) error
+func (m *MetadataManager) StartPlay(stationUUID string) error
+func (m *MetadataManager) StopPlay(stationUUID string) error
 func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata
 func (m *MetadataManager) GetTopPlayed(limit int) []StationWithMetadata
 func (m *MetadataManager) GetRecentlyPlayed(limit int) []StationWithMetadata
+
+// Background save goroutine (started in NewMetadataManager)
+func (m *MetadataManager) saveLoop(ctx context.Context)
 ```
 
 **Key behaviors**:
-- Thread-safe: Uses mutex for concurrent access
-- Auto-save: Writes to disk after each play recorded
-- Graceful degradation: If file is corrupted, start fresh (don't crash)
-- Efficient: Keep in-memory, flush periodically
+- **Thread-safe**: Single mutex in manager protects all access
+- **Debounced saves**: Write to disk max once per 5 seconds
+- **Graceful degradation**: If file is corrupted, start fresh (don't crash)
+- **Efficient**: Keep in-memory, background goroutine handles saves
+- **Duration tracking**: Record when playback starts and stops
+
+**Locking strategy**:
+- Only `MetadataManager.mu` is used (store has no mutex)
+- All access to `store` goes through manager methods
+- Clear ownership: manager owns store and all synchronization
+
+**Save strategy**:
+- `StartPlay()` / `StopPlay()` set `savePending` flag
+- Background goroutine checks flag every 5 seconds
+- If pending, write to disk and clear flag
+- Also save on shutdown (via context cancellation)
 
 ### 2. Integration with Player
 
 **Location**: `v3/internal/player/mpv.go`
 
 ```go
+type Player struct {
+    // ... existing fields ...
+    metadataManager *storage.MetadataManager
+    currentStation  *api.Station
+}
+
 // When station starts playing
 func (p *Player) Play(station api.Station) error {
     // ... existing play logic ...
     
-    // Record play in background
-    go p.recordPlay(station)
+    // Record play start
+    p.currentStation = &station
+    if p.metadataManager != nil {
+        if err := p.metadataManager.StartPlay(station.StationUUID); err != nil {
+            // Log error but don't interrupt playback
+            log.Printf("Failed to record play start: %v", err)
+        }
+    }
     
     return nil
 }
 
-func (p *Player) recordPlay(station api.Station) {
-    if p.metadataManager == nil {
-        return
+// When station stops (user presses stop, changes station, or quits)
+func (p *Player) Stop() error {
+    if p.currentStation != nil && p.metadataManager != nil {
+        if err := p.metadataManager.StopPlay(p.currentStation.StationUUID); err != nil {
+            log.Printf("Failed to record play stop: %v", err)
+        }
+        p.currentStation = nil
     }
     
-    if err := p.metadataManager.RecordPlay(station.StationUUID); err != nil {
-        // Log error but don't interrupt playback
-        log.Printf("Failed to record play: %v", err)
-    }
+    // ... existing stop logic ...
+    return nil
 }
 ```
 
 **Important**: 
-- Non-blocking: Use goroutine
-- Silent failure: Never interrupt playback
-- Best effort: If save fails, continue anyway
+- **No goroutines spawned per play**: Calls are synchronous but fast (in-memory)
+- **Deduplication**: Manager tracks `currentPlay` to prevent duplicate records
+- **Silent failure**: Never interrupt playback on metadata errors
+- **Duration tracking**: Start/Stop pairs calculate listening time
+
+**Preventing rapid-fire issues**:
+```go
+func (m *MetadataManager) StartPlay(stationUUID string) error {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    
+    // Deduplicate: ignore if same station already playing
+    if m.currentPlay == stationUUID {
+        return nil
+    }
+    
+    // Stop previous if exists
+    if m.currentPlay != "" {
+        m.stopPlayLocked(m.currentPlay)
+    }
+    
+    m.currentPlay = stationUUID
+    m.playStartTime = time.Now()
+    
+    // ... update metadata ...
+    
+    return nil
+}
+```
 
 ### 3. UI Integration
 
@@ -327,11 +386,14 @@ Add to main menu as alternative view:
 ```go
 // v3/internal/storage/station_metadata_test.go
 
-func TestRecordPlay(t *testing.T)
+func TestStartStopPlay(t *testing.T)
+func TestDurationTracking(t *testing.T)
+func TestRapidPlayPrevention(t *testing.T)
 func TestGetTopPlayed(t *testing.T)
 func TestConcurrentAccess(t *testing.T)
 func TestCorruptedFile(t *testing.T)
 func TestMigrationFromEmpty(t *testing.T)
+func TestDebouncedSave(t *testing.T)
 ```
 
 ### Manual Testing
@@ -349,7 +411,8 @@ func TestMigrationFromEmpty(t *testing.T)
 3. **Edge cases**
    - Delete metadata file while running
    - Corrupt JSON manually
-   - Play same station rapidly
+   - Play same station rapidly (should not duplicate)
+   - Switch stations quickly (should record both)
 
 4. **UI testing**
    - Test all sort options
@@ -362,10 +425,11 @@ func TestMigrationFromEmpty(t *testing.T)
 
 ### Optimization
 
-1. **In-Memory Cache**
+1. **In-Memory Cache + Debounced Saves**
    - Keep metadata in RAM
-   - Only write to disk on changes
-   - Debounce saves (max once per 5 seconds)
+   - Background goroutine saves every 5 seconds if changes pending
+   - No blocking on play/stop operations
+   - Save on graceful shutdown
 
 2. **Lazy Loading**
    - Load metadata only when needed
@@ -375,6 +439,11 @@ func TestMigrationFromEmpty(t *testing.T)
    - Typical size: ~100 bytes per station
    - 1000 stations = ~100KB (negligible)
    - No cleanup needed for years
+
+4. **No Goroutine Proliferation**
+   - Single background save goroutine per manager
+   - No goroutines spawned per play event
+   - Synchronous in-memory updates (fast)
 
 ---
 
@@ -395,7 +464,8 @@ Ideas for later releases:
 
 ### Phase 1: Core Infrastructure
 - [ ] Create `station_metadata.go` with core structs
-- [ ] Implement `MetadataManager` with CRUD operations
+- [ ] Implement `MetadataManager` with Start/Stop tracking
+- [ ] Add background save goroutine with debouncing
 - [ ] Add unit tests for metadata operations
 - [ ] Integrate with player (`mpv.go`)
 
@@ -412,7 +482,7 @@ Ideas for later releases:
 - [ ] Polish UI colors and alignment
 
 ### Phase 4: Testing & Documentation
-- [ ] Write comprehensive tests
+- [ ] Write comprehensive tests (including rapid-play scenarios)
 - [ ] Update README.md with new feature
 - [ ] Create CHANGELOG entry
 - [ ] Manual testing on different platforms
@@ -429,3 +499,5 @@ Key principles:
 - ✅ **Consistent**: Follows existing Tera UI/UX patterns
 - ✅ **Optional**: Metadata display only in dedicated views
 - ✅ **Safe**: Never interrupts playback
+- ✅ **Efficient**: Debounced saves, no goroutine per play
+- ✅ **Accurate**: Duration tracking via Start/Stop pairs

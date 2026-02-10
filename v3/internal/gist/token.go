@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	tokenDirName  = "tera/tokens"
-	tokenFileName = "github_token"
+	tokenDirName    = "tera/tokens"
+	tokenFileName   = "github_token"
 	keychainService = "tera"
 	keychainUser    = "github-token"
 	envVarName      = "TERA_GITHUB_TOKEN"
@@ -28,6 +28,12 @@ const (
 	SourceNone        TokenSource = "none"
 )
 
+// MigrationResult contains the result of a token migration operation
+type MigrationResult struct {
+	Migrated bool
+	Warning  error // Non-fatal warning (e.g., couldn't delete old file)
+}
+
 // getTokenPath returns the full path to the token file (legacy)
 func getTokenPath() (string, error) {
 	configDir, err := os.UserConfigDir()
@@ -39,7 +45,13 @@ func getTokenPath() (string, error) {
 
 // SaveToken saves the token to the OS keychain
 // Falls back to file storage if keychain is unavailable
+// Trims whitespace and validates token before saving
 func SaveToken(token string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("cannot save empty token")
+	}
+
 	// Try keychain first
 	err := keyring.Set(keychainService, keychainUser, token)
 	if err == nil {
@@ -106,55 +118,66 @@ func HasToken() bool {
 
 // DeleteToken removes the stored token from keychain and file
 // Does not remove environment variable (user must unset it themselves)
-func DeleteToken() error {
+// Returns the active token source after deletion (for user awareness)
+func DeleteToken() (activeSource TokenSource, err error) {
 	var errs []error
 
 	// Delete from keychain
-	err := keyring.Delete(keychainService, keychainUser)
-	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
-		errs = append(errs, fmt.Errorf("keychain: %w", err))
+	delErr := keyring.Delete(keychainService, keychainUser)
+	if delErr != nil && !errors.Is(delErr, keyring.ErrNotFound) {
+		errs = append(errs, fmt.Errorf("keychain: %w", delErr))
 	}
 
 	// Delete from file
-	if err := deleteFileToken(); err != nil {
-		errs = append(errs, fmt.Errorf("file: %w", err))
+	if delErr := deleteFileToken(); delErr != nil {
+		errs = append(errs, fmt.Errorf("file: %w", delErr))
 	}
 
-	return errors.Join(errs...)
+	// Check what's still active (e.g., env var)
+	activeSource, _ = GetTokenSource()
+
+	return activeSource, errors.Join(errs...)
 }
 
 // MigrateFileTokenToKeychain migrates token from file storage to keychain
-// Returns true if migration was performed, false if no migration needed
-func MigrateFileTokenToKeychain() (bool, error) {
+// Returns MigrationResult with migration status and any non-fatal warnings
+func MigrateFileTokenToKeychain() (*MigrationResult, error) {
+	result := &MigrationResult{
+		Migrated: false,
+		Warning:  nil,
+	}
+
 	// Check if token exists in keychain already
 	existingToken, err := keyring.Get(keychainService, keychainUser)
 	if err == nil && strings.TrimSpace(existingToken) != "" {
 		// Token already in keychain, no migration needed
-		return false, nil
+		return result, nil
 	}
 
 	// Check if file token exists
 	fileToken, err := loadFileToken()
 	if err != nil || fileToken == "" {
 		// No file token to migrate
-		return false, nil
+		return result, nil
 	}
 
 	// Migrate to keychain
 	err = keyring.Set(keychainService, keychainUser, fileToken)
 	if err != nil {
 		// Keychain not available, keep using file
-		return false, fmt.Errorf("keychain unavailable, keeping file storage: %w", err)
+		return result, fmt.Errorf("keychain unavailable, keeping file storage: %w", err)
 	}
+
+	result.Migrated = true
 
 	// Successfully migrated, delete file token
 	if err := deleteFileToken(); err != nil {
 		// Token is in keychain now, but couldn't delete file
-		// This is not critical, just log it
-		fmt.Fprintf(os.Stderr, "Warning: Token migrated to keychain but could not delete file: %v\n", err)
+		// This is not critical, set as warning
+		result.Warning = fmt.Errorf("token migrated to keychain but could not delete file: %w", err)
 	}
 
-	return true, nil
+	return result, nil
 }
 
 // File-based token functions (legacy support)

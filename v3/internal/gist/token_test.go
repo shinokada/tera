@@ -79,7 +79,7 @@ func TestTokenCRUD(t *testing.T) {
 	}
 
 	// Delete
-	if err := DeleteToken(); err != nil {
+	if _, err := DeleteToken(); err != nil {
 		t.Fatalf("DeleteToken failed: %v", err)
 	}
 

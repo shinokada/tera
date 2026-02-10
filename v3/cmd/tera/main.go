@@ -156,14 +156,17 @@ func handleConfigCommand() {
 
 	case "migrate-token":
 		// Manually migrate token to keychain
-		migrated, err := storage.MigrateTokenToKeychain()
+		result, err := storage.MigrateTokenToKeychain()
 		if err != nil {
 			fmt.Printf("Token migration failed: %v\n", err)
 			os.Exit(1)
 		}
-		if migrated {
+		if result.Migrated {
 			fmt.Println("✓ Token successfully migrated to OS keychain")
 			fmt.Println("✓ File-based token removed")
+			if result.Warning != nil {
+				fmt.Printf("Note: %v\n", result.Warning)
+			}
 		} else {
 			fmt.Println("No migration needed (token already in keychain or not found)")
 		}

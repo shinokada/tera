@@ -847,7 +847,7 @@ func (m *GistModel) deleteGistCmd(id string) tea.Cmd {
 
 func (m *GistModel) deleteTokenCmd() tea.Cmd {
 	return func() tea.Msg {
-		if err := gist.DeleteToken(); err != nil {
+		if _, err := gist.DeleteToken(); err != nil {
 			return errMsg{fmt.Errorf("failed to delete token: %v", err)}
 		}
 		return tokenDeletedMsg{}
