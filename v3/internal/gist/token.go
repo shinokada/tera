@@ -107,24 +107,20 @@ func HasToken() bool {
 // DeleteToken removes the stored token from keychain and file
 // Does not remove environment variable (user must unset it themselves)
 func DeleteToken() error {
-	var errList []string
+	var errs []error
 
 	// Delete from keychain
 	err := keyring.Delete(keychainService, keychainUser)
 	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
-		errList = append(errList, fmt.Sprintf("keychain: %v", err))
+		errs = append(errs, fmt.Errorf("keychain: %w", err))
 	}
 
 	// Delete from file
 	if err := deleteFileToken(); err != nil {
-		errList = append(errList, fmt.Sprintf("file: %v", err))
+		errs = append(errs, fmt.Errorf("file: %w", err))
 	}
 
-	if len(errList) > 0 {
-		return fmt.Errorf("token deletion errors: %s", strings.Join(errList, "; "))
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 // MigrateFileTokenToKeychain migrates token from file storage to keychain
@@ -230,9 +226,10 @@ func ValidateTokenWithClient(token string) (string, error) {
 
 // GetMaskedToken returns a masked version of the token for display
 // Shows 4 prefix + 4 suffix characters to balance security and usability
+// Tokens 12 characters or shorter are completely masked for security
 func GetMaskedToken(token string) string {
-	if len(token) <= 8 {
-		return "********"
+	if len(token) <= 12 {
+		return "************"
 	}
 	return fmt.Sprintf("%s...%s", token[:4], token[len(token)-4:])
 }
