@@ -46,11 +46,10 @@ func MigrateDataFromV2(v2ConfigDir string) error {
 		return fmt.Errorf("failed to move favorites: %w", err)
 	}
 
-	// Move search-history.json if it exists (could be in favorites/ or root)
+	// Move search-history.json if it exists (could be in root or already moved with favorites)
 	searchHistoryPaths := []string{
-		filepath.Join(v2ConfigDir, "favorites", "search-history.json"),
 		filepath.Join(v2ConfigDir, "search-history.json"),
-		filepath.Join(newFavoritesDir, "search-history.json"), // Also check if it got moved with favorites
+		filepath.Join(newFavoritesDir, "search-history.json"), // Check if it got moved with favorites
 	}
 	newPath := filepath.Join(cacheDir, "search-history.json")
 	for _, oldPath := range searchHistoryPaths {

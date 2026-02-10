@@ -68,7 +68,7 @@ func LoadToken() (string, error) {
 
 	// 2. Try keychain
 	token, err := keyring.Get(keychainService, keychainUser)
-	if err == nil && token != "" {
+	if err == nil && strings.TrimSpace(token) != "" {
 		return strings.TrimSpace(token), nil
 	}
 
@@ -229,9 +229,10 @@ func ValidateTokenWithClient(token string) (string, error) {
 }
 
 // GetMaskedToken returns a masked version of the token for display
+// Shows 4 prefix + 4 suffix characters to balance security and usability
 func GetMaskedToken(token string) string {
-	if len(token) <= 15 {
-		return "***********"
+	if len(token) <= 8 {
+		return "********"
 	}
-	return fmt.Sprintf("%s...%s", token[:11], token[len(token)-4:])
+	return fmt.Sprintf("%s...%s", token[:4], token[len(token)-4:])
 }
