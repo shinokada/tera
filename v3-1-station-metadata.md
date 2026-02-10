@@ -22,7 +22,7 @@ Track user listening behavior by recording:
 
 Extend the existing data directory structure:
 
-```
+```text
 ~/.config/tera/data/
 ├── favorites/
 │   ├── My-favorites.json
@@ -209,7 +209,7 @@ func (m *MetadataManager) StartPlay(stationUUID string) error {
 
 Add metadata display to station info panel:
 
-```
+```text
 ┌─ Station Info ──────────────────────────────────────┐
 │ Name: Jazz FM                                       │
 │ Country: United States                              │
@@ -237,7 +237,7 @@ Add metadata display to station info panel:
 
 Add new menu item in main menu:
 
-```
+```text
 ┌─ TERA Main Menu ─────────────────────────────────────┐
 │                                                      │
 │  1. Search Stations                                  │
@@ -252,7 +252,7 @@ Add new menu item in main menu:
 
 **Most Played View Design**:
 
-```
+```text
 ┌─ Most Played Stations ───────────────────────────────┐
 │                                                      │
 │ Sort by: ▼ Play Count    [Enter to change]         │
@@ -290,7 +290,7 @@ Help: ↑↓/jk: Navigate • Enter: Play • s: Sort • Esc: Back
 
 Add to main menu as alternative view:
 
-```
+```text
 ┌─ Recently Played ────────────────────────────────────┐
 │                                                      │
 │  Today                                               │

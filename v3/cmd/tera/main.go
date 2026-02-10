@@ -163,8 +163,9 @@ func handleConfigCommand() {
 		}
 		if result.Migrated {
 			fmt.Println("✓ Token successfully migrated to OS keychain")
-			fmt.Println("✓ File-based token removed")
-			if result.Warning != nil {
+			if result.Warning == nil {
+				fmt.Println("✓ File-based token removed")
+			} else {
 				fmt.Printf("Note: %v\n", result.Warning)
 			}
 		} else {

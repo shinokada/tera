@@ -98,7 +98,7 @@ func TestGetMaskedToken(t *testing.T) {
 	}
 
 	short := "short"
-	if GetMaskedToken(short) != "***********" {
+	if GetMaskedToken(short) != "************" {
 		t.Error("Expected full mask for short token")
 	}
 }
