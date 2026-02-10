@@ -588,7 +588,7 @@ func (m GistModel) View() string {
 				case gist.SourceEnvironment:
 					sourceInfo = "\nStorage: Environment Variable (TERA_GITHUB_TOKEN)"
 				case gist.SourceFile:
-					sourceInfo = "\nStorage: File (legacy, consider migrating with 'tera config migrate')"
+					sourceInfo = "\nStorage: File (legacy, consider migrating with 'tera config migrate-token')"
 				default:
 					sourceInfo = "\nStorage: Unknown"
 				}

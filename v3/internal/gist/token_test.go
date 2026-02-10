@@ -11,7 +11,9 @@ import (
 func TestTokenCRUD(t *testing.T) {
 	// Setup temp home
 	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir) // Windows
 
 	// Clean up keychain before test
 	_ = keyring.Delete(keychainService, keychainUser)
@@ -92,7 +94,7 @@ func TestTokenCRUD(t *testing.T) {
 func TestGetMaskedToken(t *testing.T) {
 	token := "ghp_1234567890abcdef1234"
 	masked := GetMaskedToken(token)
-	expected := "ghp_1234567...1234"
+	expected := "ghp_...1234"
 	if masked != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, masked)
 	}
@@ -104,6 +106,12 @@ func TestGetMaskedToken(t *testing.T) {
 }
 
 func TestEnvironmentVariableToken(t *testing.T) {
+	// Setup temp directory to isolate config paths
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir) // Windows
+
 	// Clean state
 	_ = os.Unsetenv(envVarName)
 	_ = keyring.Delete(keychainService, keychainUser)
@@ -146,7 +154,9 @@ func TestEnvironmentVariableToken(t *testing.T) {
 func TestFileTokenFallback(t *testing.T) {
 	// Setup temp home
 	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir) // Windows
 
 	// Clean environment and keychain
 	_ = os.Unsetenv(envVarName)

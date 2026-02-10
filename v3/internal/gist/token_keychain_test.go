@@ -234,6 +234,13 @@ func TestTokenMigration(t *testing.T) {
 			t.Skipf("Keychain not available: %v", err)
 		}
 
+		// Verify token actually landed in keychain (not file fallback)
+		source, _ := GetTokenSource()
+		if source != SourceKeychain {
+			_, _ = DeleteToken()
+			t.Skipf("Keychain backend unavailable; token saved to %v", source)
+		}
+
 		// Try to migrate
 		result, err := MigrateFileTokenToKeychain()
 		if err != nil {
