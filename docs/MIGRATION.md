@@ -55,7 +55,7 @@ The biggest change in v3 is configuration consolidation. Instead of managing mul
 │   └── cache/
 │       ├── gist_metadata.json
 │       └── search-history.json
-└── .v2-backup-20250209-143025/  # 🆕 Automatic backup
+└── .v2-backup-YYYYMMDD-HHMMSS/  # 🆕 Automatic backup
     ├── theme.yaml
     ├── appearance_config.yaml
     ├── connection_config.yaml
@@ -75,7 +75,7 @@ The biggest change in v3 is configuration consolidation. Instead of managing mul
 
 ## Migration Process
 
-### Automatic Migration (Recommended)
+### Automatic Migration
 
 Migration happens automatically when you first run TERA v3:
 
@@ -102,14 +102,7 @@ That's it! TERA is now running v3 with all your settings preserved.
 4. **Validation**: Values checked and corrected if needed
 5. **Organization**: User data moved to `data/` directory
 6. **Cleanup**: Old config files removed (backup kept)
-7. **Token Migration**: GitHub token moved to keychain (optional)
-
-### Migration Timeline
-
-- **Detection**: < 1 second
-- **Backup**: < 1 second
-- **Conversion**: < 1 second
-- **Total Time**: ~2-3 seconds
+7. **Token Migration**: GitHub token moved to keychain
 
 ---
 
@@ -140,17 +133,6 @@ These are moved to `data/` but otherwise untouched:
 ---
 
 ## What Stays The Same
-
-### No Changes Needed For:
-
-- ✅ **Using Favorites** - Works exactly as before
-- ✅ **Station Blocklist** - Same functionality
-- ✅ **Gist Sync** - Same workflow
-- ✅ **Keyboard Shortcuts** - All unchanged
-- ✅ **Playback Controls** - Identical behavior
-- ✅ **Search Functions** - Same as v2
-- ✅ **Theme Selection** - Same themes available
-- ✅ **File Locations** - Base directory unchanged (config files move to `data/` subdirectory)
 
 ### Backwards Compatibility
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/shinokada/tera/v3/internal/config"
+	"github.com/shinokada/tera/v3/internal/gist"
 )
 
 // GetUnifiedConfig loads the unified v3 config
@@ -155,7 +156,12 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 		return false, fmt.Errorf("migration failed: %w", err)
 	}
 
-	// Save migrated config
+	// Migrate user data from v2 to v3 structure
+	if err := MigrateDataFromV2(v2ConfigDir); err != nil {
+		return false, fmt.Errorf("data migration failed: %w", err)
+	}
+
+	// Save migrated config (last, so a failure above allows retry)
 	if err := config.Save(cfg); err != nil {
 		return false, fmt.Errorf("failed to save migrated config: %w", err)
 	}
@@ -175,5 +181,26 @@ func CheckAndMigrateV2Config(force bool) (bool, error) {
 		}
 	}
 
+	// Migrate token from file to keychain (v3 feature)
+	// This only runs during v2→v3 migration or when force=true
+	result, tokenErr := MigrateTokenToKeychain()
+	if tokenErr != nil {
+		// Log warning but don't fail migration
+		fmt.Fprintf(os.Stderr, "Warning: Token migration to keychain failed: %v\n", tokenErr)
+		fmt.Fprintf(os.Stderr, "Token will remain in file storage.\n")
+	} else if result.Migrated {
+		fmt.Fprintf(os.Stderr, "✓ GitHub token migrated to OS keychain\n")
+		if result.Warning != nil {
+			fmt.Fprintf(os.Stderr, "Note: %v\n", result.Warning)
+		}
+	}
+
 	return true, nil
+}
+
+// MigrateTokenToKeychain migrates token from file storage to OS keychain.
+// Used by CLI commands and the v2→v3 migration flow.
+// Returns MigrationResult with migration status and any non-fatal warnings.
+func MigrateTokenToKeychain() (*gist.MigrationResult, error) {
+	return gist.MigrateFileTokenToKeychain()
 }

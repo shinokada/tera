@@ -27,7 +27,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - **Better Organization** - Clear separation of config vs user data
 - **Easier to Edit** - All settings in one place with validation
 
-See [MIGRATION.md](v3/docs/MIGRATION.md) for upgrade details and [CHANGELOG.md](CHANGELOG.md) for full changes.
+See [MIGRATION.md](/docs/MIGRATION.md) for upgrade details and [CHANGELOG.md](CHANGELOG.md) for full changes.
 
 ## Requirements
 
@@ -112,7 +112,7 @@ sudo mv tera /usr/local/bin/
 4. ✅ Old config files are backed up with timestamp
 5. ✅ You're ready to go!
 
-See the [Migration Guide](v3/docs/MIGRATION.md) for details.
+See the [Migration Guide](/docs/MIGRATION.md) for details.
 
 ## Quick Start
 
@@ -616,8 +616,8 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 - Delete old backups
 
 **Documentation:**
-- [Gist Setup Guide](v3/docs/GIST_SETUP.md) - Token setup and security
-- [Gist Management Guide](v3/docs/GIST_CRUD_GUIDE.md) - Complete feature guide
+- [Gist Setup Guide](/docs/GIST_SETUP.md) - Token setup and security
+- [Gist Management Guide](/docs/GIST_CRUD_GUIDE.md) - Complete feature guide
 
 ## File Locations (v3)
 
