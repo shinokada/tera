@@ -54,7 +54,6 @@ type App struct {
 	apiClient                *api.Client
 	blocklistManager         *blocklist.Manager
 	favoritePath             string
-	cachePath                string
 	quickFavorites           []api.Station
 	quickFavPlayer           *player.MPVPlayer
 	playingFromMain          bool
@@ -117,7 +116,6 @@ func NewApp() *App {
 	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
-		cachePath:        cachePath,
 		apiClient:        api.NewClient(),
 		quickFavPlayer:   player.NewMPVPlayer(),
 		helpModel:        components.NewHelpModel(components.CreateMainMenuHelp()),
