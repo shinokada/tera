@@ -1,4 +1,4 @@
-# v3.2.0 - Station Metadata: Play Count, Last Played & Peronal note/label
+# v3.2.0 - Station Metadata: Play Count, Last Played & Personal note/label
 
 ## Feature Overview
 
@@ -6,6 +6,7 @@ Track user listening behavior by recording:
 - **Play count**: How many times each station has been played
 - **Last played timestamp**: When the station was last played
 - **Most Played view**: A new sortable list showing listening statistics
+- **Label/Personal note**: A new field to add personal label/note
 
 ## Goals
 
@@ -346,10 +347,10 @@ Add to main menu as alternative view:
 
 ## Migration & Backwards Compatibility
 
-### v3.0.x → v3.1.0 Migration
+### v3.1.x → v3.2.0 Migration
 
 **Auto-creation**:
-- On first run of v3.1.0, create empty `station_metadata.json`
+- On first run of v3.2.0, create empty `station_metadata.json`
 - No user action required
 - Existing users start with clean slate
 

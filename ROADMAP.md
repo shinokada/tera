@@ -79,9 +79,8 @@ os.UserConfigDir()
 ### v3.1.x Series
 
 - Gist token storage updates
-- OS keychain token storage wiht file fall back
+- OS keychain token storage with file fall back
 - Migrate-token CLI
-- 
 
 ### v3.2.x Series - Station Metadata 
 
