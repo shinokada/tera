@@ -1,4 +1,4 @@
-# v3.1.0 - Station Metadata: Play Count & Last Played
+# v3.2.0 - Station Metadata: Play Count, Last Played & Peronal note/label
 
 ## Feature Overview
 

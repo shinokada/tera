@@ -76,27 +76,34 @@ os.UserConfigDir()
 
 ---
 
-### v3.1.x Series - Station Metadata 
+### v3.1.x Series
 
-**v3.1.0** - Play Count & Last Played
+- Gist token storage updates
+- OS keychain token storage wiht file fall back
+- Migrate-token CLI
+- 
+
+### v3.2.x Series - Station Metadata 
+
+**v3.2.0** - Play Count & Last Played
 - Track how many times you've played each station
 - Show when you last played a station
 - "Most Played" list view
 
 ---
 
-### v3.2.x Series - User Ratings
+### v3.3.x Series - User Ratings
 
-**v3.2.0** - Star Ratings
+**v3.3.0** - Star Ratings
 - Rate stations 1-5 stars
 - Filter/sort by rating
 - "Top Rated" list view
 
 ---
 
-### v3.3.x Series - Custom Tags
+### v3.4.x Series - Custom Tags
 
-**v3.3.0** - Personal Tags
+**v3.4.0** - Personal Tags
 - Add custom tags to stations (e.g., "workout", "coding", "relaxing")
 - Filter stations by custom tags
 - Tag-based playlists
