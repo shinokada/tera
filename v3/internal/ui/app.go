@@ -77,10 +77,16 @@ type navigateMsg struct {
 }
 
 func NewApp() *App {
+	// Get config directory once
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to determine config directory: %v\n", err)
+		configDir = "." // Fallback to current directory
+	}
+
 	// Get favorite path from environment or use default
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
-		configDir, _ := os.UserConfigDir()
 		favPath = filepath.Join(configDir, "tera", "data", "favorites")
 	}
 
@@ -89,8 +95,18 @@ func NewApp() *App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
 	}
 
+	// Get cache path from environment or use default
+	cachePath := os.Getenv("TERA_CACHE_PATH")
+	if cachePath == "" {
+		cachePath = filepath.Join(configDir, "tera", "data", "cache")
+	}
+
+	// Ensure cache directory exists
+	if err := os.MkdirAll(cachePath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create cache directory: %v\n", err)
+	}
+
 	// Initialize blocklist manager
-	configDir, _ := os.UserConfigDir()
 	blocklistPath := filepath.Join(configDir, "tera", "data", "blocklist.json")
 	blocklistMgr := blocklist.NewManager(blocklistPath)
 	if err := blocklistMgr.Load(context.Background()); err != nil {

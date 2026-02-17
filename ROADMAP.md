@@ -18,11 +18,11 @@ The folder strategy provides:
 
 ## Version Support Policy
 
-| Version  | Status             | Support Level            | Timeline       |
-| -------- | ------------------ | ------------------------ | -------------- |
-| **v3.x** | Active Development | New features + bug fixes | Now - Ongoing  |
-| **v2.x** | Maintenance Mode   | Bug fixes only           | Until May 2026 |
-| **v1.x** | Archived           | No support               | -              |
+| Version  | Status             | Support Level            | Timeline         |
+| -------- | ------------------ | ------------------------ | ---------------- |
+| **v3.x** | Active Development | New features + bug fixes | Now - Ongoing    |
+| **v2.x** | Maintenance Mode   | Bug fixes only           | Until March 2026 |
+| **v1.x** | Archived           | No support               | -                |
 
 ### What Goes Where?
 
@@ -66,7 +66,7 @@ os.UserConfigDir()
 └── tokens/
 ```
 
-**New state (v3.1):**
+**New state (v3.x.x):**
 ```
 os.UserConfigDir()
 ├── config.yaml          # Everything in one file!
@@ -76,27 +76,33 @@ os.UserConfigDir()
 
 ---
 
-### v3.1.x Series - Station Metadata 
+### v3.1.x Series
 
-**v3.1.0** - Play Count & Last Played
+- Gist token storage updates
+- OS keychain token storage with file fall back
+- Migrate-token CLI
+
+### v3.2.x Series - Station Metadata 
+
+**v3.2.0** - Play Count & Last Played
 - Track how many times you've played each station
 - Show when you last played a station
 - "Most Played" list view
 
 ---
 
-### v3.2.x Series - User Ratings
+### v3.3.x Series - User Ratings
 
-**v3.2.0** - Star Ratings
+**v3.3.0** - Star Ratings
 - Rate stations 1-5 stars
 - Filter/sort by rating
 - "Top Rated" list view
 
 ---
 
-### v3.3.x Series - Custom Tags
+### v3.4.x Series - Custom Tags
 
-**v3.3.0** - Personal Tags
+**v3.4.0** - Personal Tags
 - Add custom tags to stations (e.g., "workout", "coding", "relaxing")
 - Filter stations by custom tags
 - Tag-based playlists
