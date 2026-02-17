@@ -338,8 +338,12 @@ func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata 
 	var s strings.Builder
 	s.WriteString(base)
 	s.WriteString("\n")
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+	dimStyle := lipgloss.NewStyle().Foreground(colorGray())
+	if metadata.PlayCount == 1 {
+		s.WriteString(dimStyle.Render("🎵 Played 1 time"))
+	} else {
+		s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+	}
 	s.WriteString("\n")
 	if !metadata.LastPlayed.IsZero() {
 		s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))

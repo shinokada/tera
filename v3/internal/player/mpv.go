@@ -649,6 +649,12 @@ func (p *MPVPlayer) monitor() {
 	case <-done:
 		// Process ended (could be error or natural end)
 		p.mu.Lock()
+		// Record play stop so duration is accumulated and MetadataManager.currentPlay
+		// is cleared. Without this, natural exits (stream drop, network loss) would
+		// leave currentPlay set and inflate duration for the next StartPlay call.
+		if p.metadataManager != nil && p.station != nil {
+			_ = p.metadataManager.StopPlay(p.station.StationUUID)
+		}
 		p.playing = false
 		p.station = nil
 		p.cmd = nil

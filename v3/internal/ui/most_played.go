@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -33,6 +34,8 @@ func (s MostPlayedSort) String() string {
 		return "Last Played"
 	case sortByFirstPlayed:
 		return "First Played"
+	case sortByName:
+		return "Station Name"
 	default:
 		return "Play Count"
 	}
@@ -369,7 +372,7 @@ func (m MostPlayedModel) handleSavePromptInput(msg tea.KeyMsg) (MostPlayedModel,
 			store := storage.NewStorage(m.favoritePath)
 			err := store.AddStation(context.TODO(), "My-favorites", *m.selectedStation)
 			if err != nil {
-				if err == storage.ErrDuplicateStation {
+				if errors.Is(err, storage.ErrDuplicateStation) {
 					m.saveMessage = "Already in My-favorites"
 				} else {
 					m.saveMessage = fmt.Sprintf("Error: %v", err)
@@ -411,7 +414,7 @@ func (m MostPlayedModel) handleSelectListInput(msg tea.KeyMsg) (MostPlayedModel,
 				store := storage.NewStorage(m.favoritePath)
 				err := store.AddStation(context.TODO(), listName, *m.selectedStation)
 				if err != nil {
-					if err == storage.ErrDuplicateStation {
+					if errors.Is(err, storage.ErrDuplicateStation) {
 						m.saveMessage = fmt.Sprintf("Already in %s", listName)
 					} else {
 						m.saveMessage = fmt.Sprintf("Error: %v", err)
@@ -475,7 +478,7 @@ func (m MostPlayedModel) viewList() string {
 
 	// Sort indicator
 	sortInfo := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
+		Foreground(colorGray()).
 		Render(fmt.Sprintf("Sort by: %s (press 's' to change)", m.sortBy.String()))
 	content.WriteString(sortInfo)
 	content.WriteString("\n\n")

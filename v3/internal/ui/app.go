@@ -540,11 +540,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	case screenMostPlayed:
 		a.mostPlayedScreen, cmd = a.mostPlayedScreen.Update(msg)
-
-		// Check if we should return to main menu
-		if navMsg, ok := msg.(navigateMsg); ok && navMsg.screen == screenMainMenu {
-			a.screen = screenMainMenu
-		}
 		return a, cmd
 	}
 

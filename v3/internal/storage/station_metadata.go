@@ -40,7 +40,6 @@ type MetadataManager struct {
 	store         *MetadataStore
 	mu            sync.RWMutex
 	savePending   atomic.Bool
-	lastSave      time.Time
 	currentPlay   string    // Track current playing station to prevent duplicates
 	playStartTime time.Time // When current play started
 	ctx           context.Context
@@ -130,7 +129,6 @@ func (m *MetadataManager) Save() error {
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 
-	m.lastSave = time.Now()
 	return nil
 }
 
@@ -207,8 +205,8 @@ func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata {
 
 	if metadata, exists := m.store.Stations[stationUUID]; exists {
 		// Return a copy to prevent external modification
-		copy := *metadata
-		return &copy
+		metaCopy := *metadata
+		return &metaCopy
 	}
 	return nil
 }
@@ -221,10 +219,10 @@ func (m *MetadataManager) GetTopPlayed(limit int) []StationWithMetadata {
 	// Collect all stations with metadata
 	var result []StationWithMetadata
 	for uuid, metadata := range m.store.Stations {
-		copy := *metadata
+		metaCopy := *metadata
 		result = append(result, StationWithMetadata{
 			Station:  api.Station{StationUUID: uuid},
-			Metadata: &copy,
+			Metadata: &metaCopy,
 		})
 	}
 
@@ -249,10 +247,10 @@ func (m *MetadataManager) GetRecentlyPlayed(limit int) []StationWithMetadata {
 	// Collect all stations with metadata
 	var result []StationWithMetadata
 	for uuid, metadata := range m.store.Stations {
-		copy := *metadata
+		metaCopy := *metadata
 		result = append(result, StationWithMetadata{
 			Station:  api.Station{StationUUID: uuid},
-			Metadata: &copy,
+			Metadata: &metaCopy,
 		})
 	}
 
@@ -276,10 +274,10 @@ func (m *MetadataManager) GetFirstPlayed(limit int) []StationWithMetadata {
 
 	var result []StationWithMetadata
 	for uuid, metadata := range m.store.Stations {
-		copy := *metadata
+		metaCopy := *metadata
 		result = append(result, StationWithMetadata{
 			Station:  api.Station{StationUUID: uuid},
-			Metadata: &copy,
+			Metadata: &metaCopy,
 		})
 	}
 
@@ -344,8 +342,8 @@ func (m *MetadataManager) saveLoop() {
 		case <-ticker.C:
 			if m.savePending.CompareAndSwap(true, false) {
 				if err := m.Save(); err != nil {
-					// Log error but continue (silent failure)
-					_ = err
+					// Re-set pending so next tick retries the save
+					m.savePending.Store(true)
 				}
 			}
 		case <-m.ctx.Done():
