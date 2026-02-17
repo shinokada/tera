@@ -125,8 +125,15 @@ func (m *MetadataManager) Save() error {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
+	// Write to a temp file then rename for crash-safety: a direct write would
+	// leave a truncated/corrupt file if the process dies mid-write.
+	tmpPath := filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to rename metadata file: %w", err)
 	}
 
 	return nil
@@ -136,6 +143,8 @@ func (m *MetadataManager) Save() error {
 func (m *MetadataManager) StartPlay(stationUUID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	now := time.Now()
 
 	// Deduplicate: ignore if same station already playing
 	if m.currentPlay == stationUUID {
@@ -148,20 +157,20 @@ func (m *MetadataManager) StartPlay(stationUUID string) error {
 	}
 
 	m.currentPlay = stationUUID
-	m.playStartTime = time.Now()
+	m.playStartTime = now
 
 	// Get or create metadata for this station
 	metadata, exists := m.store.Stations[stationUUID]
 	if !exists {
 		metadata = &StationMetadata{
-			FirstPlayed: time.Now(),
+			FirstPlayed: now,
 		}
 		m.store.Stations[stationUUID] = metadata
 	}
 
 	// Increment play count and update last played
 	metadata.PlayCount++
-	metadata.LastPlayed = time.Now()
+	metadata.LastPlayed = now
 
 	// Mark save as pending
 	m.savePending.Store(true)

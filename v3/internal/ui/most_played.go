@@ -57,23 +57,24 @@ const (
 
 // MostPlayedModel represents the Most Played screen
 type MostPlayedModel struct {
-	state            mostPlayedState
-	sortBy           MostPlayedSort
-	stations         []storage.StationWithMetadata
-	stationItems     []list.Item
-	stationListModel list.Model
-	selectedStation  *api.Station
-	player           *player.MPVPlayer
-	metadataManager  *storage.MetadataManager
-	favoritePath     string
-	saveMessage      string
-	saveMessageTime  int
-	width            int
-	height           int
-	err              error
-	helpModel        components.HelpModel
-	votedStations    *storage.VotedStations
-	blocklistManager *blocklist.Manager
+	state              mostPlayedState
+	sortBy             MostPlayedSort
+	stations           []storage.StationWithMetadata
+	stationItems       []list.Item
+	stationListModel   list.Model
+	selectedStation    *api.Station
+	player             *player.MPVPlayer
+	metadataManager    *storage.MetadataManager
+	favoritePath       string
+	saveMessage        string
+	saveMessageSuccess bool // drives success vs info styling; avoids fragile string matching
+	saveMessageTime    int
+	width              int
+	height             int
+	err                error
+	helpModel          components.HelpModel
+	votedStations      *storage.VotedStations
+	blocklistManager   *blocklist.Manager
 	// For saving to list
 	availableLists []string
 	listItems      []list.Item
@@ -280,6 +281,7 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 					}
 				} else {
 					m.saveMessage = "Station URL not available (needs lookup)"
+					m.saveMessageSuccess = false
 					m.saveMessageTime = 3
 					return m, tickEverySecond()
 				}
@@ -292,6 +294,7 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 		m.sortBy = (m.sortBy + 1) % numSortModes
 		m.refreshStationList()
 		m.saveMessage = fmt.Sprintf("Sorted by: %s", m.sortBy.String())
+		m.saveMessageSuccess = true
 		m.saveMessageTime = 2
 		return m, tickEverySecond()
 
@@ -347,6 +350,7 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		if m.player != nil {
 			vol := m.player.IncreaseVolume(5)
 			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+			m.saveMessageSuccess = true
 			m.saveMessageTime = 2
 			return m, tickEverySecond()
 		}
@@ -356,6 +360,7 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		if m.player != nil {
 			vol := m.player.DecreaseVolume(5)
 			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
+			m.saveMessageSuccess = true
 			m.saveMessageTime = 2
 			return m, tickEverySecond()
 		}
@@ -377,8 +382,10 @@ func (m MostPlayedModel) handleSavePromptInput(msg tea.KeyMsg) (MostPlayedModel,
 				} else {
 					m.saveMessage = fmt.Sprintf("Error: %v", err)
 				}
+				m.saveMessageSuccess = false
 			} else {
 				m.saveMessage = "✓ Saved to My-favorites"
+				m.saveMessageSuccess = true
 			}
 			m.saveMessageTime = 3
 		}
@@ -419,8 +426,10 @@ func (m MostPlayedModel) handleSelectListInput(msg tea.KeyMsg) (MostPlayedModel,
 					} else {
 						m.saveMessage = fmt.Sprintf("Error: %v", err)
 					}
+					m.saveMessageSuccess = false
 				} else {
 					m.saveMessage = fmt.Sprintf("✓ Saved to %s", listName)
+					m.saveMessageSuccess = true
 				}
 				m.saveMessageTime = 3
 			}

@@ -402,13 +402,9 @@ func (p *MPVPlayer) Stop() error {
 	return p.stopInternal()
 }
 
-// stopInternal stops playback without locking (internal use)
-func (p *MPVPlayer) stopInternal() error {
-	// Record play stop for statistics (errors are non-fatal)
-	if p.metadataManager != nil && p.station != nil {
-		_ = p.metadataManager.StopPlay(p.station.StationUUID)
-	}
-
+// cleanupResourcesLocked releases IPC connection, socket file, and all player
+// state fields. Must be called with p.mu already held.
+func (p *MPVPlayer) cleanupResourcesLocked() {
 	// Close IPC connection
 	if p.conn != nil {
 		_ = p.conn.Close()
@@ -420,6 +416,28 @@ func (p *MPVPlayer) stopInternal() error {
 		_ = os.Remove(p.socketPath)
 	}
 	p.socketPath = ""
+
+	// Signal monitorMetadata goroutine to stop
+	close(p.stopCh)
+
+	p.playing = false
+	p.paused = false
+	p.station = nil
+	p.cmd = nil
+
+	// Clear track history
+	p.trackMu.Lock()
+	p.trackHistory = []string{}
+	p.currentTrack = ""
+	p.trackMu.Unlock()
+}
+
+// stopInternal stops playback without locking (internal use)
+func (p *MPVPlayer) stopInternal() error {
+	// Record play stop for statistics (errors are non-fatal)
+	if p.metadataManager != nil && p.station != nil {
+		_ = p.metadataManager.StopPlay(p.station.StationUUID)
+	}
 
 	if p.cmd != nil && p.cmd.Process != nil {
 		// Send termination signal
@@ -449,20 +467,7 @@ func (p *MPVPlayer) stopInternal() error {
 		}
 	}
 
-	// Signal monitoring goroutine to stop
-	close(p.stopCh)
-
-	p.playing = false
-	p.paused = false
-	p.station = nil
-	p.cmd = nil
-
-	// Clear track history
-	p.trackMu.Lock()
-	p.trackHistory = []string{}
-	p.currentTrack = ""
-	p.trackMu.Unlock()
-
+	p.cleanupResourcesLocked()
 	return nil
 }
 
@@ -647,20 +652,20 @@ func (p *MPVPlayer) monitor() {
 
 	select {
 	case <-done:
-		// Process ended (could be error or natural end)
+		// Process ended naturally (stream drop, network loss, error).
+		// Guard with p.playing: stopInternal may have raced us here (it kills the
+		// process, then calls cleanupResourcesLocked which sets playing=false and
+		// closes stopCh). If it won the lock first, skip to avoid a double-close.
 		p.mu.Lock()
-		// Record play stop so duration is accumulated and MetadataManager.currentPlay
-		// is cleared. Without this, natural exits (stream drop, network loss) would
-		// leave currentPlay set and inflate duration for the next StartPlay call.
-		if p.metadataManager != nil && p.station != nil {
-			_ = p.metadataManager.StopPlay(p.station.StationUUID)
+		if p.playing {
+			if p.metadataManager != nil && p.station != nil {
+				_ = p.metadataManager.StopPlay(p.station.StationUUID)
+			}
+			p.cleanupResourcesLocked()
 		}
-		p.playing = false
-		p.station = nil
-		p.cmd = nil
 		p.mu.Unlock()
 	case <-p.stopCh:
-		// Stop was called, process already killed
+		// Stop was called, process already killed and resources cleaned up
 		return
 	}
 }
