@@ -183,7 +183,7 @@ type versionCheckMsg struct {
 // checkForUpdates performs the version check in the background
 func checkForUpdates() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		checker := api.NewVersionChecker()

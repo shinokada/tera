@@ -8,6 +8,11 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
+func init() {
+	// Use mock keyring for all tests to avoid macOS Keychain popup
+	keyring.MockInit()
+}
+
 func TestTokenCRUD(t *testing.T) {
 	// Setup temp home
 	tmpDir := t.TempDir()

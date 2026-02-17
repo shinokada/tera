@@ -70,6 +70,7 @@ type SearchModel struct {
 	helpModel        components.HelpModel
 	votedStations    *storage.VotedStations // Track voted stations
 	blocklistManager *blocklist.Manager
+	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
@@ -956,9 +957,16 @@ func (m SearchModel) checkPlaybackSignal(station api.Station, attempt int) tea.C
 			return nil
 		}
 
+		// Check for audio bitrate
 		bitrate, err := m.player.GetAudioBitrate()
 		if err == nil && bitrate > 0 {
-			// Signal detected!
+			// Signal detected via bitrate!
+			return playbackStartedMsg{}
+		}
+
+		// Also check for media-title as fallback (some streams don't report bitrate)
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" {
+			// Signal detected via media title!
 			return playbackStartedMsg{}
 		}
 
@@ -1322,11 +1330,23 @@ func (m SearchModel) View() string {
 		if m.selectedStation != nil {
 			// Check if user has voted for this station
 			hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-			content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
+			// Get metadata for display
+			var metadata *storage.StationMetadata
+			if m.metadataManager != nil {
+				metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+			}
+			content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {
-				content.WriteString(successStyle().Render("▶ Playing..."))
+				// Show current track if available
+				if track, err := m.player.GetCurrentTrack(); err == nil && track != "" && track != m.selectedStation.Name {
+					content.WriteString(successStyle().Render("▶ Now Playing:"))
+					content.WriteString(" ")
+					content.WriteString(infoStyle().Render(track))
+				} else {
+					content.WriteString(successStyle().Render("▶ Playing..."))
+				}
 			} else {
 				content.WriteString(infoStyle().Render("⏸ Stopped"))
 			}
@@ -1412,7 +1432,12 @@ func (m SearchModel) renderStationInfo() string {
 	var content strings.Builder
 
 	if m.selectedStation != nil {
-		content.WriteString(RenderStationDetails(*m.selectedStation))
+		// Get metadata for display
+		var metadata *storage.StationMetadata
+		if m.metadataManager != nil {
+			metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+		}
+		content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, false, metadata))
 		content.WriteString("\n\n")
 	}
 

@@ -1,4 +1,4 @@
-# v3.2.0 - Station Metadata: Play Count, Last Played & Personal note/label
+# v3.2.0 - Station Metadata: Play Count & Last Played
 
 ## Feature Overview
 
@@ -6,7 +6,6 @@ Track user listening behavior by recording:
 - **Play count**: How many times each station has been played
 - **Last played timestamp**: When the station was last played
 - **Most Played view**: A new sortable list showing listening statistics
-- **Label/Personal note**: A new field to add personal label/note
 
 ## Goals
 
@@ -16,6 +15,8 @@ Track user listening behavior by recording:
 4. **Consistent UX** - Follow existing Tera UI patterns
 
 ---
+
+NOTE: Use `os.UserConfigDir()` for `~/.config` as used so far in the v3 project.
 
 ## Data Model
 

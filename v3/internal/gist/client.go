@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -161,6 +162,95 @@ func (c *Client) ValidateToken() (string, error) {
 	}
 
 	return user.Login, nil
+}
+
+// GetGistPublic fetches a public gist without requiring authentication
+// This is useful for importing gists shared by other users
+func GetGistPublic(gistID string) (*Gist, error) {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/gists/%s", defaultBaseURL, gistID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("gist not found (may be private or invalid ID)")
+	}
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error: %s (status: %d, body: %s)", resp.Status, resp.StatusCode, string(body))
+	}
+
+	var gist Gist
+	if err := json.NewDecoder(resp.Body).Decode(&gist); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &gist, nil
+}
+
+// ParseGistURL extracts the gist ID from various URL formats
+// Supported formats:
+// - https://gist.github.com/username/gist_id
+// - https://gist.githubusercontent.com/username/gist_id/...
+// - gist_id (raw ID)
+func ParseGistURL(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("empty input")
+	}
+
+	// Check if it's a URL
+	if strings.HasPrefix(input, "https://gist.github.com/") ||
+		strings.HasPrefix(input, "http://gist.github.com/") ||
+		strings.HasPrefix(input, "https://gist.githubusercontent.com/") {
+		// Parse the URL to extract path
+		parts := strings.Split(input, "/")
+		// URL format: https://gist.github.com/username/gist_id[/...]
+		// We need at least 5 parts: https:, "", gist.github.com, username, gist_id
+		if len(parts) >= 5 {
+			gistID := parts[4]
+			// Remove any query parameters or fragments
+			if idx := strings.Index(gistID, "?"); idx != -1 {
+				gistID = gistID[:idx]
+			}
+			if idx := strings.Index(gistID, "#"); idx != -1 {
+				gistID = gistID[:idx]
+			}
+			if gistID != "" {
+				return gistID, nil
+			}
+		}
+		return "", fmt.Errorf("invalid gist URL format")
+	}
+
+	// Assume it's a raw gist ID - validate it looks like a hex string
+	// GitHub gist IDs are 32-character hex strings
+	if len(input) >= 20 && len(input) <= 40 {
+		for _, c := range input {
+			isDigit := c >= '0' && c <= '9'
+			isLowerHex := c >= 'a' && c <= 'f'
+			isUpperHex := c >= 'A' && c <= 'F'
+			if !isDigit && !isLowerHex && !isUpperHex {
+				return "", fmt.Errorf("invalid gist ID format")
+			}
+		}
+		return input, nil
+	}
+
+	return "", fmt.Errorf("invalid gist URL or ID")
 }
 
 // do plays the request and decodes the response

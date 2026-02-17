@@ -18,20 +18,21 @@ import (
 
 // MPVPlayer manages the MPV process for playing radio streams
 type MPVPlayer struct {
-	cmd          *exec.Cmd
-	playing      bool
-	paused       bool // Pause state
-	station      *api.Station
-	volume       int // Current volume (0-100)
-	muted        bool
-	lastVolume   int // Volume before mute
-	mu           sync.Mutex
-	stopCh       chan struct{}
-	socketPath   string     // IPC socket path for runtime control
-	conn         net.Conn   // Connection to IPC socket
-	trackHistory []string   // Last 5 track names
-	currentTrack string     // Current playing track
-	trackMu      sync.Mutex // Protect track history
+	cmd             *exec.Cmd
+	playing         bool
+	paused          bool // Pause state
+	station         *api.Station
+	volume          int // Current volume (0-100)
+	muted           bool
+	lastVolume      int // Volume before mute
+	mu              sync.Mutex
+	stopCh          chan struct{}
+	socketPath      string                   // IPC socket path for runtime control
+	conn            net.Conn                 // Connection to IPC socket
+	trackHistory    []string                 // Last 5 track names
+	currentTrack    string                   // Current playing track
+	trackMu         sync.Mutex               // Protect track history
+	metadataManager *storage.MetadataManager // Track play statistics
 }
 
 // NewMPVPlayer creates a new MPV player instance
@@ -143,6 +144,14 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	p.paused = false
 	p.station = station
 	p.stopCh = make(chan struct{})
+
+	// Record play start for statistics
+	if p.metadataManager != nil {
+		if err := p.metadataManager.StartPlay(station.StationUUID); err != nil {
+			// Log error but don't interrupt playback
+			_ = err
+		}
+	}
 
 	// Connect to IPC socket (with retry for socket creation delay)
 	go p.connectToSocket()
@@ -390,6 +399,13 @@ func (p *MPVPlayer) Stop() error {
 
 // stopInternal stops playback without locking (internal use)
 func (p *MPVPlayer) stopInternal() error {
+	// Record play stop for statistics
+	if p.metadataManager != nil && p.station != nil {
+		if err := p.metadataManager.StopPlay(p.station.StationUUID); err != nil {
+			_ = err
+		}
+	}
+
 	// Close IPC connection
 	if p.conn != nil {
 		_ = p.conn.Close()
@@ -597,6 +613,13 @@ func (p *MPVPlayer) IsPaused() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.paused
+}
+
+// SetMetadataManager sets the metadata manager for play statistics tracking
+func (p *MPVPlayer) SetMetadataManager(mgr *storage.MetadataManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.metadataManager = mgr
 }
 
 // monitor watches the mpv process and updates state when it exits

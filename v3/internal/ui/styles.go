@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/theme"
 )
 
@@ -162,7 +163,12 @@ func renderHeader() string {
 	headerRendererMu.RUnlock()
 
 	if renderer != nil {
-		return renderer.Render()
+		result := renderer.Render()
+		// Ensure header ends with newline for proper layout
+		if result != "" && !strings.HasSuffix(result, "\n") {
+			result += "\n"
+		}
+		return result
 	}
 	// Fallback to default if renderer not initialized
 	return lipgloss.NewStyle().
@@ -314,6 +320,60 @@ func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 			s.WriteString(fmt.Sprintf(" @ %d kbps", station.Bitrate))
 		}
 		s.WriteString("\n")
+	}
+
+	return s.String()
+}
+
+// RenderStationDetailsWithMetadata renders station details with play statistics
+func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata *storage.StationMetadata) string {
+	var s strings.Builder
+
+	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
+
+	if station.Tags != "" {
+		s.WriteString(fmt.Sprintf("Tags:    %s\n", station.Tags))
+	}
+
+	if station.Country != "" {
+		s.WriteString(fmt.Sprintf("Country: %s", station.Country))
+		if station.State != "" {
+			s.WriteString(fmt.Sprintf(", %s", station.State))
+		}
+		s.WriteString("\n")
+	}
+
+	if station.Language != "" {
+		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
+	}
+
+	// Votes with voted indicator
+	s.WriteString(fmt.Sprintf("Votes:   %d", station.Votes))
+	if voted {
+		s.WriteString("  ")
+		s.WriteString(successStyle().Render("✓ You voted"))
+	}
+	s.WriteString("\n")
+
+	if station.Codec != "" {
+		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))
+		if station.Bitrate > 0 {
+			s.WriteString(fmt.Sprintf(" @ %d kbps", station.Bitrate))
+		}
+		s.WriteString("\n")
+	}
+
+	// Play statistics (only show if metadata exists and has data)
+	if metadata != nil && metadata.PlayCount > 0 {
+		s.WriteString("\n")
+		// Use dim style for metadata to not overwhelm
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+		s.WriteString("\n")
+		if !metadata.LastPlayed.IsZero() {
+			s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
+			s.WriteString("\n")
+		}
 	}
 
 	return s.String()
