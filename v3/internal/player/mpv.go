@@ -145,12 +145,9 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	p.station = station
 	p.stopCh = make(chan struct{})
 
-	// Record play start for statistics
+	// Record play start for statistics (errors are non-fatal)
 	if p.metadataManager != nil {
-		if err := p.metadataManager.StartPlay(station.StationUUID); err != nil {
-			// Log error but don't interrupt playback
-			_ = err
-		}
+		_ = p.metadataManager.StartPlay(station.StationUUID)
 	}
 
 	// Connect to IPC socket (with retry for socket creation delay)
@@ -315,6 +312,14 @@ func (p *MPVPlayer) GetCurrentTrack() (string, error) {
 	return "", nil
 }
 
+// GetCachedTrack returns the current track name from the in-memory cache without IPC.
+// Use this in render paths to avoid potential UI jank from synchronous IPC calls.
+func (p *MPVPlayer) GetCachedTrack() string {
+	p.trackMu.Lock()
+	defer p.trackMu.Unlock()
+	return p.currentTrack
+}
+
 // GetTrackHistory returns the last 5 track names
 func (p *MPVPlayer) GetTrackHistory() []string {
 	p.trackMu.Lock()
@@ -399,11 +404,9 @@ func (p *MPVPlayer) Stop() error {
 
 // stopInternal stops playback without locking (internal use)
 func (p *MPVPlayer) stopInternal() error {
-	// Record play stop for statistics
+	// Record play stop for statistics (errors are non-fatal)
 	if p.metadataManager != nil && p.station != nil {
-		if err := p.metadataManager.StopPlay(p.station.StationUUID); err != nil {
-			_ = err
-		}
+		_ = p.metadataManager.StopPlay(p.station.StationUUID)
 	}
 
 	// Close IPC connection

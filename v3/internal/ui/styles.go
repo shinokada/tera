@@ -327,54 +327,23 @@ func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 
 // RenderStationDetailsWithMetadata renders station details with play statistics
 func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata *storage.StationMetadata) string {
+	// Delegate base formatting to avoid duplication
+	base := RenderStationDetailsWithVote(station, voted)
+
+	// Append play statistics only if data exists
+	if metadata == nil || metadata.PlayCount == 0 {
+		return base
+	}
+
 	var s strings.Builder
-
-	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
-
-	if station.Tags != "" {
-		s.WriteString(fmt.Sprintf("Tags:    %s\n", station.Tags))
-	}
-
-	if station.Country != "" {
-		s.WriteString(fmt.Sprintf("Country: %s", station.Country))
-		if station.State != "" {
-			s.WriteString(fmt.Sprintf(", %s", station.State))
-		}
-		s.WriteString("\n")
-	}
-
-	if station.Language != "" {
-		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
-	}
-
-	// Votes with voted indicator
-	s.WriteString(fmt.Sprintf("Votes:   %d", station.Votes))
-	if voted {
-		s.WriteString("  ")
-		s.WriteString(successStyle().Render("✓ You voted"))
-	}
+	s.WriteString(base)
 	s.WriteString("\n")
-
-	if station.Codec != "" {
-		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))
-		if station.Bitrate > 0 {
-			s.WriteString(fmt.Sprintf(" @ %d kbps", station.Bitrate))
-		}
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+	s.WriteString("\n")
+	if !metadata.LastPlayed.IsZero() {
+		s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
 		s.WriteString("\n")
 	}
-
-	// Play statistics (only show if metadata exists and has data)
-	if metadata != nil && metadata.PlayCount > 0 {
-		s.WriteString("\n")
-		// Use dim style for metadata to not overwhelm
-		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-		s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
-		s.WriteString("\n")
-		if !metadata.LastPlayed.IsZero() {
-			s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
-			s.WriteString("\n")
-		}
-	}
-
 	return s.String()
 }

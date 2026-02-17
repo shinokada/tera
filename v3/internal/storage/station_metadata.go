@@ -269,6 +269,38 @@ func (m *MetadataManager) GetRecentlyPlayed(limit int) []StationWithMetadata {
 	return result
 }
 
+// GetFirstPlayed returns stations sorted by first played time (oldest first)
+func (m *MetadataManager) GetFirstPlayed(limit int) []StationWithMetadata {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []StationWithMetadata
+	for uuid, metadata := range m.store.Stations {
+		copy := *metadata
+		result = append(result, StationWithMetadata{
+			Station:  api.Station{StationUUID: uuid},
+			Metadata: &copy,
+		})
+	}
+
+	// Sort by first played (oldest first)
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Metadata.FirstPlayed.IsZero() {
+			return false
+		}
+		if result[j].Metadata.FirstPlayed.IsZero() {
+			return true
+		}
+		return result[i].Metadata.FirstPlayed.Before(result[j].Metadata.FirstPlayed)
+	})
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result
+}
+
 // GetAllStationUUIDs returns all station UUIDs with metadata
 func (m *MetadataManager) GetAllStationUUIDs() []string {
 	m.mu.RLock()

@@ -401,13 +401,13 @@ func TestDebouncedSave(t *testing.T)
 ### Manual Testing
 
 1. **New user experience**
-   - Install v3.1.0 fresh
+   - Install v3.2.0 fresh
    - Verify metadata file created
    - Play station, verify count increments
 
 2. **Existing user upgrade**
-   - Start with v3.0.x config
-   - Upgrade to v3.1.0
+   - Start with v3.1.x
+   - Upgrade to v3.2.0
    - Verify no disruption
 
 3. **Edge cases**

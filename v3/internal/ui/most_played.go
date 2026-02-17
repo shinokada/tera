@@ -33,12 +33,14 @@ func (s MostPlayedSort) String() string {
 		return "Last Played"
 	case sortByFirstPlayed:
 		return "First Played"
-	case sortByName:
-		return "Station Name"
 	default:
 		return "Play Count"
 	}
 }
+
+// numSortModes is the number of valid sort modes (excludes sortByName which requires
+// station details not available in metadata-only view).
+const numSortModes = 3
 
 // State for Most Played screen
 type mostPlayedState int
@@ -225,6 +227,8 @@ func (m *MostPlayedModel) refreshStationList() {
 		m.stations = m.metadataManager.GetTopPlayed(100)
 	case sortByLastPlayed:
 		m.stations = m.metadataManager.GetRecentlyPlayed(100)
+	case sortByFirstPlayed:
+		m.stations = m.metadataManager.GetFirstPlayed(100)
 	default:
 		m.stations = m.metadataManager.GetTopPlayed(100)
 	}
@@ -281,8 +285,8 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 		return m, nil
 
 	case "s":
-		// Cycle through sort options
-		m.sortBy = (m.sortBy + 1) % 4
+		// Cycle through implemented sort options (Name excluded: station names not stored in metadata)
+		m.sortBy = (m.sortBy + 1) % numSortModes
 		m.refreshStationList()
 		m.saveMessage = fmt.Sprintf("Sorted by: %s", m.sortBy.String())
 		m.saveMessageTime = 2
@@ -336,21 +340,19 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		return m, nil
 
 	case "+", "=":
-		// Volume up
+		// Volume up (IncreaseVolume handles clamping to 0-100)
 		if m.player != nil {
-			vol := m.player.GetVolume()
-			m.player.SetVolume(vol + 5)
-			m.saveMessage = fmt.Sprintf("Volume: %d%%", m.player.GetVolume())
+			vol := m.player.IncreaseVolume(5)
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 			m.saveMessageTime = 2
 			return m, tickEverySecond()
 		}
 
 	case "-":
-		// Volume down
+		// Volume down (DecreaseVolume handles clamping to 0-100)
 		if m.player != nil {
-			vol := m.player.GetVolume()
-			m.player.SetVolume(vol - 5)
-			m.saveMessage = fmt.Sprintf("Volume: %d%%", m.player.GetVolume())
+			vol := m.player.DecreaseVolume(5)
+			m.saveMessage = fmt.Sprintf("Volume: %d%%", vol)
 			m.saveMessageTime = 2
 			return m, tickEverySecond()
 		}
@@ -525,8 +527,9 @@ func (m MostPlayedModel) viewPlaying() string {
 		if m.player.IsPaused() {
 			content.WriteString(infoStyle().Render("⏸ Paused"))
 		} else {
-			// Show current track if available
-			if track, err := m.player.GetCurrentTrack(); err == nil && track != "" && track != m.selectedStation.Name {
+			// Use cached track to avoid IPC call in the render path
+			track := m.player.GetCachedTrack()
+			if track != "" && track != m.selectedStation.Name {
 				content.WriteString(successStyle().Render("▶ Now Playing:"))
 				content.WriteString(" ")
 				content.WriteString(infoStyle().Render(track))

@@ -177,6 +177,7 @@ func GetGistPublic(gistID string) (*Gist, error) {
 	}
 
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "tera-radio-player")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -256,6 +257,7 @@ func ParseGistURL(input string) (string, error) {
 // do plays the request and decodes the response
 func (c *Client) do(req *http.Request, v interface{}) error {
 	req.Header.Set("Authorization", "token "+c.token)
+	req.Header.Set("User-Agent", "tera-radio-player")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Content-Type", "application/json")
 
