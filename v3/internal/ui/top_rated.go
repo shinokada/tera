@@ -138,7 +138,11 @@ func (i topRatedStationItem) Title() string {
 	name := i.station.TrimName()
 	if name == "" {
 		// Fallback for old ratings without cached station info
-		name = "Station " + i.station.StationUUID[:8]
+		if len(i.station.StationUUID) >= 8 {
+			name = "Station " + i.station.StationUUID[:8]
+		} else {
+			name = "Unknown Station"
+		}
 	}
 	if len(name) > 35 {
 		name = name[:32] + "..."
@@ -203,8 +207,8 @@ func createTopRatedHelp() []components.HelpSection {
 			Items: []components.HelpItem{
 				{Key: "↑↓/jk", Description: "Navigate"},
 				{Key: "Enter", Description: "Play"},
-				{Key: "*1-5", Description: "Rate station"},
-				{Key: "*0/*r", Description: "Remove rating"},
+				{Key: "r then 1-5", Description: "Rate station"},
+				{Key: "r then 0", Description: "Remove rating"},
 				{Key: "s", Description: "Sort"},
 				{Key: "f", Description: "Filter"},
 				{Key: "a", Description: "Add to favorites"},
@@ -285,13 +289,6 @@ func (m *TopRatedModel) refreshStationList() {
 	if m.ratingsManager == nil {
 		m.stations = []storage.StationWithRating{}
 		return
-	}
-
-	// Get stations based on filter first
-	if m.filterBy == filterAllRatings {
-		m.stations = m.ratingsManager.GetAllRated()
-	} else {
-		m.stations = m.ratingsManager.GetByMinRating(m.filterBy.MinRating())
 	}
 
 	// Sort based on sort order
@@ -515,7 +512,7 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 
 func (m TopRatedModel) handleSavePromptInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
 	switch msg.String() {
-	case "y", "Y":
+	case "y", "Y", "enter":
 		// Save to My-favorites
 		if m.selectedStation != nil {
 			store := storage.NewStorage(m.favoritePath)

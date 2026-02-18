@@ -1080,7 +1080,7 @@ func (a *App) viewMainMenu() string {
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-8: Menu • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-9: Menu • 10+: Quick Play • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)

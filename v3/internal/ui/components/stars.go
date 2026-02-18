@@ -79,6 +79,12 @@ func (s *StarRenderer) RenderCompact(rating int) string {
 
 // RenderWithLabel returns stars with label (e.g., "★★★★☆ (4/5)")
 func (s *StarRenderer) RenderWithLabel(rating int) string {
+	if rating < 0 {
+		rating = 0
+	}
+	if rating > 5 {
+		rating = 5
+	}
 	stars := s.Render(rating)
 	label := s.dimStyle().Render(" (" + string(rune('0'+rating)) + "/5)")
 	return stars + label

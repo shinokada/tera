@@ -6,7 +6,9 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 
 - 🔍 **Search** - Find stations by name, tag, language, country, or state
 - 🎲 **I Feel Lucky** - Random station discovery by keyword
-- 💾 **Favorites** - Organize stations into custom lists with duplicate detection- ⭐ **Star Ratings** - Rate stations 1-5 stars and browse your top-rated collection- ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
+- 💾 **Favorites** - Organize stations into custom lists with duplicate detection
+- ⭐ **Star Ratings** - Rate stations 1-5 stars and browse your top-rated collection
+- ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
 - 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
 - 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
@@ -188,8 +190,8 @@ From main menu, select "5. Top Rated" to:
 
 | Screen    | Key       | Action           |
 | --------- | --------- | ---------------- |
-| Playing   | `*1-5`    | Rate station     |
-| Playing   | `*0`/`*r` | Remove rating    |
+| Playing   | `r` then `1-5` | Rate station     |
+| Playing   | `r` then `0`   | Remove rating    |
 | Top Rated | `f`       | Cycle filter     |
 | Top Rated | `s`       | Cycle sort order |
 

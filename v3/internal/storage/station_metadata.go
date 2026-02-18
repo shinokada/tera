@@ -363,6 +363,7 @@ func (m *MetadataManager) GetTotalStations() int {
 func (m *MetadataManager) ClearAll() error {
 	m.mu.Lock()
 	m.store.Stations = make(map[string]*StationMetadata)
+	m.store.StationCache = make(map[string]*CachedStation)
 	m.currentPlay = ""
 	m.playStartTime = time.Time{}
 	m.mu.Unlock()

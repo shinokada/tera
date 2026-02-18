@@ -24,9 +24,10 @@ func IsValidTrackMetadata(track, stationName string) bool {
 		return false
 	}
 	// Filter out common file extensions that indicate no metadata
-	if strings.HasSuffix(strings.ToLower(track), ".mp3") ||
-		strings.HasSuffix(strings.ToLower(track), ".aac") ||
-		strings.HasSuffix(strings.ToLower(track), ".ogg") {
+	lower := strings.ToLower(track)
+	if strings.HasSuffix(lower, ".mp3") ||
+		strings.HasSuffix(lower, ".aac") ||
+		strings.HasSuffix(lower, ".ogg") {
 		return false
 	}
 	return true

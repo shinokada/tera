@@ -805,6 +805,13 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if startTick {
 				return m, tickEverySecond()
 			}
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
+			startTick := m.saveMessageTime <= 0
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
 		}
 		return m, nil
 	}

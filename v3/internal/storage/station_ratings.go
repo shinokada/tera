@@ -215,6 +215,7 @@ func (r *RatingsManager) RemoveRating(stationUUID string) error {
 	}
 
 	delete(r.store.Ratings, stationUUID)
+	delete(r.store.StationCache, stationUUID)
 	r.savePending.Store(true)
 	return nil
 }
@@ -351,6 +352,7 @@ func (r *RatingsManager) GetTotalRated() int {
 func (r *RatingsManager) ClearAll() error {
 	r.mu.Lock()
 	r.store.Ratings = make(map[string]*StationRating)
+	r.store.StationCache = make(map[string]*RatingsCachedStation)
 	r.mu.Unlock()
 
 	// Save is called unconditionally, so no need to set savePending here.
