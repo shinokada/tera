@@ -136,6 +136,7 @@ func (m *MetadataManager) Save() error {
 	// leave a truncated/corrupt file if the process dies mid-write.
 	tmpPath := filePath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup of partial write
 		return fmt.Errorf("failed to write metadata temp file: %w", err)
 	}
 	if err := os.Rename(tmpPath, filePath); err != nil {
@@ -406,6 +407,9 @@ func FormatLastPlayed(t time.Time) string {
 		return fmt.Sprintf("%d weeks ago", weeks)
 	case diff < 365*24*time.Hour:
 		months := int(diff.Hours() / (24 * 30))
+		if months >= 12 {
+			return "About a year ago"
+		}
 		if months == 1 {
 			return "1 month ago"
 		}
@@ -425,7 +429,11 @@ func FormatDuration(seconds int64) string {
 		return fmt.Sprintf("%ds", seconds)
 	}
 	if seconds < 3600 {
-		return fmt.Sprintf("%dm", seconds/60)
+		m, s := seconds/60, seconds%60
+		if s == 0 {
+			return fmt.Sprintf("%dm", m)
+		}
+		return fmt.Sprintf("%dm %ds", m, s)
 	}
 	hours := seconds / 3600
 	minutes := (seconds % 3600) / 60
