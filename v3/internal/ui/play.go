@@ -818,8 +818,11 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Handle remove rating (0 or r)
 	if key == "0" || key == "r" {
-		_ = m.ratingsManager.RemoveRating(m.selectedStation.StationUUID)
-		m.saveMessage = "✓ Rating removed"
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
 		startTick := m.saveMessageTime <= 0
 		m.saveMessageTime = messageDisplayShort
 		if startTick {

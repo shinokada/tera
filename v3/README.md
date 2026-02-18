@@ -188,12 +188,12 @@ From main menu, select "5. Top Rated" to:
 
 **Keyboard Shortcuts:**
 
-| Screen    | Key       | Action           |
-| --------- | --------- | ---------------- |
+| Screen    | Key            | Action           |
+| --------- | -------------- | ---------------- |
 | Playing   | `r` then `1-5` | Rate station     |
 | Playing   | `r` then `0`   | Remove rating    |
-| Top Rated | `f`       | Cycle filter     |
-| Top Rated | `s`       | Cycle sort order |
+| Top Rated | `f`            | Cycle filter     |
+| Top Rated | `s`            | Cycle sort order |
 
 **Storage Location:**
 - Linux: `~/.config/tera/data/station_ratings.json`
@@ -215,7 +215,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 8):
+Access app configuration from the main menu (option 9):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -270,11 +270,13 @@ Choose an option:
 
   1. Play from Favorites
   2. Search Stations
-  3. Manage Lists
-  4. Block List
-  5. I Feel Lucky
-  6. Gist Management
-  7. Settings
+  3. Most Played
+  4. Top Rated
+  5. Manage Lists
+  6. Block List
+  7. I Feel Lucky
+  8. Gist Management
+  9. Settings
 
 ─── Quick Play Favorites ───
   10. Jazz FM • UK • MP3 192kbps
@@ -296,7 +298,7 @@ Type 10-12 to play instantly!
 
 The easiest way to change themes is through the Settings menu:
 
-1. Press `8` from the main menu to open Settings
+1. Press `9` from the main menu to open Settings
 2. Select "Theme / Colors"
 3. Choose from predefined themes:
    - **Default** - Cyan and blue tones
@@ -338,7 +340,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `8` from the main menu to open Settings
+1. Press `9` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version
@@ -371,7 +373,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### How It Works
 
-1. Navigate to **I Feel Lucky** from the main menu (option 5)
+1. Navigate to **I Feel Lucky** from the main menu (option 7)
 2. Press `t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
@@ -575,7 +577,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 7) Gist Management → 6) Token Management
+1. Go to: Main Menu → 8) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!
