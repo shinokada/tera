@@ -999,8 +999,9 @@ func (m PlayModel) viewPlaying() string {
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		// Show current track if available
-		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" && track != m.selectedStation.Name {
+		// Use the cached track (kept fresh by monitorMetadata every 5 s) to
+		// avoid a blocking IPC socket call inside the render path.
+		if track := m.player.GetCachedTrack(); track != "" && track != m.selectedStation.Name {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
 			content.WriteString(infoStyle().Render(track))

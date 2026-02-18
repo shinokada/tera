@@ -47,7 +47,10 @@ type MetadataManager struct {
 	wg            sync.WaitGroup
 }
 
-// NewMetadataManager creates a new metadata manager
+// NewMetadataManager creates a new metadata manager.
+// The error return is always nil in the current implementation: load failures
+// are treated as a non-fatal "start fresh" condition. The signature is kept
+// for forward-compatibility in case future callers need to detect init errors.
 func NewMetadataManager(dataPath string) (*MetadataManager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &MetadataManager{
@@ -304,7 +307,8 @@ func (m *MetadataManager) ClearAll() error {
 	return m.Save()
 }
 
-// saveLoop runs in the background and saves periodically when changes are pending
+// saveLoop runs in the background and saves periodically when changes are pending.
+// The final save on shutdown is handled by Close() after wg.Wait() returns.
 func (m *MetadataManager) saveLoop() {
 	defer m.wg.Done()
 
@@ -321,16 +325,13 @@ func (m *MetadataManager) saveLoop() {
 				}
 			}
 		case <-m.ctx.Done():
-			// Save any pending changes before exiting
-			if m.savePending.Load() {
-				_ = m.Save()
-			}
 			return
 		}
 	}
 }
 
-// Close stops the background save goroutine and saves any pending changes
+// Close stops the background save goroutine and saves any pending changes.
+// It returns any error from the final disk write so callers can log or handle it.
 func (m *MetadataManager) Close() error {
 	// Stop any current play to record duration
 	m.mu.Lock()
@@ -339,12 +340,15 @@ func (m *MetadataManager) Close() error {
 	}
 	m.mu.Unlock()
 
-	// Signal background goroutine to stop
+	// Signal background goroutine to stop and wait for it to exit
 	m.cancel()
-
-	// Wait for goroutine to finish
 	m.wg.Wait()
 
+	// Perform the final save here (after the goroutine has stopped) so the
+	// error is propagated to the caller instead of being silently discarded.
+	if m.savePending.Load() {
+		return m.Save()
+	}
 	return nil
 }
 
