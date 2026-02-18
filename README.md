@@ -238,7 +238,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "5. Block List" to:
+From main menu, select "5. Block List" toh:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)

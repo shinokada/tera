@@ -227,6 +227,8 @@ func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata {
 
 // sortedStationsLocked collects all station entries, sorts them by less, and
 // truncates to at most limit results (0 = no limit). Must be called with RLock held.
+// NOTE: The Station field in each result contains only StationUUID; callers are
+// responsible for enriching full station details via the API if needed.
 func (m *MetadataManager) sortedStationsLocked(less func(a, b StationWithMetadata) bool, limit int) []StationWithMetadata {
 	result := make([]StationWithMetadata, 0, len(m.store.Stations))
 	for uuid, metadata := range m.store.Stations {
@@ -405,6 +407,9 @@ func FormatLastPlayed(t time.Time) string {
 
 // FormatDuration formats duration in seconds as a human-readable string
 func FormatDuration(seconds int64) string {
+	if seconds <= 0 {
+		return "0s"
+	}
 	if seconds < 60 {
 		return fmt.Sprintf("%ds", seconds)
 	}

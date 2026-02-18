@@ -99,11 +99,12 @@ tera
 # Main Menu Options:
 # 1) Play from Favorites - Browse your saved lists
 # 2) Search Stations     - Find new stations
-# 3) Manage Lists        - Create/edit/delete favorite lists
-# 4) Block List          - Manage blocked stations
-# 5) I Feel Lucky        - Random station by keyword
-# 6) Gist Management     - Backup/restore via GitHub
-# 7) Settings            - Configure TERA
+# 3) Most Played         - Your listening statistics
+# 4) Manage Lists        - Create/edit/delete favorite lists
+# 5) Block List          - Manage blocked stations
+# 6) I Feel Lucky        - Random station by keyword
+# 7) Gist Management     - Backup/restore via GitHub
+# 8) Settings            - Configure TERA
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
@@ -148,7 +149,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "4. Block List" to:
+From main menu, select "5. Block List" to:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)
@@ -182,7 +183,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 7):
+Access app configuration from the main menu (option 8):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -458,7 +459,7 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
-| `1-7`    | Quick select menu item       |
+| `1-8`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
 ### Playback Controls
@@ -541,7 +542,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 6) Gist Management → 6) Token Management
+1. Go to: Main Menu → 7) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!
