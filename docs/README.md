@@ -137,14 +137,14 @@ Track your listening history and rediscover your favorite stations.
 
 **Key bindings**:
 
-| Key       | Action                    |
-| --------- | ------------------------- |
-| `↑↓` / `jk` | Navigate                |
-| `Enter`   | Play selected station     |
-| `s`       | Cycle sort order          |
-| `f`       | Add to favorites          |
-| `?`       | Help                      |
-| `Esc` / `m` | Back to main menu       |
+| Key         | Action                |
+| ----------- | --------------------- |
+| `↑↓` / `jk` | Navigate              |
+| `Enter`     | Play selected station |
+| `s`         | Cycle sort order      |
+| `f`         | Add to favorites      |
+| `?`         | Help                  |
+| `Esc` / `m` | Back to main menu     |
 
 All data is stored in `station_metadata.json` in your data directory. Delete this file at any time to clear your history.
 
@@ -179,7 +179,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "4. Block List" to:
+From main menu, select "5. Block List" to:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)
@@ -213,7 +213,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 7):
+Access app configuration from the main menu (option 8):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -337,7 +337,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `7` from the main menu to open Settings
+1. Press `8` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version
@@ -370,7 +370,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### How It Works
 
-1. Navigate to **I Feel Lucky** from the main menu (option 5)
+1. Navigate to **I Feel Lucky** from the main menu (option 6)
 2. Press `t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
@@ -573,7 +573,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 6) Gist Management → 6) Token Management
+1. Go to: Main Menu → 7) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!
@@ -601,7 +601,7 @@ TERA v3 organizes files with a unified config and a separate data directory:
 
 ### File Structure
 
-```
+```text
 tera/
 ├── config.yaml             # Unified configuration (all settings)
 ├── data/                   # User data directory
