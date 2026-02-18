@@ -5,6 +5,28 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-02-18
+
+### Added
+- **Star Ratings** - Rate any station from 1-5 stars with `r` then `1-5` keys
+- **Top Rated** - New menu option (5) to browse your highest-rated stations
+- **Rating display** - Stars shown in search results, favorites, and playing screen
+- **Filter by rating** - Filter Top Rated list by minimum star rating
+- **Sort options** - Sort by rating (high/low), recently rated
+- **Quick rating** - Press `r` then `1-5` to rate while playing
+- **Remove rating** - Press `r` then `0` to clear a station's rating
+- Station caching for Top Rated and Most Played to display full station info
+
+### Changed
+- Main menu reordered: Top Rated is now option 5, I Feel Lucky moved to 6
+- Star rendering with spacing for better display in Warp terminal (`★ ★ ★ ★ ☆`)
+- Top Rated page uses bottom-aligned footer for consistent UI
+
+### Fixed
+- Most Played and Top Rated now properly display station names from cached data
+- Empty lines in Most Played list when station names were missing
+- Track metadata display filtering out URL-like strings
+
 ## [3.0.1] - 2026-02-09
 
 ### Fixed

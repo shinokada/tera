@@ -668,8 +668,8 @@ func (m SettingsModel) viewHistory() string {
 	content.WriteString("\n\n")
 	content.WriteString(stationFieldStyle().Render("Current Stats:"))
 	content.WriteString("\n")
-	content.WriteString(fmt.Sprintf("  Search history items: %d\n", len(m.searchHistory.SearchItems)))
-	content.WriteString(fmt.Sprintf("  Lucky history items:  %d\n", len(m.searchHistory.LuckyQueries)))
+	fmt.Fprintf(&content, "  Search history items: %d\n", len(m.searchHistory.SearchItems))
+	fmt.Fprintf(&content, "  Lucky history items:  %d\n", len(m.searchHistory.LuckyQueries))
 
 	if m.message != "" {
 		content.WriteString("\n")

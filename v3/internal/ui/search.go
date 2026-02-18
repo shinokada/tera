@@ -72,6 +72,10 @@ type SearchModel struct {
 	blocklistManager *blocklist.Manager
 	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
@@ -1038,6 +1042,11 @@ func (m SearchModel) handleSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handlePlayerUpdate handles player-related updates during playback
 func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "q":
 		// Quit application
@@ -1158,7 +1167,62 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
 	}
+	return m, nil
+}
+
+// handleRatingModeInput handles input when in rating mode
+func (m SearchModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+			startTick := m.saveMessageTime <= 0
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		return m, nil
+	}
+
+	// Handle remove rating (0 or r)
+	if key == "0" || key == "r" {
+		_ = m.ratingsManager.RemoveRating(m.selectedStation.StationUUID)
+		m.saveMessage = "✓ Rating removed"
+		startTick := m.saveMessageTime <= 0
+		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
+		return m, nil
+	}
+
+	// Any other key - just clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -1275,19 +1339,19 @@ func (m SearchModel) View() string {
 			if m.searchType == api.SearchAdvanced {
 				criteria.WriteString("Search criteria:\n")
 				if tag := strings.TrimSpace(m.advancedInputs[0].Value()); tag != "" {
-					criteria.WriteString(fmt.Sprintf("  Tag: %s\n", tag))
+					fmt.Fprintf(&criteria, "  Tag: %s\n", tag)
 				}
 				if lang := strings.TrimSpace(m.advancedInputs[1].Value()); lang != "" {
-					criteria.WriteString(fmt.Sprintf("  Language: %s\n", lang))
+					fmt.Fprintf(&criteria, "  Language: %s\n", lang)
 				}
 				if country := strings.TrimSpace(m.advancedInputs[2].Value()); country != "" {
-					criteria.WriteString(fmt.Sprintf("  Country: %s\n", country))
+					fmt.Fprintf(&criteria, "  Country: %s\n", country)
 				}
 				if state := strings.TrimSpace(m.advancedInputs[3].Value()); state != "" {
-					criteria.WriteString(fmt.Sprintf("  State: %s\n", state))
+					fmt.Fprintf(&criteria, "  State: %s\n", state)
 				}
 				if name := strings.TrimSpace(m.advancedInputs[4].Value()); name != "" {
-					criteria.WriteString(fmt.Sprintf("  Name: %s\n", name))
+					fmt.Fprintf(&criteria, "  Name: %s\n", name)
 				}
 				if m.advancedBitrate != "" {
 					bitrateText := map[string]string{
@@ -1295,7 +1359,7 @@ func (m SearchModel) View() string {
 						"2": "Medium (96-128 kbps)",
 						"3": "High (≥ 192 kbps)",
 					}
-					criteria.WriteString(fmt.Sprintf("  Bitrate: %s\n", bitrateText[m.advancedBitrate]))
+					fmt.Fprintf(&criteria, "  Bitrate: %s\n", bitrateText[m.advancedBitrate])
 				}
 			}
 
@@ -1341,13 +1405,20 @@ func (m SearchModel) View() string {
 			if m.metadataManager != nil {
 				metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 			}
-			content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
+			// Get rating for display
+			var rating int
+			if m.ratingsManager != nil {
+				if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+					rating = r.Rating
+				}
+			}
+			content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {
 				// Use the cached track (kept fresh by monitorMetadata every 5 s) to
 				// avoid a blocking IPC socket call inside the render path.
-				if track := m.player.GetCachedTrack(); track != "" && track != m.selectedStation.Name {
+				if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
 					content.WriteString(successStyle().Render("▶ Now Playing:"))
 					content.WriteString(" ")
 					content.WriteString(infoStyle().Render(track))
@@ -1375,7 +1446,7 @@ func (m SearchModel) View() string {
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
-			Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • v: Vote • ?: Help",
+			Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • r: Rate • v: Vote • ?: Help",
 		}, m.height)
 
 	case searchStateSelectList:
@@ -1444,7 +1515,14 @@ func (m SearchModel) renderStationInfo() string {
 		if m.metadataManager != nil {
 			metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 		}
-		content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, false, metadata))
+		// Get rating for display
+		var rating int
+		if m.ratingsManager != nil {
+			if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+				rating = r.Rating
+			}
+		}
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
 		content.WriteString("\n\n")
 	}
 

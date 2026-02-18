@@ -59,6 +59,10 @@ type PlayModel struct {
 	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
 	trackHistory     []string // Last 5 tracks played
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -644,6 +648,11 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "?":
 		// Toggle help overlay
@@ -759,7 +768,62 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.undoLastBlock()
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
 	}
+	return m, nil
+}
+
+// handleRatingModeInput handles input when in rating mode
+func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+			startTick := m.saveMessageTime <= 0
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		return m, nil
+	}
+
+	// Handle remove rating (0 or r)
+	if key == "0" || key == "r" {
+		_ = m.ratingsManager.RemoveRating(m.selectedStation.StationUUID)
+		m.saveMessage = "✓ Rating removed"
+		startTick := m.saveMessageTime <= 0
+		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
+		return m, nil
+	}
+
+	// Any other key - just clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -994,14 +1058,21 @@ func (m PlayModel) viewPlaying() string {
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
-	content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
+	// Get rating for display
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
+		}
+	}
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
 		// Use the cached track (kept fresh by monitorMetadata every 5 s) to
 		// avoid a blocking IPC socket call inside the render path.
-		if track := m.player.GetCachedTrack(); track != "" && track != m.selectedStation.Name {
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
 			content.WriteString(infoStyle().Render(track))
@@ -1034,7 +1105,7 @@ func (m PlayModel) viewPlaying() string {
 				trackStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 			}
 
-			content.WriteString(fmt.Sprintf("%s %s\n", indicator, trackStyle.Render(track)))
+			fmt.Fprintf(&content, "%s %s\n", indicator, trackStyle.Render(track))
 		}
 	}
 
@@ -1061,7 +1132,7 @@ func (m PlayModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "b: Block • u: Undo • f: Favorites • v: Vote • 0: Main Menu • ?: Help",
+		Help:    "b: Block • u: Undo • f: Favorites • r: Rate • v: Vote • 0: Main Menu • ?: Help",
 	}, m.height)
 }
 

@@ -103,10 +103,11 @@ tera
 # 2) Search Stations     - Find new stations
 # 3) Most Played         - Your listening statistics
 # 4) Manage Lists        - Create/edit/delete favorite lists
-# 5) Block List          - Manage blocked stations
-# 6) I Feel Lucky        - Random station by keyword
-# 7) Gist Management     - Backup/restore via GitHub
-# 8) Settings            - Configure TERA
+# 5) Top Rated           - Browse your highest-rated stations
+# 6) Block List          - Manage blocked stations
+# 7) I Feel Lucky        - Random station by keyword
+# 8) Gist Management     - Backup/restore via GitHub
+# 9) Settings            - Configure TERA
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
@@ -179,7 +180,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "5. Block List" to:
+From main menu, select "6. Block List" to:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)
@@ -197,6 +198,36 @@ From main menu, select "5. Block List" to:
 - Linux: `~/.config/tera/data/blocklist.json`
 - macOS: `~/Library/Application Support/tera/data/blocklist.json`
 - Windows: `%APPDATA%\tera\data\blocklist.json`
+
+### Star Ratings
+
+Rate your favorite stations from 1-5 stars to build your personal collection of top stations.
+
+**How to Rate:**
+- While playing any station, press `r` then `1-5` to rate
+- Press `r` then `0` to remove a rating
+- Stars appear in search results, favorites, and the playing screen
+
+**Top Rated View:**
+From main menu, select "5. Top Rated" to:
+- Browse all your rated stations sorted by rating
+- Filter by minimum star rating (press `f`)
+- Sort by rating high/low or recently rated (press `s`)
+- Play stations directly from the list
+
+**Keyboard Shortcuts:**
+
+| Screen    | Key       | Action           |
+| --------- | --------- | ---------------- |
+| Playing   | `*1-5`    | Rate station     |
+| Playing   | `*0`/`*r` | Remove rating    |
+| Top Rated | `f`       | Cycle filter     |
+| Top Rated | `s`       | Cycle sort order |
+
+**Storage Location:**
+- Linux: `~/.config/tera/data/station_ratings.json`
+- macOS: `~/Library/Application Support/tera/data/station_ratings.json`
+- Windows: `%APPDATA%\tera\data\station_ratings.json`
 
 ### I Feel Lucky
 
@@ -490,7 +521,7 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
-| `1-8`    | Quick select menu item       |
+| `1-9`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
 ### Playback Controls
@@ -501,6 +532,7 @@ You can edit this file directly or use the Settings menu.
 | `*`     | Volume up (+5%)   |
 | `/`     | Volume down (-5%) |
 | `m`     | Toggle mute       |
+| `r`     | Rate station      |
 | `b`     | Block station     |
 | `u`     | Undo block (5s)   |
 

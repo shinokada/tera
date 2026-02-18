@@ -22,10 +22,23 @@ type StationMetadata struct {
 	TotalDurationSeconds int64     `json:"total_duration_seconds"`
 }
 
+// CachedStation stores essential station info for display in Most Played
+type CachedStation struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Country  string `json:"country,omitempty"`
+	Language string `json:"language,omitempty"`
+	Tags     string `json:"tags,omitempty"`
+	Codec    string `json:"codec,omitempty"`
+	Bitrate  int    `json:"bitrate,omitempty"`
+	Votes    int    `json:"votes,omitempty"`
+}
+
 // MetadataStore holds all station metadata (no mutex - protected by manager)
 type MetadataStore struct {
-	Stations map[string]*StationMetadata `json:"stations"`
-	Version  int                         `json:"version"`
+	Stations     map[string]*StationMetadata `json:"stations"`
+	StationCache map[string]*CachedStation   `json:"station_cache,omitempty"` // Cache station info for display
+	Version      int                         `json:"version"`
 }
 
 // StationWithMetadata combines station info with its metadata for display
@@ -39,7 +52,7 @@ type MetadataManager struct {
 	dataPath      string
 	store         *MetadataStore
 	mu            sync.RWMutex
-	saveMu        sync.Mutex  // serializes concurrent Save() calls
+	saveMu        sync.Mutex // serializes concurrent Save() calls
 	savePending   atomic.Bool
 	currentPlay   string    // Track current playing station to prevent duplicates
 	playStartTime time.Time // When current play started
@@ -57,8 +70,9 @@ func NewMetadataManager(dataPath string) (*MetadataManager, error) {
 	m := &MetadataManager{
 		dataPath: dataPath,
 		store: &MetadataStore{
-			Stations: make(map[string]*StationMetadata),
-			Version:  1,
+			Stations:     make(map[string]*StationMetadata),
+			StationCache: make(map[string]*CachedStation),
+			Version:      1,
 		},
 		ctx:    ctx,
 		cancel: cancel,
@@ -103,9 +117,12 @@ func (m *MetadataManager) Load() error {
 		return fmt.Errorf("failed to parse metadata file: %w", err)
 	}
 
-	// Ensure stations map is initialized
+	// Ensure maps are initialized
 	if store.Stations == nil {
 		store.Stations = make(map[string]*StationMetadata)
+	}
+	if store.StationCache == nil {
+		store.StationCache = make(map[string]*CachedStation)
 	}
 
 	m.store = &store
@@ -147,8 +164,13 @@ func (m *MetadataManager) Save() error {
 	return nil
 }
 
-// StartPlay records that a station started playing
-func (m *MetadataManager) StartPlay(stationUUID string) error {
+// StartPlay records that a station started playing and caches station info
+func (m *MetadataManager) StartPlay(station *api.Station) error {
+	if station == nil {
+		return nil
+	}
+	stationUUID := station.StationUUID
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -174,6 +196,18 @@ func (m *MetadataManager) StartPlay(stationUUID string) error {
 			FirstPlayed: now,
 		}
 		m.store.Stations[stationUUID] = metadata
+	}
+
+	// Cache station info for later display
+	m.store.StationCache[stationUUID] = &CachedStation{
+		Name:     station.Name,
+		URL:      station.URLResolved,
+		Country:  station.Country,
+		Language: station.Language,
+		Tags:     station.Tags,
+		Codec:    station.Codec,
+		Bitrate:  station.Bitrate,
+		Votes:    station.Votes,
 	}
 
 	// Increment play count and update last played
@@ -232,14 +266,27 @@ func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata {
 
 // sortedStationsLocked collects all station entries, sorts them by less, and
 // truncates to at most limit results (0 = no limit). Must be called with RLock held.
-// NOTE: The Station field in each result contains only StationUUID; callers are
-// responsible for enriching full station details via the API if needed.
+// Station info is populated from the cache if available.
 func (m *MetadataManager) sortedStationsLocked(less func(a, b StationWithMetadata) bool, limit int) []StationWithMetadata {
 	result := make([]StationWithMetadata, 0, len(m.store.Stations))
 	for uuid, metadata := range m.store.Stations {
 		metaCopy := *metadata
+		station := api.Station{StationUUID: uuid}
+
+		// Populate station info from cache if available
+		if cached, ok := m.store.StationCache[uuid]; ok {
+			station.Name = cached.Name
+			station.URLResolved = cached.URL
+			station.Country = cached.Country
+			station.Language = cached.Language
+			station.Tags = cached.Tags
+			station.Codec = cached.Codec
+			station.Bitrate = cached.Bitrate
+			station.Votes = cached.Votes
+		}
+
 		result = append(result, StationWithMetadata{
-			Station:  api.Station{StationUUID: uuid},
+			Station:  station,
 			Metadata: &metaCopy,
 		})
 	}

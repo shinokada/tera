@@ -32,10 +32,11 @@ const (
 	screenAppearanceSettings
 	screenBlocklist
 	screenMostPlayed
+	screenTopRated
 )
 
 // Main menu configuration
-const mainMenuItemCount = 8
+const mainMenuItemCount = 9
 
 type App struct {
 	screen                   Screen
@@ -47,6 +48,7 @@ type App struct {
 	listManagementScreen     ListManagementModel
 	luckyScreen              LuckyModel
 	mostPlayedScreen         MostPlayedModel
+	topRatedScreen           TopRatedModel
 	gistScreen               GistModel
 	settingsScreen           SettingsModel
 	shuffleSettingsScreen    ShuffleSettingsModel
@@ -56,6 +58,8 @@ type App struct {
 	apiClient                *api.Client
 	blocklistManager         *blocklist.Manager
 	metadataManager          *storage.MetadataManager // Track play statistics
+	ratingsManager           *storage.RatingsManager  // Track station ratings
+	starRenderer             *components.StarRenderer // Render star ratings
 	favoritePath             string
 	quickFavorites           []api.Station
 	quickFavPlayer           *player.MPVPlayer
@@ -123,6 +127,15 @@ func NewApp() *App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to initialize metadata manager: %v\n", err)
 	}
 
+	// Initialize ratings manager for star ratings
+	ratingsMgr, err := storage.NewRatingsManager(dataPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize ratings manager: %v\n", err)
+	}
+
+	// Initialize star renderer
+	starRenderer := components.NewStarRenderer(true) // Use unicode by default
+
 	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
@@ -131,6 +144,8 @@ func NewApp() *App {
 		helpModel:        components.NewHelpModel(components.CreateMainMenuHelp()),
 		blocklistManager: blocklistMgr,
 		metadataManager:  metadataMgr,
+		ratingsManager:   ratingsMgr,
+		starRenderer:     starRenderer,
 	}
 
 	// Set metadata manager on players for play tracking
@@ -158,11 +173,12 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Play from Favorites", "", "1"),
 		components.NewMenuItem("Search Stations", "", "2"),
 		components.NewMenuItem("Most Played", "", "3"),
-		components.NewMenuItem("Manage Lists", "", "4"),
-		components.NewMenuItem("Block List", "", "5"),
-		components.NewMenuItem("I Feel Lucky", "", "6"),
-		components.NewMenuItem("Gist Management", "", "7"),
-		components.NewMenuItem("Settings", "", "8"),
+		components.NewMenuItem("Top Rated", "", "4"),
+		components.NewMenuItem("Manage Lists", "", "5"),
+		components.NewMenuItem("Block List", "", "6"),
+		components.NewMenuItem("I Feel Lucky", "", "7"),
+		components.NewMenuItem("Gist Management", "", "8"),
+		components.NewMenuItem("Settings", "", "9"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -226,9 +242,16 @@ func (a *App) Cleanup() {
 		if a.mostPlayedScreen.player != nil {
 			_ = a.mostPlayedScreen.player.Stop()
 		}
+		if a.topRatedScreen.player != nil {
+			_ = a.topRatedScreen.player.Stop()
+		}
 		// Close metadata manager to save pending changes
 		if a.metadataManager != nil {
 			_ = a.metadataManager.Close()
+		}
+		// Close ratings manager to save pending changes
+		if a.ratingsManager != nil {
+			_ = a.ratingsManager.Close()
 		}
 	})
 }
@@ -288,6 +311,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.playScreen.player.SetMetadataManager(a.metadataManager)
 				}
 			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.playScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.playScreen.starRenderer = a.starRenderer
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -302,6 +332,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if a.searchScreen.player != nil {
 					a.searchScreen.player.SetMetadataManager(a.metadataManager)
 				}
+			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.searchScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.searchScreen.starRenderer = a.starRenderer
 			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
@@ -326,6 +363,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.luckyScreen.player.SetMetadataManager(a.metadataManager)
 				}
 			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.luckyScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.luckyScreen.starRenderer = a.starRenderer
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.luckyScreen.width = a.width
@@ -338,12 +382,31 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.metadataManager != nil && a.mostPlayedScreen.player != nil {
 				a.mostPlayedScreen.player.SetMetadataManager(a.metadataManager)
 			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.mostPlayedScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.mostPlayedScreen.starRenderer = a.starRenderer
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.mostPlayedScreen.width = a.width
 				a.mostPlayedScreen.height = a.height
 			}
 			return a, a.mostPlayedScreen.Init()
+		case screenTopRated:
+			a.topRatedScreen = NewTopRatedModel(a.ratingsManager, a.metadataManager, a.starRenderer, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking
+			if a.metadataManager != nil && a.topRatedScreen.player != nil {
+				a.topRatedScreen.player.SetMetadataManager(a.metadataManager)
+			}
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.topRatedScreen.width = a.width
+				a.topRatedScreen.height = a.height
+			}
+			return a, a.topRatedScreen.Init()
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
 			// Set dimensions immediately if we have them
@@ -540,6 +603,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	case screenMostPlayed:
 		a.mostPlayedScreen, cmd = a.mostPlayedScreen.Update(msg)
+		return a, cmd
+	case screenTopRated:
+		a.topRatedScreen, cmd = a.topRatedScreen.Update(msg)
 		return a, cmd
 	}
 
@@ -779,23 +845,27 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenMostPlayed}
 		}
-	case 3: // Manage Lists
+	case 3: // Top Rated
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenTopRated}
+		}
+	case 4: // Manage Lists
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenList}
 		}
-	case 4: // Block List
+	case 5: // Block List
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenBlocklist}
 		}
-	case 5: // I Feel Lucky
+	case 6: // I Feel Lucky
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 6: // Gist Management
+	case 7: // Gist Management
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
-	case 7: // Settings
+	case 8: // Settings
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSettings}
 		}
@@ -855,6 +925,8 @@ func (a *App) View() string {
 		return a.blocklistScreen.View()
 	case screenMostPlayed:
 		return a.mostPlayedScreen.View()
+	case screenTopRated:
+		return a.topRatedScreen.View()
 	}
 	return "Unknown screen"
 }
@@ -905,11 +977,12 @@ func (a *App) viewMainMenu() string {
 		{"1", "Play from Favorites"},
 		{"2", "Search Stations"},
 		{"3", "Most Played"},
-		{"4", "Manage Lists"},
-		{"5", "Block List"},
-		{"6", "I Feel Lucky"},
-		{"7", "Gist Management"},
-		{"8", "Settings"},
+		{"4", "Top Rated"},
+		{"5", "Manage Lists"},
+		{"6", "Block List"},
+		{"7", "I Feel Lucky"},
+		{"8", "Gist Management"},
+		{"9", "Settings"},
 	}
 
 	for i, item := range menuItems {
@@ -928,6 +1001,13 @@ func (a *App) viewMainMenu() string {
 		content.WriteString("\n")
 		content.WriteString(successStyle().Render("♫ Now Playing: "))
 		content.WriteString(stationNameStyle().Render(a.playingStation.TrimName()))
+		// Show star rating if rated
+		if a.ratingsManager != nil {
+			if r := a.ratingsManager.GetRating(a.playingStation.StationUUID); r != nil && a.starRenderer != nil {
+				content.WriteString(" ")
+				content.WriteString(a.starRenderer.RenderCompactPlain(r.Rating))
+			}
+		}
 		content.WriteString("\n")
 	}
 
@@ -954,7 +1034,7 @@ func (a *App) viewMainMenu() string {
 				stationInfo.WriteString(" • ")
 				stationInfo.WriteString(station.Codec)
 				if station.Bitrate > 0 {
-					stationInfo.WriteString(fmt.Sprintf(" %dkbps", station.Bitrate))
+					fmt.Fprintf(&stationInfo, " %dkbps", station.Bitrate)
 				}
 			}
 

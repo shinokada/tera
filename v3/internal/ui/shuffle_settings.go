@@ -394,9 +394,9 @@ func (m ShuffleSettingsModel) viewMenu() string {
 	// Current settings summary
 	content.WriteString(subtitleStyle().Render("Current Settings:"))
 	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("  Auto-advance:           %s\n", boolToEnabledDisabled(m.config.AutoAdvance)))
-	content.WriteString(fmt.Sprintf("  Auto-advance interval:  %d minutes\n", m.config.IntervalMinutes))
-	content.WriteString(fmt.Sprintf("  Remember history:       %s (Last %d stations)\n", boolToEnabledDisabled(m.config.RememberHistory), m.config.MaxHistory))
+	fmt.Fprintf(&content, "  Auto-advance:           %s\n", boolToEnabledDisabled(m.config.AutoAdvance))
+	fmt.Fprintf(&content, "  Auto-advance interval:  %d minutes\n", m.config.IntervalMinutes)
+	fmt.Fprintf(&content, "  Remember history:       %s (Last %d stations)\n", boolToEnabledDisabled(m.config.RememberHistory), m.config.MaxHistory)
 	content.WriteString("\n")
 
 	// Menu
@@ -437,7 +437,7 @@ func (m ShuffleSettingsModel) viewInterval() string {
 
 	content.WriteString(subtitleStyle().Render("Select auto-advance interval:"))
 	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("  Current: %d minutes\n", m.config.IntervalMinutes))
+	fmt.Fprintf(&content, "  Current: %d minutes\n", m.config.IntervalMinutes)
 	content.WriteString("\n")
 
 	// Interval list
@@ -468,7 +468,7 @@ func (m ShuffleSettingsModel) viewHistorySize() string {
 
 	content.WriteString(subtitleStyle().Render("Select shuffle history size:"))
 	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("  Current: %d stations\n", m.config.MaxHistory))
+	fmt.Fprintf(&content, "  Current: %d stations\n", m.config.MaxHistory)
 	content.WriteString("\n")
 
 	// History size list

@@ -10,7 +10,27 @@ import (
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/theme"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
+
+// IsValidTrackMetadata returns true if the track string appears to be actual
+// stream metadata (song title/artist) rather than a URL path or filename.
+func IsValidTrackMetadata(track, stationName string) bool {
+	if track == "" || track == stationName {
+		return false
+	}
+	// Filter out URL-like tracks (no actual metadata from stream)
+	if strings.Contains(track, "?") || strings.HasPrefix(track, "http") {
+		return false
+	}
+	// Filter out common file extensions that indicate no metadata
+	if strings.HasSuffix(strings.ToLower(track), ".mp3") ||
+		strings.HasSuffix(strings.ToLower(track), ".aac") ||
+		strings.HasSuffix(strings.ToLower(track), ".ogg") {
+		return false
+	}
+	return true
+}
 
 // Global header renderer instance (initialized in app.go)
 var (
@@ -288,26 +308,26 @@ func RenderStationDetails(station api.Station) string {
 func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 	var s strings.Builder
 
-	s.WriteString(fmt.Sprintf("Name:    %s\n", boldStyle().Render(station.TrimName())))
+	fmt.Fprintf(&s, "Name:    %s\n", boldStyle().Render(station.TrimName()))
 
 	if station.Tags != "" {
-		s.WriteString(fmt.Sprintf("Tags:    %s\n", station.Tags))
+		fmt.Fprintf(&s, "Tags:    %s\n", station.Tags)
 	}
 
 	if station.Country != "" {
-		s.WriteString(fmt.Sprintf("Country: %s", station.Country))
+		fmt.Fprintf(&s, "Country: %s", station.Country)
 		if station.State != "" {
-			s.WriteString(fmt.Sprintf(", %s", station.State))
+			fmt.Fprintf(&s, ", %s", station.State)
 		}
 		s.WriteString("\n")
 	}
 
 	if station.Language != "" {
-		s.WriteString(fmt.Sprintf("Language: %s\n", station.Language))
+		fmt.Fprintf(&s, "Language: %s\n", station.Language)
 	}
 
 	// Votes with voted indicator
-	s.WriteString(fmt.Sprintf("Votes:   %d", station.Votes))
+	fmt.Fprintf(&s, "Votes:   %d", station.Votes)
 	if voted {
 		s.WriteString("  ")
 		s.WriteString(successStyle().Render("✓ You voted"))
@@ -315,9 +335,9 @@ func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 	s.WriteString("\n")
 
 	if station.Codec != "" {
-		s.WriteString(fmt.Sprintf("Codec:   %s", station.Codec))
+		fmt.Fprintf(&s, "Codec:   %s", station.Codec)
 		if station.Bitrate > 0 {
-			s.WriteString(fmt.Sprintf(" @ %d kbps", station.Bitrate))
+			fmt.Fprintf(&s, " @ %d kbps", station.Bitrate)
 		}
 		s.WriteString("\n")
 	}
@@ -349,5 +369,31 @@ func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata 
 		s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
 		s.WriteString("\n")
 	}
+	return s.String()
+}
+
+// RenderStationDetailsWithRating renders station details with play statistics and star rating
+func RenderStationDetailsWithRating(station api.Station, voted bool, metadata *storage.StationMetadata, rating int, starRenderer *components.StarRenderer) string {
+	// Delegate base formatting (includes metadata) to avoid duplication
+	base := RenderStationDetailsWithMetadata(station, voted, metadata)
+
+	var s strings.Builder
+	s.WriteString(base)
+
+	// Show rating or hint to rate
+	if starRenderer != nil {
+		s.WriteString("\n")
+		if rating > 0 {
+			// Show current rating
+			accentStyle := lipgloss.NewStyle().Foreground(theme.Current().HighlightColor())
+			s.WriteString(accentStyle.Render(starRenderer.RenderCompactPlain(rating)))
+		} else {
+			// Show hint to rate (unrated)
+			dimStyle := lipgloss.NewStyle().Foreground(colorGray())
+			s.WriteString(dimStyle.Render("☆ ☆ ☆ ☆ ☆ [r: Rate]"))
+		}
+		s.WriteString("\n")
+	}
+
 	return s.String()
 }
