@@ -504,7 +504,7 @@ func (m MostPlayedModel) viewList() string {
 	// Show save message if any
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
-		if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Sorted") || strings.HasPrefix(m.saveMessage, "Volume") {
+		if m.saveMessageSuccess {
 			content.WriteString(successStyle().Render(m.saveMessage))
 		} else {
 			content.WriteString(infoStyle().Render(m.saveMessage))
@@ -559,7 +559,11 @@ func (m MostPlayedModel) viewPlaying() string {
 	// Show save message
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
-		content.WriteString(successStyle().Render(m.saveMessage))
+		if m.saveMessageSuccess {
+			content.WriteString(successStyle().Render(m.saveMessage))
+		} else {
+			content.WriteString(infoStyle().Render(m.saveMessage))
+		}
 	}
 
 	return RenderPage(PageLayout{

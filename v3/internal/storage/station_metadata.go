@@ -220,13 +220,10 @@ func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata {
 	return nil
 }
 
-// GetTopPlayed returns stations sorted by play count (most played first)
-func (m *MetadataManager) GetTopPlayed(limit int) []StationWithMetadata {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// Collect all stations with metadata
-	var result []StationWithMetadata
+// sortedStationsLocked collects all station entries, sorts them by less, and
+// truncates to at most limit results (0 = no limit). Must be called with RLock held.
+func (m *MetadataManager) sortedStationsLocked(less func(a, b StationWithMetadata) bool, limit int) []StationWithMetadata {
+	result := make([]StationWithMetadata, 0, len(m.store.Stations))
 	for uuid, metadata := range m.store.Stations {
 		metaCopy := *metadata
 		result = append(result, StationWithMetadata{
@@ -234,78 +231,44 @@ func (m *MetadataManager) GetTopPlayed(limit int) []StationWithMetadata {
 			Metadata: &metaCopy,
 		})
 	}
-
-	// Sort by play count (descending)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Metadata.PlayCount > result[j].Metadata.PlayCount
-	})
-
-	// Limit results
+	sort.Slice(result, func(i, j int) bool { return less(result[i], result[j]) })
 	if limit > 0 && len(result) > limit {
 		result = result[:limit]
 	}
-
 	return result
+}
+
+// GetTopPlayed returns stations sorted by play count (most played first)
+func (m *MetadataManager) GetTopPlayed(limit int) []StationWithMetadata {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.sortedStationsLocked(func(a, b StationWithMetadata) bool {
+		return a.Metadata.PlayCount > b.Metadata.PlayCount
+	}, limit)
 }
 
 // GetRecentlyPlayed returns stations sorted by last played time (most recent first)
 func (m *MetadataManager) GetRecentlyPlayed(limit int) []StationWithMetadata {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	// Collect all stations with metadata
-	var result []StationWithMetadata
-	for uuid, metadata := range m.store.Stations {
-		metaCopy := *metadata
-		result = append(result, StationWithMetadata{
-			Station:  api.Station{StationUUID: uuid},
-			Metadata: &metaCopy,
-		})
-	}
-
-	// Sort by last played (most recent first)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Metadata.LastPlayed.After(result[j].Metadata.LastPlayed)
-	})
-
-	// Limit results
-	if limit > 0 && len(result) > limit {
-		result = result[:limit]
-	}
-
-	return result
+	return m.sortedStationsLocked(func(a, b StationWithMetadata) bool {
+		return a.Metadata.LastPlayed.After(b.Metadata.LastPlayed)
+	}, limit)
 }
 
 // GetFirstPlayed returns stations sorted by first played time (oldest first)
 func (m *MetadataManager) GetFirstPlayed(limit int) []StationWithMetadata {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	var result []StationWithMetadata
-	for uuid, metadata := range m.store.Stations {
-		metaCopy := *metadata
-		result = append(result, StationWithMetadata{
-			Station:  api.Station{StationUUID: uuid},
-			Metadata: &metaCopy,
-		})
-	}
-
-	// Sort by first played (oldest first)
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].Metadata.FirstPlayed.IsZero() {
+	return m.sortedStationsLocked(func(a, b StationWithMetadata) bool {
+		if a.Metadata.FirstPlayed.IsZero() {
 			return false
 		}
-		if result[j].Metadata.FirstPlayed.IsZero() {
+		if b.Metadata.FirstPlayed.IsZero() {
 			return true
 		}
-		return result[i].Metadata.FirstPlayed.Before(result[j].Metadata.FirstPlayed)
-	})
-
-	if limit > 0 && len(result) > limit {
-		result = result[:limit]
-	}
-
-	return result
+		return a.Metadata.FirstPlayed.Before(b.Metadata.FirstPlayed)
+	}, limit)
 }
 
 // GetAllStationUUIDs returns all station UUIDs with metadata
@@ -335,7 +298,7 @@ func (m *MetadataManager) ClearAll() error {
 	m.playStartTime = time.Time{}
 	m.mu.Unlock()
 
-	m.savePending.Store(true)
+	// Save is called unconditionally, so no need to set savePending here.
 	return m.Save()
 }
 
