@@ -39,6 +39,7 @@ type MetadataManager struct {
 	dataPath      string
 	store         *MetadataStore
 	mu            sync.RWMutex
+	saveMu        sync.Mutex  // serializes concurrent Save() calls
 	savePending   atomic.Bool
 	currentPlay   string    // Track current playing station to prevent duplicates
 	playStartTime time.Time // When current play started
@@ -113,6 +114,9 @@ func (m *MetadataManager) Load() error {
 
 // Save saves metadata to disk
 func (m *MetadataManager) Save() error {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+
 	m.mu.RLock()
 	data, err := json.MarshalIndent(m.store, "", "  ")
 	m.mu.RUnlock()
@@ -287,7 +291,7 @@ func (m *MetadataManager) GetFirstPlayed(limit int) []StationWithMetadata {
 	}, limit)
 }
 
-// GetAllStationUUIDs returns all station UUIDs with metadata
+// GetAllStationUUIDs returns all station UUIDs with metadata in sorted order.
 func (m *MetadataManager) GetAllStationUUIDs() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -296,6 +300,7 @@ func (m *MetadataManager) GetAllStationUUIDs() []string {
 	for uuid := range m.store.Stations {
 		uuids = append(uuids, uuid)
 	}
+	sort.Strings(uuids)
 	return uuids
 }
 
@@ -399,8 +404,14 @@ func FormatLastPlayed(t time.Time) string {
 			return "1 week ago"
 		}
 		return fmt.Sprintf("%d weeks ago", weeks)
+	case diff < 365*24*time.Hour:
+		months := int(diff.Hours() / (24 * 30))
+		if months == 1 {
+			return "1 month ago"
+		}
+		return fmt.Sprintf("%d months ago", months)
 	default:
-		// Format as date for older entries
+		// Format as date for entries older than a year
 		return t.Format("Jan 2, 2006")
 	}
 }
