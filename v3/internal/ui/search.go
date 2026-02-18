@@ -971,7 +971,13 @@ func (m SearchModel) checkPlaybackSignal(station api.Station, attempt int) tea.C
 		}
 
 		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
-			return playbackStalledMsg{station: station}
+			// Only report stalled if the process actually died.
+			// IPC checks can fail while audio is playing (slow socket,
+			// buffering, missing metadata), so trust IsPlaying() here.
+			if !m.player.IsPlaying() {
+				return playbackStalledMsg{station: station}
+			}
+			return playbackStartedMsg{}
 		}
 
 		return checkSignalMsg{station: station, attempt: attempt + 1}
