@@ -398,7 +398,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `7` from the main menu to open Settings
+1. Press `8` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version

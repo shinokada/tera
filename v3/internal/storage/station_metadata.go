@@ -236,7 +236,16 @@ func (m *MetadataManager) sortedStationsLocked(less func(a, b StationWithMetadat
 			Metadata: &metaCopy,
 		})
 	}
-	sort.Slice(result, func(i, j int) bool { return less(result[i], result[j]) })
+	sort.Slice(result, func(i, j int) bool {
+		if less(result[i], result[j]) {
+			return true
+		}
+		if less(result[j], result[i]) {
+			return false
+		}
+		// Tiebreak by UUID for deterministic ordering across calls
+		return result[i].Station.StationUUID < result[j].Station.StationUUID
+	})
 	if limit > 0 && len(result) > limit {
 		result = result[:limit]
 	}
