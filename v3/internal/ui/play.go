@@ -772,7 +772,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter rating mode
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
-			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
 			m.saveMessageTime = -1 // Persistent until action
 			return m, nil
 		}
@@ -800,14 +800,14 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				stars = m.starRenderer.RenderCompactPlain(rating) + " "
 			}
 			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
-			startTick := m.saveMessageTime <= 0
+			startTick := m.saveMessageTime == 0
 			m.saveMessageTime = messageDisplayShort
 			if startTick {
 				return m, tickEverySecond()
 			}
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
-			startTick := m.saveMessageTime <= 0
+			startTick := m.saveMessageTime == 0
 			m.saveMessageTime = messageDisplayShort
 			if startTick {
 				return m, tickEverySecond()
@@ -816,14 +816,14 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle remove rating (0 or r)
-	if key == "0" || key == "r" {
+	// Handle remove rating (0 only)
+	if key == "0" {
 		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
 			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
 		} else {
 			m.saveMessage = "✓ Rating removed"
 		}
-		startTick := m.saveMessageTime <= 0
+		startTick := m.saveMessageTime == 0
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -831,7 +831,7 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Any other key - just clear the message
+	// Any other key (including r, esc) - cancel rating mode, clear the message
 	m.saveMessage = ""
 	m.saveMessageTime = 0
 	return m, nil

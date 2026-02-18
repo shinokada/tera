@@ -177,6 +177,7 @@ Rate your favorite stations from 1-5 stars to build your personal collection of 
 **How to Rate:**
 - While playing any station, press `r` then `1-5` to rate
 - Press `r` then `0` to remove a rating
+- Press `r` then any other key (or `Esc`) to cancel without changing the rating
 - Stars appear in search results, favorites, and the playing screen
 
 **Top Rated View:**
@@ -616,6 +617,9 @@ tera/
 ├── gist_metadata.json      # Your gist history
 ├── tokens/
 │   └── github_token        # GitHub Personal Access Token
+├── data/
+│   ├── station_metadata.json  # Play statistics
+│   └── station_ratings.json   # Star ratings
 └── favorites/
     ├── My-favorites.json   # Quick play list (main menu 10+)
     ├── Rock.json           # Your custom lists
