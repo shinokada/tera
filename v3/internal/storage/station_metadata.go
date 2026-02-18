@@ -197,8 +197,10 @@ func (m *MetadataManager) stopPlayLocked(stationUUID string) {
 	// Calculate duration
 	if !m.playStartTime.IsZero() {
 		duration := time.Since(m.playStartTime)
-		if metadata, exists := m.store.Stations[stationUUID]; exists {
-			metadata.TotalDurationSeconds += int64(duration.Seconds())
+		if duration > 0 {
+			if metadata, exists := m.store.Stations[stationUUID]; exists {
+				metadata.TotalDurationSeconds += int64(duration.Seconds())
+			}
 		}
 	}
 
