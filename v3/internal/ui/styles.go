@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/theme"
 )
 
@@ -162,7 +163,12 @@ func renderHeader() string {
 	headerRendererMu.RUnlock()
 
 	if renderer != nil {
-		return renderer.Render()
+		result := renderer.Render()
+		// Ensure header ends with newline for proper layout
+		if result != "" && !strings.HasSuffix(result, "\n") {
+			result += "\n"
+		}
+		return result
 	}
 	// Fallback to default if renderer not initialized
 	return lipgloss.NewStyle().
@@ -316,5 +322,32 @@ func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 		s.WriteString("\n")
 	}
 
+	return s.String()
+}
+
+// RenderStationDetailsWithMetadata renders station details with play statistics
+func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata *storage.StationMetadata) string {
+	// Delegate base formatting to avoid duplication
+	base := RenderStationDetailsWithVote(station, voted)
+
+	// Append play statistics only if data exists
+	if metadata == nil || metadata.PlayCount == 0 {
+		return base
+	}
+
+	var s strings.Builder
+	s.WriteString(base)
+	s.WriteString("\n")
+	dimStyle := lipgloss.NewStyle().Foreground(colorGray())
+	if metadata.PlayCount == 1 {
+		s.WriteString(dimStyle.Render("🎵 Played 1 time"))
+	} else {
+		s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+	}
+	s.WriteString("\n")
+	if !metadata.LastPlayed.IsZero() {
+		s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
+		s.WriteString("\n")
+	}
 	return s.String()
 }

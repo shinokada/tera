@@ -56,6 +56,7 @@ type PlayModel struct {
 	helpModel        components.HelpModel   // Help overlay
 	votedStations    *storage.VotedStations // Track voted stations
 	blocklistManager *blocklist.Manager
+	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
 	trackHistory     []string // Last 5 tracks played
 }
@@ -153,14 +154,27 @@ func (m PlayModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cmd
 			return nil
 		}
 
+		// Check for audio bitrate
 		bitrate, err := m.player.GetAudioBitrate()
 		if err == nil && bitrate > 0 {
-			// Signal detected!
+			// Signal detected via bitrate!
+			return playbackStartedMsg{}
+		}
+
+		// Also check for media-title as fallback (some streams don't report bitrate)
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" {
+			// Signal detected via media title!
 			return playbackStartedMsg{}
 		}
 
 		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
-			return favoritesPlaybackStalledMsg{station: station}
+			// Only report stalled if the process actually died.
+			// IPC checks can fail while audio is playing (slow socket,
+			// buffering, missing metadata), so trust IsPlaying() here.
+			if !m.player.IsPlaying() {
+				return favoritesPlaybackStalledMsg{station: station}
+			}
+			return playbackStartedMsg{}
 		}
 
 		return favoritesCheckSignalMsg{station: station, attempt: attempt + 1}
@@ -973,15 +987,27 @@ func (m PlayModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info with voted status integrated
-	// Guard against nil votedStations
+	// Station info with voted status and metadata integrated
 	hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-	content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
+	// Get metadata for display
+	var metadata *storage.StationMetadata
+	if m.metadataManager != nil {
+		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+	}
+	content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle().Render("▶ Playing..."))
+		// Use the cached track (kept fresh by monitorMetadata every 5 s) to
+		// avoid a blocking IPC socket call inside the render path.
+		if track := m.player.GetCachedTrack(); track != "" && track != m.selectedStation.Name {
+			content.WriteString(successStyle().Render("▶ Now Playing:"))
+			content.WriteString(" ")
+			content.WriteString(infoStyle().Render(track))
+		} else {
+			content.WriteString(successStyle().Render("▶ Playing..."))
+		}
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}

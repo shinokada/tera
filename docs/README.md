@@ -12,6 +12,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
 - ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
+- 📊 **Most Played** - View your listening history sorted by play count, last played, or first played
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
@@ -100,11 +101,12 @@ tera
 # Main Menu Options:
 # 1) Play from Favorites - Browse your saved lists
 # 2) Search Stations     - Find new stations
-# 3) Manage Lists        - Create/edit/delete favorite lists
-# 4) Block List          - Manage blocked stations
-# 5) I Feel Lucky        - Random station by keyword
-# 6) Gist Management     - Backup/restore via GitHub
-# 7) Settings            - Configure TERA
+# 3) Most Played         - Your listening statistics
+# 4) Manage Lists        - Create/edit/delete favorite lists
+# 5) Block List          - Manage blocked stations
+# 6) I Feel Lucky        - Random station by keyword
+# 7) Gist Management     - Backup/restore via GitHub
+# 8) Settings            - Configure TERA
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
@@ -117,6 +119,34 @@ tera
 ### Play from Favorites
 
 Browse and play stations from your organized lists. Navigate with `↑↓` or `jk`, press `Enter` to play.
+
+### Most Played
+
+Track your listening history and rediscover your favorite stations.
+
+**What's tracked** (stored locally, never transmitted):
+- Play count per station
+- Last played timestamp
+- First played timestamp
+- Total listening duration
+
+**Sort options** (press `s` to cycle):
+- **Play Count** (default) — Most played stations first
+- **Last Played** — Most recently heard first
+- **First Played** — Oldest discoveries first
+
+**Key bindings**:
+
+| Key         | Action                |
+| ----------- | --------------------- |
+| `↑↓` / `jk` | Navigate              |
+| `Enter`     | Play selected station |
+| `s`         | Cycle sort order      |
+| `f`         | Add to favorites      |
+| `?`         | Help                  |
+| `Esc` / `m` | Back to main menu     |
+
+All data is stored in `station_metadata.json` in your data directory. Delete this file at any time to clear your history.
 
 ### Search Stations
 
@@ -149,7 +179,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "4. Block List" to:
+From main menu, select "5. Block List" to:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)
@@ -164,9 +194,9 @@ From main menu, select "4. Block List" to:
 | Block List | `c` | Clear all blocks          |
 
 **Storage Location:**
-- Linux: `~/.config/tera/blocklist.json`
-- macOS: `~/Library/Application Support/tera/blocklist.json`
-- Windows: `%APPDATA%\tera\blocklist.json`
+- Linux: `~/.config/tera/data/blocklist.json`
+- macOS: `~/Library/Application Support/tera/data/blocklist.json`
+- Windows: `%APPDATA%\tera\data\blocklist.json`
 
 ### I Feel Lucky
 
@@ -183,7 +213,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 7):
+Access app configuration from the main menu (option 8):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -238,11 +268,12 @@ Choose an option:
 
   1. Play from Favorites
   2. Search Stations
-  3. Manage Lists
-  4. Block List
-  5. I Feel Lucky
-  6. Gist Management
-  7. Settings
+  3. Most Played
+  4. Manage Lists
+  5. Block List
+  6. I Feel Lucky
+  7. Gist Management
+  8. Settings
 
 ─── Quick Play Favorites ───
   10. Jazz FM • UK • MP3 192kbps
@@ -264,7 +295,7 @@ Type 10-12 to play instantly!
 
 The easiest way to change themes is through the Settings menu:
 
-1. Press `7` from the main menu to open Settings
+1. Press `8` from the main menu to open Settings
 2. Select "Theme / Colors"
 3. Choose from predefined themes:
    - **Default** - Cyan and blue tones
@@ -306,7 +337,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `7` from the main menu to open Settings
+1. Press `8` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version
@@ -339,7 +370,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### How It Works
 
-1. Navigate to **I Feel Lucky** from the main menu (option 5)
+1. Navigate to **I Feel Lucky** from the main menu (option 6)
 2. Press `t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
@@ -459,7 +490,7 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
-| `1-7`    | Quick select menu item       |
+| `1-8`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
 
 ### Playback Controls
@@ -542,7 +573,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 6) Gist Management → 6) Token Management
+1. Go to: Main Menu → 7) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!
@@ -560,7 +591,7 @@ Backup and sync your favorite lists across devices using GitHub Gists.
 
 ## File Locations
 
-TERA stores its configuration files in the OS-standard config directory:
+TERA v3 organizes files with a unified config and a separate data directory:
 
 | Operating System | Location                              |
 | ---------------- | ------------------------------------- |
@@ -568,23 +599,23 @@ TERA stores its configuration files in the OS-standard config directory:
 | **macOS**        | `~/Library/Application Support/tera/` |
 | **Windows**      | `%APPDATA%\tera\`                     |
 
-### Configuration Files
+### File Structure
 
-```
+```text
 tera/
-├── theme.yaml              # Color and padding customization
-├── appearance_config.yaml  # Header customization (text, ASCII art, etc.)
-├── connection_config.yaml  # Auto-reconnect and buffering settings
-├── shuffle.yaml            # Shuffle mode settings
-├── blocklist.json          # Blocked radio stations
-├── voted_stations.json     # Voting history (prevents duplicate votes)
-├── gist_metadata.json      # Your gist history
-├── tokens/
-│   └── github_token        # GitHub Personal Access Token
-└── favorites/
-    ├── My-favorites.json   # Quick play list (main menu 10+)
-    ├── Rock.json           # Your custom lists
-    └── Jazz.json
+├── config.yaml             # Unified configuration (all settings)
+├── data/                   # User data directory
+│   ├── blocklist.json      # Blocked radio stations
+│   ├── voted_stations.json # Voting history
+│   ├── station_metadata.json # Play count & listening history
+│   ├── favorites/          # Your station lists
+│   │   ├── My-favorites.json
+│   │   ├── Rock.json
+│   │   └── Jazz.json
+│   └── cache/              # Temporary data
+│       ├── gist_metadata.json
+│       └── search-history.json
+└── .v2-backup-YYYYMMDD-HHMMSS/  # Automatic v2 config backup (if migrated)
 ```
 
 **Environment Variable Override:**

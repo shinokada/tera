@@ -27,6 +27,7 @@ const (
 	gistStateUpdate
 	gistStateDelete
 	gistStateRecover
+	gistStateImportURL // NEW: Import from URL
 	gistStateTokenMenu
 	gistStateTokenSetup
 	gistStateTokenView
@@ -70,10 +71,11 @@ func NewGistModel(favoritePath string) GistModel {
 	menuItems := []components.MenuItem{
 		components.NewMenuItem("Create a gist", "Upload favorites to a new secret gist", "1"),
 		components.NewMenuItem("My Gists", "View and manage your saved gists", "2"),
-		components.NewMenuItem("Recover favorites", "Download and restore favorites from a gist", "3"),
-		components.NewMenuItem("Update a gist", "Update description of an existing gist", "4"),
-		components.NewMenuItem("Delete a gist", "Remove a gist permanently", "5"),
-		components.NewMenuItem("Token Management", "Manage your GitHub Personal Access Token", "6"),
+		components.NewMenuItem("Recover favorites", "Download and restore favorites from your gists", "3"),
+		components.NewMenuItem("Import from URL", "Import favorites from any public gist URL", "4"),
+		components.NewMenuItem("Update a gist", "Update description of an existing gist", "5"),
+		components.NewMenuItem("Delete a gist", "Remove a gist permanently", "6"),
+		components.NewMenuItem("Token Management", "Manage your GitHub Personal Access Token", "7"),
 	}
 
 	menuList := components.CreateMenu(menuItems, "TERA Gist Menu", 0, 0)
@@ -189,7 +191,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = msg.err.Error()
 		m.messageIsError = true
 		// If we're in a gist list state or create state and get an error, go back to menu
-		if m.state == gistStateCreate || m.state == gistStateList || m.state == gistStateUpdate || m.state == gistStateDelete || m.state == gistStateRecover {
+		if m.state == gistStateCreate || m.state == gistStateList || m.state == gistStateUpdate || m.state == gistStateDelete || m.state == gistStateRecover || m.state == gistStateImportURL {
 			m.state = gistStateMenu
 		}
 		return m, nil
@@ -197,8 +199,8 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case successMsg:
 		m.message = msg.msg
 		m.messageIsError = false
-		// After successful create/update/delete/recover, go back to menu
-		if m.state == gistStateCreate || m.state == gistStateRecover || m.state == gistStateUpdateInput || m.state == gistStateDeleteConfirm {
+		// After successful create/update/delete/recover/import, go back to menu
+		if m.state == gistStateCreate || m.state == gistStateRecover || m.state == gistStateUpdateInput || m.state == gistStateDeleteConfirm || m.state == gistStateImportURL {
 			m.state = gistStateMenu
 		}
 		return m, nil
@@ -263,13 +265,21 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case 2: // Recover
 					m.state = gistStateRecover
 					return m.initGistList()
-				case 3: // Update
+				case 3: // Import from URL
+					m.state = gistStateImportURL
+					m.inputPurpose = "import_url"
+					m.textInput.Placeholder = "https://gist.github.com/user/id or gist ID"
+					m.textInput.SetValue("")
+					m.textInput.EchoMode = textinput.EchoNormal
+					m.textInput.Focus()
+					return m, nil
+				case 4: // Update
 					m.state = gistStateUpdate
 					return m.initGistList()
-				case 4: // Delete
+				case 5: // Delete
 					m.state = gistStateDelete
 					return m.initGistList()
-				case 5: // Token Management
+				case 6: // Token Management
 					m.state = gistStateTokenMenu
 					return m.initTokenMenu()
 				}
@@ -403,6 +413,25 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 		cmds = append(cmds, cmd)
 
+	case gistStateImportURL:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			if keyMsg.String() == "enter" {
+				input := m.textInput.Value()
+				gistID, err := gist.ParseGistURL(input)
+				if err != nil {
+					m.message = fmt.Sprintf("Invalid URL or ID: %v", err)
+					m.messageIsError = true
+					return m, nil
+				}
+				return m, m.importGistCmd(gistID)
+			} else if keyMsg.String() == "esc" {
+				m.state = gistStateMenu
+				return m, nil
+			}
+		}
+		m.textInput, cmd = m.textInput.Update(msg)
+		cmds = append(cmds, cmd)
+
 	case gistStateTokenMenu:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			// Handle ESC to go back
@@ -511,7 +540,7 @@ func (m GistModel) View() string {
 			Title:    "Gist Management",
 			Subtitle: "Select an Option",
 			Content:  m.menuList.View() + "\n" + m.renderMessage(),
-			Help:     "↑↓/jk: Navigate • Enter: Select • 1-6: Quick select • Esc: Back • Ctrl+C: Quit",
+			Help:     "↑↓/jk: Navigate • Enter: Select • 1-7: Quick select • Esc: Back • Ctrl+C: Quit",
 		})
 	case gistStateCreateVisibility:
 		return RenderPage(PageLayout{
@@ -537,6 +566,17 @@ func (m GistModel) View() string {
 			Subtitle: "Uploading favorites to GitHub",
 			Content:  "Creating gist...\n\nPlease wait while your favorites are uploaded.\n\n" + m.renderMessage(),
 			Help:     "Please wait...",
+		})
+	case gistStateImportURL:
+		return RenderPage(PageLayout{
+			Title:    "Import from URL",
+			Subtitle: "Paste a public gist URL or ID",
+			Content: fmt.Sprintf("Enter a gist URL or ID to import favorites:\n\n"+
+				"Supported formats:\n"+
+				"  • https://gist.github.com/username/gist_id\n"+
+				"  • Raw gist ID (e.g., abc123def456...)\n\n"+
+				"%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Help: "Enter: Import • Esc: Back",
 		})
 	case gistStateList, gistStateUpdate, gistStateDelete, gistStateRecover:
 		action := "My Gists"
@@ -797,6 +837,78 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 			return successMsg{fmt.Sprintf("Favorites restored! (Warning: %d backup(s) failed to save)", len(backupFailures))}
 		}
 		return successMsg{"Favorites restored successfully! (backups saved in .backup folder)"}
+	}
+}
+
+// importGistCmd imports favorites from any public gist without requiring authentication
+func (m *GistModel) importGistCmd(gistID string) tea.Cmd {
+	return func() tea.Msg {
+		// Use public API - no token required for public gists
+		// If token is available and gist is private, try with token first
+		var g *gist.Gist
+		var err error
+
+		if m.gistClient != nil {
+			// Try with authentication first (works for both public and private gists)
+			g, err = m.gistClient.GetGist(gistID)
+		}
+
+		if g == nil || err != nil {
+			// Fall back to public API (only works for public gists)
+			g, err = gist.GetGistPublic(gistID)
+			if err != nil {
+				return errMsg{fmt.Errorf("failed to fetch gist: %w", err)}
+			}
+		}
+
+		// Create backup of existing files before overwriting
+		backupDir := filepath.Join(m.favoritePath, ".backup")
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			return errMsg{fmt.Errorf("failed to create backup directory: %w", err)}
+		}
+
+		// Backup existing files that will be overwritten
+		timestamp := time.Now().Format("20060102-150405")
+		var backupFailures []string
+		for filename := range g.Files {
+			cleanName := filepath.Base(filename)
+			if cleanName != filename || cleanName == "." || cleanName == ".." {
+				continue
+			}
+			existingPath := filepath.Join(m.favoritePath, cleanName)
+			if _, err := os.Stat(existingPath); err == nil {
+				// File exists, create backup
+				backupName := fmt.Sprintf("%s.%s.bak", cleanName, timestamp)
+				backupPath := filepath.Join(backupDir, backupName)
+				if data, err := os.ReadFile(existingPath); err == nil {
+					if writeErr := os.WriteFile(backupPath, data, 0644); writeErr != nil {
+						backupFailures = append(backupFailures, cleanName)
+					}
+				} else {
+					backupFailures = append(backupFailures, cleanName)
+				}
+			}
+		}
+
+		// Import files
+		importedCount := 0
+		for filename, file := range g.Files {
+			// Validate filename to prevent directory traversal
+			cleanName := filepath.Base(filename)
+			if cleanName != filename || cleanName == "." || cleanName == ".." {
+				continue
+			}
+			path := filepath.Join(m.favoritePath, cleanName)
+			if err := os.WriteFile(path, []byte(file.Content), 0644); err != nil {
+				return errMsg{err}
+			}
+			importedCount++
+		}
+
+		if len(backupFailures) > 0 {
+			return successMsg{fmt.Sprintf("Imported %d file(s)! (Warning: %d backup(s) failed)", importedCount, len(backupFailures))}
+		}
+		return successMsg{fmt.Sprintf("Successfully imported %d file(s) from gist! (backups in .backup folder)", importedCount)}
 	}
 }
 

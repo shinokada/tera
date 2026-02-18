@@ -63,6 +63,7 @@ type LuckyModel struct {
 	allStations       []api.Station // All stations from search for shuffle
 	lastSearchKeyword string        // Keyword used for current shuffle session
 	blocklistManager  *blocklist.Manager
+	metadataManager   *storage.MetadataManager // Track play statistics
 	lastBlockTime     time.Time
 }
 
@@ -898,9 +899,16 @@ func (m LuckyModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cm
 			return nil
 		}
 
+		// Check for audio bitrate
 		bitrate, err := m.player.GetAudioBitrate()
 		if err == nil && bitrate > 0 {
-			// Signal detected!
+			// Signal detected via bitrate!
+			return playbackStartedMsg{}
+		}
+
+		// Also check for media-title as fallback (some streams don't report bitrate)
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" {
+			// Signal detected via media title!
 			return playbackStartedMsg{}
 		}
 
@@ -1114,7 +1122,14 @@ func (m LuckyModel) viewPlaying() string {
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle().Render("▶ Playing..."))
+		// Show current track if available
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" && track != m.selectedStation.Name {
+			content.WriteString(successStyle().Render("▶ Now Playing:"))
+			content.WriteString(" ")
+			content.WriteString(infoStyle().Render(track))
+		} else {
+			content.WriteString(successStyle().Render("▶ Playing..."))
+		}
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}
@@ -1493,7 +1508,14 @@ func (m LuckyModel) viewShufflePlaying() string {
 	// Playback status
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle().Render("▶ Playing..."))
+		// Show current track if available
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" && track != m.selectedStation.Name {
+			content.WriteString(successStyle().Render("▶ Now Playing:"))
+			content.WriteString(" ")
+			content.WriteString(infoStyle().Render(track))
+		} else {
+			content.WriteString(successStyle().Render("▶ Playing..."))
+		}
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}

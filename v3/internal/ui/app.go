@@ -31,10 +31,11 @@ const (
 	screenConnectionSettings
 	screenAppearanceSettings
 	screenBlocklist
+	screenMostPlayed
 )
 
 // Main menu configuration
-const mainMenuItemCount = 7
+const mainMenuItemCount = 8
 
 type App struct {
 	screen                   Screen
@@ -45,6 +46,7 @@ type App struct {
 	searchScreen             SearchModel
 	listManagementScreen     ListManagementModel
 	luckyScreen              LuckyModel
+	mostPlayedScreen         MostPlayedModel
 	gistScreen               GistModel
 	settingsScreen           SettingsModel
 	shuffleSettingsScreen    ShuffleSettingsModel
@@ -53,6 +55,7 @@ type App struct {
 	blocklistScreen          BlocklistModel
 	apiClient                *api.Client
 	blocklistManager         *blocklist.Manager
+	metadataManager          *storage.MetadataManager // Track play statistics
 	favoritePath             string
 	quickFavorites           []api.Station
 	quickFavPlayer           *player.MPVPlayer
@@ -113,6 +116,13 @@ func NewApp() *App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist: %v\n", err)
 	}
 
+	// Initialize metadata manager for play statistics
+	dataPath := filepath.Join(configDir, "tera", "data")
+	metadataMgr, err := storage.NewMetadataManager(dataPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize metadata manager: %v\n", err)
+	}
+
 	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
@@ -120,6 +130,12 @@ func NewApp() *App {
 		quickFavPlayer:   player.NewMPVPlayer(),
 		helpModel:        components.NewHelpModel(components.CreateMainMenuHelp()),
 		blocklistManager: blocklistMgr,
+		metadataManager:  metadataMgr,
+	}
+
+	// Set metadata manager on players for play tracking
+	if metadataMgr != nil {
+		app.quickFavPlayer.SetMetadataManager(metadataMgr)
 	}
 
 	// Initialize header renderer
@@ -141,11 +157,12 @@ func (a *App) initMainMenu() {
 	items := []components.MenuItem{
 		components.NewMenuItem("Play from Favorites", "", "1"),
 		components.NewMenuItem("Search Stations", "", "2"),
-		components.NewMenuItem("Manage Lists", "", "3"),
-		components.NewMenuItem("Block List", "", "4"),
-		components.NewMenuItem("I Feel Lucky", "", "5"),
-		components.NewMenuItem("Gist Management", "", "6"),
-		components.NewMenuItem("Settings", "", "7"),
+		components.NewMenuItem("Most Played", "", "3"),
+		components.NewMenuItem("Manage Lists", "", "4"),
+		components.NewMenuItem("Block List", "", "5"),
+		components.NewMenuItem("I Feel Lucky", "", "6"),
+		components.NewMenuItem("Gist Management", "", "7"),
+		components.NewMenuItem("Settings", "", "8"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -206,6 +223,13 @@ func (a *App) Cleanup() {
 		if a.luckyScreen.player != nil {
 			_ = a.luckyScreen.player.Stop()
 		}
+		if a.mostPlayedScreen.player != nil {
+			_ = a.mostPlayedScreen.player.Stop()
+		}
+		// Close metadata manager to save pending changes
+		if a.metadataManager != nil {
+			_ = a.metadataManager.Close()
+		}
 	})
 }
 
@@ -257,6 +281,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.screen {
 		case screenPlay:
 			a.playScreen = NewPlayModel(a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking and metadata display
+			if a.metadataManager != nil {
+				a.playScreen.metadataManager = a.metadataManager
+				if a.playScreen.player != nil {
+					a.playScreen.player.SetMetadataManager(a.metadataManager)
+				}
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -265,6 +296,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.playScreen.Init()
 		case screenSearch:
 			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking and metadata display
+			if a.metadataManager != nil {
+				a.searchScreen.metadataManager = a.metadataManager
+				if a.searchScreen.player != nil {
+					a.searchScreen.player.SetMetadataManager(a.metadataManager)
+				}
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -281,12 +319,31 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.listManagementScreen.Init()
 		case screenLucky:
 			a.luckyScreen = NewLuckyModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking and metadata display
+			if a.metadataManager != nil {
+				a.luckyScreen.metadataManager = a.metadataManager
+				if a.luckyScreen.player != nil {
+					a.luckyScreen.player.SetMetadataManager(a.metadataManager)
+				}
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.luckyScreen.width = a.width
 				a.luckyScreen.height = a.height
 			}
 			return a, a.luckyScreen.Init()
+		case screenMostPlayed:
+			a.mostPlayedScreen = NewMostPlayedModel(a.metadataManager, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking
+			if a.metadataManager != nil && a.mostPlayedScreen.player != nil {
+				a.mostPlayedScreen.player.SetMetadataManager(a.metadataManager)
+			}
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.mostPlayedScreen.width = a.width
+				a.mostPlayedScreen.height = a.height
+			}
+			return a, a.mostPlayedScreen.Init()
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
 			// Set dimensions immediately if we have them
@@ -480,6 +537,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
 		}
+		return a, cmd
+	case screenMostPlayed:
+		a.mostPlayedScreen, cmd = a.mostPlayedScreen.Update(msg)
 		return a, cmd
 	}
 
@@ -715,23 +775,27 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSearch}
 		}
-	case 2: // Manage Lists
+	case 2: // Most Played
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenMostPlayed}
+		}
+	case 3: // Manage Lists
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenList}
 		}
-	case 3: // Block List
+	case 4: // Block List
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenBlocklist}
 		}
-	case 4: // I Feel Lucky
+	case 5: // I Feel Lucky
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 5: // Gist Management
+	case 6: // Gist Management
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
-	case 6: // Settings
+	case 7: // Settings
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSettings}
 		}
@@ -789,6 +853,8 @@ func (a *App) View() string {
 		return a.appearanceSettingsScreen.View()
 	case screenBlocklist:
 		return a.blocklistScreen.View()
+	case screenMostPlayed:
+		return a.mostPlayedScreen.View()
 	}
 	return "Unknown screen"
 }
@@ -838,11 +904,12 @@ func (a *App) viewMainMenu() string {
 	}{
 		{"1", "Play from Favorites"},
 		{"2", "Search Stations"},
-		{"3", "Manage Lists"},
-		{"4", "Block List"},
-		{"5", "I Feel Lucky"},
-		{"6", "Gist Management"},
-		{"7", "Settings"},
+		{"3", "Most Played"},
+		{"4", "Manage Lists"},
+		{"5", "Block List"},
+		{"6", "I Feel Lucky"},
+		{"7", "Gist Management"},
+		{"8", "Settings"},
 	}
 
 	for i, item := range menuItems {
@@ -933,7 +1000,7 @@ func (a *App) viewMainMenu() string {
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-7: Menu • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-8: Menu • 10+: Quick Play • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)

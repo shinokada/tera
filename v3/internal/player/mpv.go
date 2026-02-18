@@ -18,20 +18,21 @@ import (
 
 // MPVPlayer manages the MPV process for playing radio streams
 type MPVPlayer struct {
-	cmd          *exec.Cmd
-	playing      bool
-	paused       bool // Pause state
-	station      *api.Station
-	volume       int // Current volume (0-100)
-	muted        bool
-	lastVolume   int // Volume before mute
-	mu           sync.Mutex
-	stopCh       chan struct{}
-	socketPath   string     // IPC socket path for runtime control
-	conn         net.Conn   // Connection to IPC socket
-	trackHistory []string   // Last 5 track names
-	currentTrack string     // Current playing track
-	trackMu      sync.Mutex // Protect track history
+	cmd             *exec.Cmd
+	playing         bool
+	paused          bool // Pause state
+	station         *api.Station
+	volume          int // Current volume (0-100)
+	muted           bool
+	lastVolume      int // Volume before mute
+	mu              sync.Mutex
+	stopCh          chan struct{}
+	socketPath      string                   // IPC socket path for runtime control
+	conn            net.Conn                 // Connection to IPC socket
+	trackHistory    []string                 // Last 5 track names
+	currentTrack    string                   // Current playing track
+	trackMu         sync.Mutex               // Protect track history
+	metadataManager *storage.MetadataManager // Track play statistics
 }
 
 // NewMPVPlayer creates a new MPV player instance
@@ -143,6 +144,11 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	p.paused = false
 	p.station = station
 	p.stopCh = make(chan struct{})
+
+	// Record play start for statistics (errors are non-fatal)
+	if p.metadataManager != nil {
+		_ = p.metadataManager.StartPlay(station.StationUUID)
+	}
 
 	// Connect to IPC socket (with retry for socket creation delay)
 	go p.connectToSocket()
@@ -306,6 +312,14 @@ func (p *MPVPlayer) GetCurrentTrack() (string, error) {
 	return "", nil
 }
 
+// GetCachedTrack returns the current track name from the in-memory cache without IPC.
+// Use this in render paths to avoid potential UI jank from synchronous IPC calls.
+func (p *MPVPlayer) GetCachedTrack() string {
+	p.trackMu.Lock()
+	defer p.trackMu.Unlock()
+	return p.currentTrack
+}
+
 // GetTrackHistory returns the last 5 track names
 func (p *MPVPlayer) GetTrackHistory() []string {
 	p.trackMu.Lock()
@@ -388,8 +402,9 @@ func (p *MPVPlayer) Stop() error {
 	return p.stopInternal()
 }
 
-// stopInternal stops playback without locking (internal use)
-func (p *MPVPlayer) stopInternal() error {
+// cleanupResourcesLocked releases IPC connection, socket file, and all player
+// state fields. Must be called with p.mu already held.
+func (p *MPVPlayer) cleanupResourcesLocked() {
 	// Close IPC connection
 	if p.conn != nil {
 		_ = p.conn.Close()
@@ -401,6 +416,28 @@ func (p *MPVPlayer) stopInternal() error {
 		_ = os.Remove(p.socketPath)
 	}
 	p.socketPath = ""
+
+	// Signal monitorMetadata goroutine to stop
+	close(p.stopCh)
+
+	p.playing = false
+	p.paused = false
+	p.station = nil
+	p.cmd = nil
+
+	// Clear track history
+	p.trackMu.Lock()
+	p.trackHistory = []string{}
+	p.currentTrack = ""
+	p.trackMu.Unlock()
+}
+
+// stopInternal stops playback without locking (internal use)
+func (p *MPVPlayer) stopInternal() error {
+	// Record play stop for statistics (errors are non-fatal)
+	if p.metadataManager != nil && p.station != nil {
+		_ = p.metadataManager.StopPlay(p.station.StationUUID)
+	}
 
 	if p.cmd != nil && p.cmd.Process != nil {
 		// Send termination signal
@@ -430,20 +467,7 @@ func (p *MPVPlayer) stopInternal() error {
 		}
 	}
 
-	// Signal monitoring goroutine to stop
-	close(p.stopCh)
-
-	p.playing = false
-	p.paused = false
-	p.station = nil
-	p.cmd = nil
-
-	// Clear track history
-	p.trackMu.Lock()
-	p.trackHistory = []string{}
-	p.currentTrack = ""
-	p.trackMu.Unlock()
-
+	p.cleanupResourcesLocked()
 	return nil
 }
 
@@ -599,6 +623,13 @@ func (p *MPVPlayer) IsPaused() bool {
 	return p.paused
 }
 
+// SetMetadataManager sets the metadata manager for play statistics tracking
+func (p *MPVPlayer) SetMetadataManager(mgr *storage.MetadataManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.metadataManager = mgr
+}
+
 // monitor watches the mpv process and updates state when it exits
 func (p *MPVPlayer) monitor() {
 	p.mu.Lock()
@@ -621,14 +652,20 @@ func (p *MPVPlayer) monitor() {
 
 	select {
 	case <-done:
-		// Process ended (could be error or natural end)
+		// Process ended naturally (stream drop, network loss, error).
+		// Guard with p.playing: stopInternal may have raced us here (it kills the
+		// process, then calls cleanupResourcesLocked which sets playing=false and
+		// closes stopCh). If it won the lock first, skip to avoid a double-close.
 		p.mu.Lock()
-		p.playing = false
-		p.station = nil
-		p.cmd = nil
+		if p.playing {
+			if p.metadataManager != nil && p.station != nil {
+				_ = p.metadataManager.StopPlay(p.station.StationUUID)
+			}
+			p.cleanupResourcesLocked()
+		}
 		p.mu.Unlock()
 	case <-p.stopCh:
-		// Stop was called, process already killed
+		// Stop was called, process already killed and resources cleaned up
 		return
 	}
 }

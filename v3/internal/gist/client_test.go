@@ -90,3 +90,98 @@ func TestListGists(t *testing.T) {
 		t.Errorf("Expected 2 gists, got %d", len(gists))
 	}
 }
+
+func TestParseGistURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "full github URL",
+			input:   "https://gist.github.com/username/abc123def456789012345678901234567890",
+			want:    "abc123def456789012345678901234567890",
+			wantErr: false,
+		},
+		{
+			name:    "full github URL with trailing path",
+			input:   "https://gist.github.com/username/abc123def456789012345678901234567890/raw",
+			want:    "abc123def456789012345678901234567890",
+			wantErr: false,
+		},
+		{
+			name:    "http URL",
+			input:   "http://gist.github.com/user/abc123def456789012345678901234567890",
+			want:    "abc123def456789012345678901234567890",
+			wantErr: false,
+		},
+		{
+			name:    "githubusercontent URL",
+			input:   "https://gist.githubusercontent.com/user/abc123def456789012345678901234567890/raw",
+			want:    "abc123def456789012345678901234567890",
+			wantErr: false,
+		},
+		{
+			name:    "raw gist ID 32 chars",
+			input:   "abc123def456789012345678901234ab",
+			want:    "abc123def456789012345678901234ab",
+			wantErr: false,
+		},
+		{
+			name:    "URL with query params",
+			input:   "https://gist.github.com/user/abc123def456789012345678901234567890?file=test.txt",
+			want:    "abc123def456789012345678901234567890",
+			wantErr: false,
+		},
+		{
+			name:    "URL with fragment",
+			input:   "https://gist.github.com/user/abc123def456789012345678901234567890#file-test-txt",
+			want:    "abc123def456789012345678901234567890",
+			wantErr: false,
+		},
+		{
+			name:    "empty input",
+			input:   "",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "whitespace only",
+			input:   "   ",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid short ID",
+			input:   "abc123",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid characters in ID",
+			input:   "abc123xyz456789012345678901234ab",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid URL format",
+			input:   "https://gist.github.com/",
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseGistURL(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseGistURL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ParseGistURL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
