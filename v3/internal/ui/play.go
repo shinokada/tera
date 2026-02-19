@@ -333,8 +333,9 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		// Only start tick if not already running
-		if m.saveMessageTime == 0 {
+		// Only start tick if not already running (saveMessageTime == 0 means no tick;
+		// -1 means persistent/rating prompt with no tick dispatched yet)
+		if m.saveMessageTime <= 0 {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
 		return m, m.pollTrackHistory()
@@ -802,14 +803,14 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				stars = m.starRenderer.RenderCompactPlain(rating) + " "
 			}
 			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
 			m.saveMessageTime = messageDisplayShort
 			if startTick {
 				return m, tickEverySecond()
 			}
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
 			m.saveMessageTime = messageDisplayShort
 			if startTick {
 				return m, tickEverySecond()
@@ -825,7 +826,7 @@ func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = "✓ Rating removed"
 		}
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
