@@ -147,7 +147,7 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 
 	// Record play start for statistics (errors are non-fatal)
 	if p.metadataManager != nil {
-		_ = p.metadataManager.StartPlay(station.StationUUID)
+		_ = p.metadataManager.StartPlay(station)
 	}
 
 	// Connect to IPC socket (with retry for socket creation delay)

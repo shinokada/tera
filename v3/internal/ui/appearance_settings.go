@@ -261,6 +261,13 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.helpModel.Toggle()
 			return m, nil
 
+		case "ctrl+d":
+			// Clear ASCII art when in the ASCII input state
+			if m.state == appearanceStateAsciiInput {
+				m.asciiInput.SetValue("")
+				return m, nil
+			}
+
 		case "enter":
 			return m.handleEnter()
 		}
@@ -586,7 +593,7 @@ func (m AppearanceSettingsModel) viewAsciiInput() string {
 	var b strings.Builder
 	b.WriteString("Paste or type your ASCII art (max 15 lines):\n\n")
 	b.WriteString(m.asciiInput.View())
-	b.WriteString("\n\nPress Enter to save, Esc to cancel")
+	b.WriteString("\n\nCtrl+D: Clear all • Enter: Save • Esc: Cancel")
 	b.WriteString("\nTip: Use https://patorjk.com/software/taag/ or 'figlet' to generate ASCII art")
 	return b.String()
 }

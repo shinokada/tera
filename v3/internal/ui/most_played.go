@@ -75,6 +75,10 @@ type MostPlayedModel struct {
 	helpModel          components.HelpModel
 	votedStations      *storage.VotedStations
 	blocklistManager   *blocklist.Manager
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
 	// For saving to list
 	availableLists []string
 	listItems      []list.Item
@@ -87,9 +91,22 @@ type mostPlayedStationItem struct {
 	metadata *storage.StationMetadata
 }
 
-func (i mostPlayedStationItem) FilterValue() string { return i.station.Name }
+func (i mostPlayedStationItem) FilterValue() string {
+	if i.station.Name != "" {
+		return i.station.Name
+	}
+	return i.station.StationUUID
+}
 func (i mostPlayedStationItem) Title() string {
 	name := i.station.TrimName()
+	if name == "" {
+		// Fallback for old metadata without cached station info
+		if len(i.station.StationUUID) >= 8 {
+			name = "Station " + i.station.StationUUID[:8]
+		} else {
+			name = "Unknown Station"
+		}
+	}
 	if len(name) > 35 {
 		name = name[:32] + "..."
 	}
@@ -134,6 +151,7 @@ func NewMostPlayedModel(metadataManager *storage.MetadataManager, favoritePath s
 	m.stationListModel.SetShowStatusBar(false)
 	m.stationListModel.SetFilteringEnabled(true)
 	m.stationListModel.SetShowHelp(false)
+	m.stationListModel.SetShowPagination(false)
 
 	return m
 }
@@ -242,13 +260,17 @@ func (m *MostPlayedModel) refreshStationList() {
 	// This is a limitation - we only have UUIDs in metadata
 	// Future enhancement: cache station info in metadata
 
-	// Convert to list items
-	m.stationItems = make([]list.Item, len(m.stations))
-	for i, s := range m.stations {
-		m.stationItems[i] = mostPlayedStationItem{
+	// Convert to list items, filtering out stations without valid names
+	m.stationItems = make([]list.Item, 0, len(m.stations))
+	for _, s := range m.stations {
+		// Skip stations that have no name and no UUID (completely invalid)
+		if s.Station.Name == "" && s.Station.StationUUID == "" {
+			continue
+		}
+		m.stationItems = append(m.stationItems, mostPlayedStationItem{
 			station:  s.Station,
 			metadata: s.Metadata,
-		}
+		})
 	}
 	m.stationListModel.SetItems(m.stationItems)
 }
@@ -317,6 +339,11 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 }
 
 func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "q", "esc", "m":
 		// Stop playback and return to list
@@ -364,11 +391,61 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 			m.saveMessageTime = 2
 			return m, tickEverySecond()
 		}
+
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
+			m.saveMessageSuccess = true
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
 	}
 
 	return m, nil
 }
 
+// handleRatingModeInput handles input when in rating mode
+func (m MostPlayedModel) handleRatingModeInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+			m.saveMessageSuccess = true
+			m.saveMessageTime = 2
+			return m, tickEverySecond()
+		}
+		return m, nil
+	}
+
+	// Handle remove rating (0 or r)
+	if key == "0" || key == "r" {
+		_ = m.ratingsManager.RemoveRating(m.selectedStation.StationUUID)
+		m.saveMessage = "✓ Rating removed"
+		m.saveMessageSuccess = true
+		m.saveMessageTime = 2
+		return m, tickEverySecond()
+	}
+
+	// Any other key - just clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
+	return m, nil
+}
 func (m MostPlayedModel) handleSavePromptInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
@@ -525,13 +602,20 @@ func (m MostPlayedModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info with metadata
+	// Station info with metadata and rating
 	hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
 	var metadata *storage.StationMetadata
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
-	content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
+	// Get rating for display
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
+		}
+	}
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 
 	// Playback status
 	content.WriteString("\n")
@@ -541,7 +625,7 @@ func (m MostPlayedModel) viewPlaying() string {
 		} else {
 			// Use cached track to avoid IPC call in the render path
 			track := m.player.GetCachedTrack()
-			if track != "" && track != m.selectedStation.Name {
+			if IsValidTrackMetadata(track, m.selectedStation.Name) {
 				content.WriteString(successStyle().Render("▶ Now Playing:"))
 				content.WriteString(" ")
 				content.WriteString(infoStyle().Render(track))
@@ -554,7 +638,7 @@ func (m MostPlayedModel) viewPlaying() string {
 	}
 
 	// Volume
-	content.WriteString(fmt.Sprintf("\n\nVolume: %d%%", m.player.GetVolume()))
+	fmt.Fprintf(&content, "\n\nVolume: %d%%", m.player.GetVolume())
 
 	// Show save message
 	if m.saveMessage != "" {
@@ -569,7 +653,7 @@ func (m MostPlayedModel) viewPlaying() string {
 	return RenderPage(PageLayout{
 		Title:   "📊 Most Played - Now Playing",
 		Content: content.String(),
-		Help:    "p: Pause • s: Stop • +/-: Volume • f: Favorites • Esc: Back",
+		Help:    "p: Pause • s: Stop • +/-: Volume • r: Rate • f: Favorites • Esc: Back",
 	})
 }
 
@@ -577,7 +661,7 @@ func (m MostPlayedModel) viewSavePrompt() string {
 	var content strings.Builder
 
 	if m.selectedStation != nil {
-		content.WriteString(fmt.Sprintf("Save \"%s\" to favorites?\n\n", m.selectedStation.TrimName()))
+		fmt.Fprintf(&content, "Save \"%s\" to favorites?\n\n", m.selectedStation.TrimName())
 	}
 	content.WriteString("[Y] Save to My-favorites\n")
 	content.WriteString("[L] Choose from list\n")

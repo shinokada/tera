@@ -59,6 +59,10 @@ type PlayModel struct {
 	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
 	trackHistory     []string // Last 5 tracks played
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -304,11 +308,8 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate usable height
-		listHeight := msg.Height - 14
-		if listHeight < 5 {
-			listHeight = 5
-		}
+		// Calculate usable height based on actual header size
+		listHeight := availableListHeight(msg.Height)
 
 		// Initialize models if we have data but they're not initialized yet
 		if len(m.listItems) > 0 && m.listModel.Items() == nil {
@@ -329,14 +330,16 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		// Only start tick if not already running
-		if m.saveMessageTime == 0 {
+		// Only start tick if not already running (saveMessageTime == 0 means no tick;
+		// -1 means persistent/rating prompt with no tick dispatched yet)
+		if m.saveMessageTime <= 0 {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
 		return m, m.pollTrackHistory()
 
 	case playbackErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = playStateSavePrompt // Show prompt even on error
 		return m, nil
 
@@ -345,6 +348,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		// Show save prompt when going back from playing
@@ -533,12 +537,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// initializeListModel creates the list model with current dimensions
+// initializeListModel creates the list model with current dimensions.
+// The available height is calculated from the actual rendered header so that
+// tall ASCII art headers don't overflow the terminal.
 func (m *PlayModel) initializeListModel() {
-	listHeight := m.height - 14
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -552,12 +555,11 @@ func (m *PlayModel) initializeListModel() {
 	m.listModel.Styles.HelpStyle = helpStyle()
 }
 
-// initializeStationListModel creates the station list model with current dimensions
+// initializeStationListModel creates the station list model with current dimensions.
+// The available height is calculated from the actual rendered header so that
+// tall ASCII art headers don't overflow the terminal.
 func (m *PlayModel) initializeStationListModel() {
-	listHeight := m.height - 14
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -644,6 +646,11 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "?":
 		// Toggle help overlay
@@ -759,7 +766,72 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.undoLastBlock()
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
 	}
+	return m, nil
+}
+
+// handleRatingModeInput handles input when in rating mode
+func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+			startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
+			startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		return m, nil
+	}
+
+	// Handle remove rating (0 only)
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
+		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -994,14 +1066,21 @@ func (m PlayModel) viewPlaying() string {
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
-	content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
+	// Get rating for display
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
+		}
+	}
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
 		// Use the cached track (kept fresh by monitorMetadata every 5 s) to
 		// avoid a blocking IPC socket call inside the render path.
-		if track := m.player.GetCachedTrack(); track != "" && track != m.selectedStation.Name {
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
 			content.WriteString(infoStyle().Render(track))
@@ -1034,7 +1113,7 @@ func (m PlayModel) viewPlaying() string {
 				trackStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 			}
 
-			content.WriteString(fmt.Sprintf("%s %s\n", indicator, trackStyle.Render(track)))
+			fmt.Fprintf(&content, "%s %s\n", indicator, trackStyle.Render(track))
 		}
 	}
 
@@ -1049,7 +1128,7 @@ func (m PlayModel) viewPlaying() string {
 			} else {
 				style = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") {
+		} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
 			style = infoStyle()
 		} else {
 			style = errorStyle()
@@ -1058,10 +1137,15 @@ func (m PlayModel) viewPlaying() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
+	helpText := "b: Block • u: Undo • f: Favorites"
+	if m.ratingsManager != nil {
+		helpText += " • r: Rate"
+	}
+	helpText += " • v: Vote • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "b: Block • u: Undo • f: Favorites • v: Vote • 0: Main Menu • ?: Help",
+		Help:    helpText,
 	}, m.height)
 }
 

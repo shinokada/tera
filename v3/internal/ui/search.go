@@ -72,6 +72,10 @@ type SearchModel struct {
 	blocklistManager *blocklist.Manager
 	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
@@ -236,11 +240,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate usable height
-		listHeight := msg.Height - 14
-		if listHeight < 5 {
-			listHeight = 5 // Minimum height
-		}
+		// Calculate usable height based on actual header size
+		listHeight := availableListHeight(msg.Height)
 
 		// Update list sizes based on current state
 		switch m.state {
@@ -304,17 +305,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked})
 		}
 
-		// Calculate proper list height
-		// Header needs enough space, so use same buffer as search menu
-		listHeight := m.height - 14
-		if listHeight < 5 {
-			listHeight = 5
-		}
-
 		// Create results list
 		delegate := createStyledDelegate()
 
-		m.resultsList = list.New(m.resultsItems, delegate, m.width, listHeight)
+		m.resultsList = list.New(m.resultsItems, delegate, m.width, availableListHeight(m.height))
 		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
 		m.resultsList.SetShowHelp(false)     // We use custom footer instead
 		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
@@ -341,6 +335,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playerErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = searchStateResults
 		return m, nil
 
@@ -349,6 +344,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		m.state = searchStateResults
@@ -411,6 +407,12 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.width > 0 && m.height > 0 {
 			m.initializeListModel()
 		}
+		return m, nil
+
+	case saveToListSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to '%s'", msg.stationName, msg.listName)
+		m.saveMessageTime = messageDisplayShort
+		m.state = searchStatePlaying
 		return m, nil
 
 	case saveToListFailedMsg:
@@ -657,12 +659,11 @@ func (m SearchModel) loadAvailableLists() tea.Cmd {
 	}
 }
 
-// initializeListModel creates the list model with current dimensions
+// initializeListModel creates the list model with current dimensions.
+// It uses availableListHeight to account for the actual rendered header so that
+// tall ASCII art headers don't cause the page to overflow the terminal.
 func (m *SearchModel) initializeListModel() {
-	listHeight := m.height - 14
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -1038,6 +1039,11 @@ func (m SearchModel) handleSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handlePlayerUpdate handles player-related updates during playback
 func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "q":
 		// Quit application
@@ -1158,7 +1164,59 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
 	}
+	return m, nil
+}
+
+// handleRatingModeInput handles input when in rating mode
+func (m SearchModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Handle remove rating (0 only); r is treated as cancel to match play.go
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -1275,19 +1333,19 @@ func (m SearchModel) View() string {
 			if m.searchType == api.SearchAdvanced {
 				criteria.WriteString("Search criteria:\n")
 				if tag := strings.TrimSpace(m.advancedInputs[0].Value()); tag != "" {
-					criteria.WriteString(fmt.Sprintf("  Tag: %s\n", tag))
+					fmt.Fprintf(&criteria, "  Tag: %s\n", tag)
 				}
 				if lang := strings.TrimSpace(m.advancedInputs[1].Value()); lang != "" {
-					criteria.WriteString(fmt.Sprintf("  Language: %s\n", lang))
+					fmt.Fprintf(&criteria, "  Language: %s\n", lang)
 				}
 				if country := strings.TrimSpace(m.advancedInputs[2].Value()); country != "" {
-					criteria.WriteString(fmt.Sprintf("  Country: %s\n", country))
+					fmt.Fprintf(&criteria, "  Country: %s\n", country)
 				}
 				if state := strings.TrimSpace(m.advancedInputs[3].Value()); state != "" {
-					criteria.WriteString(fmt.Sprintf("  State: %s\n", state))
+					fmt.Fprintf(&criteria, "  State: %s\n", state)
 				}
 				if name := strings.TrimSpace(m.advancedInputs[4].Value()); name != "" {
-					criteria.WriteString(fmt.Sprintf("  Name: %s\n", name))
+					fmt.Fprintf(&criteria, "  Name: %s\n", name)
 				}
 				if m.advancedBitrate != "" {
 					bitrateText := map[string]string{
@@ -1295,7 +1353,7 @@ func (m SearchModel) View() string {
 						"2": "Medium (96-128 kbps)",
 						"3": "High (≥ 192 kbps)",
 					}
-					criteria.WriteString(fmt.Sprintf("  Bitrate: %s\n", bitrateText[m.advancedBitrate]))
+					fmt.Fprintf(&criteria, "  Bitrate: %s\n", bitrateText[m.advancedBitrate])
 				}
 			}
 
@@ -1341,13 +1399,20 @@ func (m SearchModel) View() string {
 			if m.metadataManager != nil {
 				metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 			}
-			content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
+			// Get rating for display
+			var rating int
+			if m.ratingsManager != nil {
+				if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+					rating = r.Rating
+				}
+			}
+			content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {
 				// Use the cached track (kept fresh by monitorMetadata every 5 s) to
 				// avoid a blocking IPC socket call inside the render path.
-				if track := m.player.GetCachedTrack(); track != "" && track != m.selectedStation.Name {
+				if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
 					content.WriteString(successStyle().Render("▶ Now Playing:"))
 					content.WriteString(" ")
 					content.WriteString(infoStyle().Render(track))
@@ -1366,17 +1431,22 @@ func (m SearchModel) View() string {
 				} else {
 					content.WriteString(successStyle().Render(m.saveMessage))
 				}
-			} else if strings.Contains(m.saveMessage, "Already") {
-				content.WriteString(infoStyle().Render(m.saveMessage))
+			} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
+			 content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
-				content.WriteString(errorStyle().Render(m.saveMessage))
+			 content.WriteString(errorStyle().Render(m.saveMessage))
 			}
-		}
-		return RenderPageWithBottomHelp(PageLayout{
-			Title:   "🎵 Now Playing",
-			Content: content.String(),
-			Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • v: Vote • ?: Help",
-		}, m.height)
+			}
+			helpText := "b: Block • u: Undo • f: Favorites • s: Save to list"
+			if m.ratingsManager != nil {
+				helpText += " • r: Rate"
+			}
+			helpText += " • v: Vote • ?: Help"
+			return RenderPageWithBottomHelp(PageLayout{
+				Title:   "🎵 Now Playing",
+				Content: content.String(),
+				Help:    helpText,
+			}, m.height)
 
 	case searchStateSelectList:
 		return m.viewSelectList()
@@ -1444,7 +1514,9 @@ func (m SearchModel) renderStationInfo() string {
 		if m.metadataManager != nil {
 			metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 		}
-		content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, false, metadata))
+		hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+		// Station info view does not handle interactive rating; use metadata-only rendering.
+		content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
 		content.WriteString("\n\n")
 	}
 

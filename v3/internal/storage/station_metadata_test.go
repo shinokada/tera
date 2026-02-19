@@ -4,7 +4,18 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/shinokada/tera/v3/internal/api"
 )
+
+// testStation creates a test station with the given UUID
+func testStation(uuid string) *api.Station {
+	return &api.Station{
+		StationUUID: uuid,
+		Name:        "Test Station " + uuid,
+		URLResolved: "http://test.stream/" + uuid,
+	}
+}
 
 func TestMetadataManager(t *testing.T) {
 	// Create temp directory
@@ -35,7 +46,7 @@ func TestMetadataManager(t *testing.T) {
 
 		stationUUID := "test-station-1"
 
-		err = mgr.StartPlay(stationUUID)
+		err = mgr.StartPlay(testStation(stationUUID))
 		if err != nil {
 			t.Fatalf("Failed to start play: %v", err)
 		}
@@ -71,7 +82,7 @@ func TestMetadataManager(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			// Stop previous play to allow next play to count
 			_ = mgr.StopPlay(stationUUID)
-			err = mgr.StartPlay(stationUUID)
+			err = mgr.StartPlay(testStation(stationUUID))
 			if err != nil {
 				t.Fatalf("Failed to start play: %v", err)
 			}
@@ -97,9 +108,9 @@ func TestMetadataManager(t *testing.T) {
 		stationUUID := "test-station-dedup"
 
 		// Start play twice without stopping
-		_ = mgr.StartPlay(stationUUID)
-		_ = mgr.StartPlay(stationUUID)
-		_ = mgr.StartPlay(stationUUID)
+		_ = mgr.StartPlay(testStation(stationUUID))
+		_ = mgr.StartPlay(testStation(stationUUID))
+		_ = mgr.StartPlay(testStation(stationUUID))
 
 		metadata := mgr.GetMetadata(stationUUID)
 		if metadata == nil {
@@ -121,7 +132,7 @@ func TestMetadataManager(t *testing.T) {
 
 		stationUUID := "test-station-duration"
 
-		_ = mgr.StartPlay(stationUUID)
+		_ = mgr.StartPlay(testStation(stationUUID))
 
 		// Wait a bit to accumulate duration
 		time.Sleep(100 * time.Millisecond)
@@ -150,9 +161,9 @@ func TestMetadataManager(t *testing.T) {
 		station1 := "test-station-switch-1"
 		station2 := "test-station-switch-2"
 
-		_ = mgr.StartPlay(station1)
+		_ = mgr.StartPlay(testStation(station1))
 		time.Sleep(50 * time.Millisecond)
-		_ = mgr.StartPlay(station2) // Should auto-stop station1
+		_ = mgr.StartPlay(testStation(station2)) // Should auto-stop station1
 
 		// Both should have metadata
 		meta1 := mgr.GetMetadata(station1)
@@ -188,19 +199,19 @@ func TestMetadataManager(t *testing.T) {
 		// Station 3: 5 plays
 		for i := 0; i < 5; i++ {
 			_ = mgr.StopPlay(station3)
-			_ = mgr.StartPlay(station3)
+			_ = mgr.StartPlay(testStation(station3))
 		}
 		_ = mgr.StopPlay(station3)
 
 		// Station 1: 3 plays
 		for i := 0; i < 3; i++ {
 			_ = mgr.StopPlay(station1)
-			_ = mgr.StartPlay(station1)
+			_ = mgr.StartPlay(testStation(station1))
 		}
 		_ = mgr.StopPlay(station1)
 
 		// Station 2: 1 play
-		_ = mgr.StartPlay(station2)
+		_ = mgr.StartPlay(testStation(station2))
 		_ = mgr.StopPlay(station2)
 
 		// Get top 2
@@ -236,15 +247,15 @@ func TestMetadataManager(t *testing.T) {
 		station3 := "recent-3"
 
 		// Play in order: station1, station2, station3
-		_ = mgr.StartPlay(station1)
+		_ = mgr.StartPlay(testStation(station1))
 		_ = mgr.StopPlay(station1)
 		time.Sleep(10 * time.Millisecond)
 
-		_ = mgr.StartPlay(station2)
+		_ = mgr.StartPlay(testStation(station2))
 		_ = mgr.StopPlay(station2)
 		time.Sleep(10 * time.Millisecond)
 
-		_ = mgr.StartPlay(station3)
+		_ = mgr.StartPlay(testStation(station3))
 		_ = mgr.StopPlay(station3)
 
 		// Most recent should be station3
@@ -277,7 +288,7 @@ func TestMetadataManager(t *testing.T) {
 				t.Fatalf("Failed to create metadata manager: %v", err)
 			}
 
-			_ = mgr.StartPlay(stationUUID)
+			_ = mgr.StartPlay(testStation(stationUUID))
 			_ = mgr.StopPlay(stationUUID)
 
 			// Force save
@@ -313,7 +324,7 @@ func TestMetadataManager(t *testing.T) {
 
 		stationUUID := "clear-test-station"
 
-		_ = mgr.StartPlay(stationUUID)
+		_ = mgr.StartPlay(testStation(stationUUID))
 		_ = mgr.StopPlay(stationUUID)
 
 		if mgr.GetTotalStations() == 0 {
@@ -389,7 +400,7 @@ func TestFormatDuration(t *testing.T) {
 	}{
 		{30, "30s"},
 		{60, "1m"},
-		{90, "1m"},
+		{90, "1m 30s"},
 		{3600, "1h"},
 		{3660, "1h 1m"},
 		{7200, "2h"},
