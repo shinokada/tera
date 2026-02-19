@@ -177,6 +177,18 @@ func createStyledDelegate() list.DefaultDelegate {
 	return delegate
 }
 
+// availableListHeight returns the usable height for list models after
+// subtracting the rendered header lines and fixed UI chrome (title, subtitle,
+// help bar, padding). Callers should pass the current terminal height.
+func availableListHeight(totalHeight int) int {
+	headerLines := strings.Count(renderHeader(), "\n")
+	h := totalHeight - (headerLines + 10)
+	if h < 5 {
+		h = 5
+	}
+	return h
+}
+
 // renderHeader renders the header with fallback (thread-safe)
 func renderHeader() string {
 	headerRendererMu.RLock()

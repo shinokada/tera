@@ -241,11 +241,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Calculate usable height based on actual header size
-		headerLines := strings.Count(renderHeader(), "\n")
-		listHeight := msg.Height - (headerLines + 10)
-		if listHeight < 5 {
-			listHeight = 5 // Minimum height
-		}
+		listHeight := availableListHeight(msg.Height)
 
 		// Update list sizes based on current state
 		switch m.state {
@@ -309,17 +305,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked})
 		}
 
-		// Calculate proper list height
-		// Header needs enough space, so use same buffer as search menu
-		listHeight := m.height - 14
-		if listHeight < 5 {
-			listHeight = 5
-		}
-
 		// Create results list
 		delegate := createStyledDelegate()
 
-		m.resultsList = list.New(m.resultsItems, delegate, m.width, listHeight)
+		m.resultsList = list.New(m.resultsItems, delegate, m.width, availableListHeight(m.height))
 		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
 		m.resultsList.SetShowHelp(false)     // We use custom footer instead
 		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
@@ -346,6 +335,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playerErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = searchStateResults
 		return m, nil
 
@@ -354,6 +344,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		m.state = searchStateResults
@@ -669,17 +660,10 @@ func (m SearchModel) loadAvailableLists() tea.Cmd {
 }
 
 // initializeListModel creates the list model with current dimensions.
-// It calculates the available height by measuring the actual rendered header
-// so that tall ASCII art headers don't cause the page to overflow the terminal.
+// It uses availableListHeight to account for the actual rendered header so that
+// tall ASCII art headers don't cause the page to overflow the terminal.
 func (m *SearchModel) initializeListModel() {
-	header := renderHeader()
-	headerLines := strings.Count(header, "\n")
-	// Overhead: header + assemblePageContent scaffolding (3) + viewSelectList extra content (4) + help (1) + padding (2)
-	overhead := headerLines + 10
-	listHeight := m.height - overhead
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -1184,7 +1168,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter rating mode
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
-			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
 			m.saveMessageTime = -1 // Persistent until action
 			return m, nil
 		}
@@ -1212,28 +1196,25 @@ func (m SearchModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 				stars = m.starRenderer.RenderCompactPlain(rating) + " "
 			}
 			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
-			startTick := m.saveMessageTime <= 0
-			m.saveMessageTime = messageDisplayShort
-			if startTick {
-				return m, tickEverySecond()
-			}
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
 		}
-		return m, nil
-	}
-
-	// Handle remove rating (0 or r)
-	if key == "0" || key == "r" {
-		_ = m.ratingsManager.RemoveRating(m.selectedStation.StationUUID)
-		m.saveMessage = "✓ Rating removed"
-		startTick := m.saveMessageTime <= 0
 		m.saveMessageTime = messageDisplayShort
-		if startTick {
-			return m, tickEverySecond()
-		}
 		return m, nil
 	}
 
-	// Any other key - just clear the message
+	// Handle remove rating (0 only); r is treated as cancel to match play.go
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
 	m.saveMessage = ""
 	m.saveMessageTime = 0
 	return m, nil
@@ -1450,17 +1431,17 @@ func (m SearchModel) View() string {
 				} else {
 					content.WriteString(successStyle().Render(m.saveMessage))
 				}
-			} else if strings.Contains(m.saveMessage, "Already") {
-				content.WriteString(infoStyle().Render(m.saveMessage))
+			} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
+			 content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
-				content.WriteString(errorStyle().Render(m.saveMessage))
+			 content.WriteString(errorStyle().Render(m.saveMessage))
 			}
-		}
-		return RenderPageWithBottomHelp(PageLayout{
-			Title:   "🎵 Now Playing",
-			Content: content.String(),
-			Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • r: Rate • v: Vote • ?: Help",
-		}, m.height)
+			}
+			return RenderPageWithBottomHelp(PageLayout{
+			 Title:   "🎵 Now Playing",
+			 Content: content.String(),
+			 Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • r: Rate • v: Vote • ?: Help",
+			}, m.height)
 
 	case searchStateSelectList:
 		return m.viewSelectList()
@@ -1535,7 +1516,8 @@ func (m SearchModel) renderStationInfo() string {
 				rating = r.Rating
 			}
 		}
-		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+		hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 		content.WriteString("\n\n")
 	}
 

@@ -309,11 +309,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Calculate usable height based on actual header size
-		headerLines := strings.Count(renderHeader(), "\n")
-		listHeight := msg.Height - (headerLines + 10)
-		if listHeight < 5 {
-			listHeight = 5
-		}
+		listHeight := availableListHeight(msg.Height)
 
 		// Initialize models if we have data but they're not initialized yet
 		if len(m.listItems) > 0 && m.listModel.Items() == nil {
@@ -545,13 +541,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // The available height is calculated from the actual rendered header so that
 // tall ASCII art headers don't overflow the terminal.
 func (m *PlayModel) initializeListModel() {
-	header := renderHeader()
-	headerLines := strings.Count(header, "\n")
-	overhead := headerLines + 10
-	listHeight := m.height - overhead
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -569,13 +559,7 @@ func (m *PlayModel) initializeListModel() {
 // The available height is calculated from the actual rendered header so that
 // tall ASCII art headers don't overflow the terminal.
 func (m *PlayModel) initializeStationListModel() {
-	header := renderHeader()
-	headerLines := strings.Count(header, "\n")
-	overhead := headerLines + 10
-	listHeight := m.height - overhead
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
