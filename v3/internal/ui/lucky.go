@@ -261,6 +261,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = luckyStateSavePrompt
 		return m, nil
 
@@ -269,6 +270,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		m.state = luckyStateInput
@@ -392,6 +394,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.player != nil {
 				_ = m.player.Stop()
 			}
+			m.ratingMode = false // Clear rating mode on async state transition
 
 			// Show message
 			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
@@ -747,20 +750,25 @@ func (m LuckyModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				stars = m.starRenderer.RenderCompactPlain(rating) + " "
 			}
 			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
-			m.saveMessageTime = messageDisplayShort
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
 		}
-		return m, nil
-	}
-
-	// Handle remove rating (0 or r)
-	if key == "0" || key == "r" {
-		_ = m.ratingsManager.RemoveRating(m.selectedStation.StationUUID)
-		m.saveMessage = "✓ Rating removed"
 		m.saveMessageTime = messageDisplayShort
 		return m, nil
 	}
 
-	// Any other key - just clear the message
+	// Handle remove rating (0 only); r is treated as cancel to match play.go
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
 	m.saveMessage = ""
 	m.saveMessageTime = 0
 	return m, nil
@@ -1196,8 +1204,8 @@ func (m LuckyModel) viewPlaying() string {
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		// Show current track if available
-		if track, err := m.player.GetCurrentTrack(); err == nil && IsValidTrackMetadata(track, m.selectedStation.Name) {
+		// Use the cached track to avoid a blocking IPC socket call in the render path.
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
 			content.WriteString(infoStyle().Render(track))
@@ -1220,7 +1228,8 @@ func (m LuckyModel) viewPlaying() string {
 			}
 		} else if strings.Contains(m.saveMessage, "Already") ||
 			strings.Contains(m.saveMessage, "Paused") ||
-			strings.Contains(m.saveMessage, "Resumed") {
+			strings.Contains(m.saveMessage, "Resumed") ||
+			strings.HasPrefix(m.saveMessage, "Press") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -1506,6 +1515,15 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
@@ -1592,8 +1610,8 @@ func (m LuckyModel) viewShufflePlaying() string {
 	// Playback status
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		// Show current track if available
-		if track, err := m.player.GetCurrentTrack(); err == nil && IsValidTrackMetadata(track, m.selectedStation.Name) {
+		// Use the cached track to avoid a blocking IPC socket call in the render path.
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
 			content.WriteString(infoStyle().Render(track))
@@ -1683,7 +1701,8 @@ func (m LuckyModel) viewShufflePlaying() string {
 			strings.Contains(m.saveMessage, "Resumed") ||
 			strings.Contains(m.saveMessage, "paused") ||
 			strings.Contains(m.saveMessage, "resumed") ||
-			strings.Contains(m.saveMessage, "stopped") {
+			strings.Contains(m.saveMessage, "stopped") ||
+			strings.HasPrefix(m.saveMessage, "Press") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -1692,7 +1711,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "Space: Pause/Play • b: Block • u: Undo • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
+	help := "Space: Pause/Play • b: Block • u: Undo • r: Rate • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,

@@ -206,14 +206,13 @@ func createRulesListModel(rules []blocklist.BlockRule) list.Model {
 
 	delegate := createStyledDelegate()
 	l := list.New(items, delegate, 80, 20)
-	// Title is intentionally empty: the page layout (PageLayout.Title) renders it
-	// to avoid a duplicate heading and the extra lines it adds to the layout.
-	l.Title = ""
+	// Title is suppressed: PageLayout.Title renders it to avoid a duplicate
+	// heading and the extra lines the list title bar would add.
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
 	l.SetShowPagination(true)
-	l.Styles.Title = listTitleStyle()
 	l.Styles.PaginationStyle = paginationStyle()
 
 	return l
