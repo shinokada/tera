@@ -206,7 +206,9 @@ func createRulesListModel(rules []blocklist.BlockRule) list.Model {
 
 	delegate := createStyledDelegate()
 	l := list.New(items, delegate, 80, 20)
-	l.Title = "🚫 Active Block Rules"
+	// Title is intentionally empty: the page layout (PageLayout.Title) renders it
+	// to avoid a duplicate heading and the extra lines it adds to the layout.
+	l.Title = ""
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)

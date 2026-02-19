@@ -160,15 +160,18 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		h := msg.Height - 8
-		if h < 10 {
-			h = 10
+		// listHeight accounts for: ASCII header (~8 lines) + page chrome
+		// (blank line + title + subtitle + help = ~4 lines) + bottom padding (~2)
+		// Use 14 to match the same overhead used in play.go.
+		listHeight := msg.Height - 14
+		if listHeight < 5 {
+			listHeight = 5
 		}
 		// Update all list sizes
-		m.mainMenu.SetSize(msg.Width-4, h)
-		m.rulesMenu.SetSize(msg.Width-4, h)
-		m.listModel.SetSize(msg.Width-4, h)
-		m.rulesListModel.SetSize(msg.Width-4, h)
+		m.mainMenu.SetSize(msg.Width-4, listHeight)
+		m.rulesMenu.SetSize(msg.Width-4, listHeight)
+		m.listModel.SetSize(msg.Width-4, listHeight)
+		m.rulesListModel.SetSize(msg.Width-4, listHeight)
 		return m, nil
 
 	case blocklistLoadedMsg:
@@ -209,11 +212,11 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rules = msg.rules
 		m.rulesListModel = createRulesListModel(msg.rules)
 		if m.width > 0 && m.height > 0 {
-			h := m.height - 8
-			if h < 10 {
-				h = 10
+			listHeight := m.height - 14
+			if listHeight < 5 {
+				listHeight = 5
 			}
-			m.rulesListModel.SetSize(m.width-4, h)
+			m.rulesListModel.SetSize(m.width-4, listHeight)
 		}
 		if len(msg.rules) > 0 {
 			m.rulesListModel.Select(0)
@@ -812,29 +815,31 @@ func (m BlocklistModel) viewBlockByTag() string {
 
 // viewActiveRules renders the active rules list
 func (m BlocklistModel) viewActiveRules() string {
-	var content strings.Builder
-
+	// Use Subtitle slot for transient messages so the list starts at a
+	// consistent vertical position and the header is never clipped.
+	subtitle := ""
 	if m.message != "" {
-		style := successStyle()
 		if strings.Contains(m.message, "✗") {
-			style = errorStyle()
+			subtitle = errorStyle().Render(m.message)
+		} else {
+			subtitle = successStyle().Render(m.message)
 		}
-		content.WriteString(style.Render(m.message))
-		content.WriteString("\n\n")
 	}
 
+	var content strings.Builder
 	if len(m.rules) == 0 {
 		content.WriteString(infoStyle().Render("No block rules defined yet.\n\n"))
 		content.WriteString("Use the Block Rules menu to add rules.")
 	} else {
-		// Use the interactive list
+		// Use the interactive list (title is rendered by PageLayout.Title)
 		content.WriteString(m.rulesListModel.View())
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
-		Title:   "Active Block Rules",
-		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • d: Delete rule • Esc: Back",
+		Title:    "🚫 Active Block Rules",
+		Subtitle: subtitle,
+		Content:  content.String(),
+		Help:     "↑↓/jk: Navigate • d: Delete rule • Esc: Back",
 	}, m.height)
 }
 
