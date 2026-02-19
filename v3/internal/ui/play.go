@@ -1137,10 +1137,15 @@ func (m PlayModel) viewPlaying() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
+	helpText := "b: Block • u: Undo • f: Favorites"
+	if m.ratingsManager != nil {
+		helpText += " • r: Rate"
+	}
+	helpText += " • v: Vote • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "b: Block • u: Undo • f: Favorites • r: Rate • v: Vote • 0: Main Menu • ?: Help",
+		Help:    helpText,
 	}, m.height)
 }
 

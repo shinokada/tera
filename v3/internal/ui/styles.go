@@ -178,11 +178,23 @@ func createStyledDelegate() list.DefaultDelegate {
 }
 
 // availableListHeight returns the usable height for list models after
-// subtracting the rendered header lines and fixed UI chrome (title, subtitle,
-// help bar, padding). Callers should pass the current terminal height.
+// subtracting the rendered header lines and fixed UI chrome. Callers should
+// pass the current terminal height.
+//
+// Chrome breakdown (10 lines):
+//
+//	1 blank line (after header)
+//	1 title line
+//	1 subtitle line
+//	1 blank line (before content)
+//	1 status bar
+//	1 help bar
+//	2 vertical padding (docStyleNoTopPadding bottom padding)
+//	2 spare lines for breathing room
 func availableListHeight(totalHeight int) int {
+	const uiChrome = 10 // see breakdown above
 	headerLines := strings.Count(renderHeader(), "\n")
-	h := totalHeight - (headerLines + 10)
+	h := totalHeight - (headerLines + uiChrome)
 	if h < 5 {
 		h = 5
 	}

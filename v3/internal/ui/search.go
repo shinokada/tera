@@ -1437,10 +1437,15 @@ func (m SearchModel) View() string {
 			 content.WriteString(errorStyle().Render(m.saveMessage))
 			}
 			}
+			helpText := "b: Block • u: Undo • f: Favorites • s: Save to list"
+			if m.ratingsManager != nil {
+				helpText += " • r: Rate"
+			}
+			helpText += " • v: Vote • ?: Help"
 			return RenderPageWithBottomHelp(PageLayout{
-			 Title:   "🎵 Now Playing",
-			 Content: content.String(),
-			 Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • r: Rate • v: Vote • ?: Help",
+				Title:   "🎵 Now Playing",
+				Content: content.String(),
+				Help:    helpText,
 			}, m.height)
 
 	case searchStateSelectList:
@@ -1509,15 +1514,9 @@ func (m SearchModel) renderStationInfo() string {
 		if m.metadataManager != nil {
 			metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 		}
-		// Get rating for display
-		var rating int
-		if m.ratingsManager != nil {
-			if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
-				rating = r.Rating
-			}
-		}
 		hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
+		// Station info view does not handle interactive rating; use metadata-only rendering.
+		content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
 		content.WriteString("\n\n")
 	}
 
