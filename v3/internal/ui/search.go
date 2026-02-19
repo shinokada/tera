@@ -240,8 +240,9 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate usable height
-		listHeight := msg.Height - 14
+		// Calculate usable height based on actual header size
+		headerLines := strings.Count(renderHeader(), "\n")
+		listHeight := msg.Height - (headerLines + 10)
 		if listHeight < 5 {
 			listHeight = 5 // Minimum height
 		}
@@ -415,6 +416,12 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.width > 0 && m.height > 0 {
 			m.initializeListModel()
 		}
+		return m, nil
+
+	case saveToListSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to '%s'", msg.stationName, msg.listName)
+		m.saveMessageTime = messageDisplayShort
+		m.state = searchStatePlaying
 		return m, nil
 
 	case saveToListFailedMsg:
@@ -661,9 +668,15 @@ func (m SearchModel) loadAvailableLists() tea.Cmd {
 	}
 }
 
-// initializeListModel creates the list model with current dimensions
+// initializeListModel creates the list model with current dimensions.
+// It calculates the available height by measuring the actual rendered header
+// so that tall ASCII art headers don't cause the page to overflow the terminal.
 func (m *SearchModel) initializeListModel() {
-	listHeight := m.height - 14
+	header := renderHeader()
+	headerLines := strings.Count(header, "\n")
+	// Overhead: header + assemblePageContent scaffolding (3) + viewSelectList extra content (4) + help (1) + padding (2)
+	overhead := headerLines + 10
+	listHeight := m.height - overhead
 	if listHeight < 5 {
 		listHeight = 5
 	}
