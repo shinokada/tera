@@ -969,7 +969,13 @@ func (m LuckyModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cm
 		}
 
 		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
-			return luckyPlaybackStalledMsg{station: station}
+			// Only report stalled if the process actually died.
+			// IPC checks can fail while audio is playing (slow socket,
+			// buffering, missing metadata), so trust IsPlaying() here.
+			if !m.player.IsPlaying() {
+				return luckyPlaybackStalledMsg{station: station}
+			}
+			return playbackStartedMsg{}
 		}
 
 		return luckyCheckSignalMsg{station: station, attempt: attempt + 1}
