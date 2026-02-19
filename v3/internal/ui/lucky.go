@@ -717,7 +717,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter rating mode
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
-			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
 			m.saveMessageTime = -1 // Persistent until action
 			return m, nil
 		}
@@ -1204,7 +1204,8 @@ func (m LuckyModel) viewPlaying() string {
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	voted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")

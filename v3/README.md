@@ -417,6 +417,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 | `f`   | Save to My-favorites                  |
 | `s`   | Save to another list                  |
 | `v`   | Vote for station                      |
+| `r`   | Rate station (then 1-5 / 0)           |
 | `Esc` | Stop shuffle and return to input      |
 
 ### Shuffle Settings

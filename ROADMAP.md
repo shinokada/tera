@@ -212,5 +212,5 @@ Want to help? Here are areas we'd love contributions:
 ---
 
 **Last Updated:** February 2026  
-**Current Version:** v3.0.0  
-**Next Release:** v3.1.0 (Unified Config)
+**Current Version:** v3.3.0  
+**Next Release:** v3.4.0 (Unified Config)
