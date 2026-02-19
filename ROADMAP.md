@@ -103,7 +103,7 @@ os.UserConfigDir()
 ### v3.4.x Series - Custom Tags
 
 **v3.4.0** - Personal Tags
-- Add custom tags to stations (e.g., "workout", "coding", "relaxing")
+- Add custom tags to stations (e.g., "late night coding", "Sunday morning", "work from home")
 - Filter stations by custom tags
 - Tag-based playlists
 

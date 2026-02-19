@@ -366,6 +366,11 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.selectedStation = nextStation
+			m.ratingMode = false // Clear rating mode on auto-advance station change
+			if m.saveMessageTime == -1 {
+				m.saveMessage = ""
+				m.saveMessageTime = 0
+			}
 			// Stop current playback and start new station
 			_ = m.player.Stop() // Ignore error, we're starting new playback anyway
 
@@ -1378,6 +1383,11 @@ func (m *LuckyModel) rebuildMenuWithHistory() {
 
 // updateShufflePlaying handles input during shuffle playback
 func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "esc":
 		// Stop shuffle and playback, return to I Feel Lucky input

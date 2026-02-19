@@ -105,7 +105,7 @@ tera
 # 5) Manage Lists        - Create/edit/delete favorite lists
 # 6) Block List          - Manage blocked stations
 # 7) I Feel Lucky        - Random station by keyword
-# 8) Gist Management     - Backup/restore via GitHub
+# 8) Gist Management     - Backup/restore via *GitHub*
 # 9) Settings            - Configure TERA
 
 # Quick Play (from main menu):
