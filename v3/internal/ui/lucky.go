@@ -1616,7 +1616,8 @@ func (m LuckyModel) viewShufflePlaying() string {
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	voted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
 
 	// Playback status
 	content.WriteString("\n")
