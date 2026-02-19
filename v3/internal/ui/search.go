@@ -1412,7 +1412,7 @@ func (m SearchModel) View() string {
 			if m.player.IsPlaying() {
 				// Use the cached track (kept fresh by monitorMetadata every 5 s) to
 				// avoid a blocking IPC socket call inside the render path.
-				if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
+				if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
 					content.WriteString(successStyle().Render("▶ Now Playing:"))
 					content.WriteString(" ")
 					content.WriteString(infoStyle().Render(track))

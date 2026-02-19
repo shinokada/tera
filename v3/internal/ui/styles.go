@@ -20,7 +20,7 @@ func IsValidTrackMetadata(track, stationName string) bool {
 		return false
 	}
 	// Filter out URL-like tracks (no actual metadata from stream)
-	if strings.Contains(track, "?") || strings.HasPrefix(track, "http") {
+	if strings.HasPrefix(track, "http") || strings.Contains(track, "://") {
 		return false
 	}
 	// Filter out common file extensions that indicate no metadata
