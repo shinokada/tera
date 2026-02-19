@@ -341,6 +341,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = playStateSavePrompt // Show prompt even on error
 		return m, nil
 
@@ -349,6 +350,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		// Show save prompt when going back from playing
@@ -1130,7 +1132,7 @@ func (m PlayModel) viewPlaying() string {
 			} else {
 				style = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") {
+		} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
 			style = infoStyle()
 		} else {
 			style = errorStyle()

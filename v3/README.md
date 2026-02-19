@@ -101,8 +101,8 @@ tera
 # 1) Play from Favorites - Browse your saved lists
 # 2) Search Stations     - Find new stations
 # 3) Most Played         - Your listening statistics
-# 4) Manage Lists        - Create/edit/delete favorite lists
-# 5) Top Rated           - Browse your highest-rated stations
+# 4) Top Rated           - Browse your highest-rated stations
+# 5) Manage Lists        - Create/edit/delete favorite lists
 # 6) Block List          - Manage blocked stations
 # 7) I Feel Lucky        - Random station by keyword
 # 8) Gist Management     - Backup/restore via GitHub
@@ -180,7 +180,7 @@ Rate your favorite stations from 1-5 stars to build your personal collection of 
 - Press `r` then any other key (or `Esc`) to cancel without changing the rating
 - Stars appear in search results, favorites, and the playing screen
 
-**Top Rated View:**
+**Top-Rated View:**
 From main menu, select "5. Top Rated" to:
 - Browse all your rated stations sorted by rating
 - Filter by minimum star rating (press `f`)

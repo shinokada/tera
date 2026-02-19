@@ -208,7 +208,7 @@ Rate your favorite stations from 1-5 stars to build your personal collection of 
 - Press `r` then `0` to remove a rating
 - Stars appear in search results, favorites, and the playing screen
 
-**Top Rated View:**
+**Top-Rated View:**
 From main menu, select "5. Top Rated" to:
 - Browse all your rated stations sorted by rating
 - Filter by minimum star rating (press `f`)
