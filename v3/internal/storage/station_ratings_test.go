@@ -468,7 +468,7 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 	defer func() { _ = mgr.Close() }()
 
 	// Run concurrent operations
-	done := make(chan bool)
+	done := make(chan struct{})
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
@@ -478,7 +478,7 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 				_ = mgr.GetRating(stationUUID)
 				_ = mgr.GetTopRated(10)
 			}
-			done <- true
+			done <- struct{}{}
 		}()
 	}
 

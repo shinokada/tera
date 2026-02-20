@@ -235,6 +235,10 @@ func (t *TagsManager) RemoveTag(stationUUID string, tag string) error {
 	if found {
 		existing.Tags = newTags
 		existing.UpdatedAt = time.Now()
+		if len(newTags) == 0 {
+			delete(t.store.StationTags, stationUUID)
+		}
+		t.pruneAllTags()
 		t.savePending.Store(true)
 	}
 	return nil
@@ -266,6 +270,16 @@ func (t *TagsManager) SetTags(stationUUID string, tags []string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	// Empty tag list — remove the entry entirely (same semantics as ClearTags).
+	if len(normalized) == 0 {
+		if _, ok := t.store.StationTags[stationUUID]; ok {
+			delete(t.store.StationTags, stationUUID)
+			t.pruneAllTags()
+			t.savePending.Store(true)
+		}
+		return nil
+	}
+
 	now := time.Now()
 	existing := t.store.StationTags[stationUUID]
 	if existing == nil {
@@ -293,6 +307,7 @@ func (t *TagsManager) ClearTags(stationUUID string) error {
 
 	if _, ok := t.store.StationTags[stationUUID]; ok {
 		delete(t.store.StationTags, stationUUID)
+		t.pruneAllTags()
 		t.savePending.Store(true)
 	}
 	return nil
@@ -517,4 +532,23 @@ func (t *TagsManager) addToAllTags(tag string) {
 	}
 	t.store.AllTags = append(t.store.AllTags, tag)
 	slices.Sort(t.store.AllTags)
+}
+
+// pruneAllTags rebuilds AllTags from the current StationTags map, removing any
+// tags that are no longer referenced by any station. Call after removing tags
+// from a station. Caller must hold t.mu (write lock).
+func (t *TagsManager) pruneAllTags() {
+	inUse := make(map[string]struct{})
+	for _, st := range t.store.StationTags {
+		for _, tag := range st.Tags {
+			inUse[tag] = struct{}{}
+		}
+	}
+	filtered := t.store.AllTags[:0]
+	for _, tag := range t.store.AllTags {
+		if _, ok := inUse[tag]; ok {
+			filtered = append(filtered, tag)
+		}
+	}
+	t.store.AllTags = filtered
 }
