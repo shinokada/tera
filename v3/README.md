@@ -154,7 +154,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "6. Block List" to:
+From main menu, select "8. Block List" to:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)
@@ -228,10 +228,10 @@ Tagged stations show `[tag]` pills inline in every list view — Favorites, Sear
 
 **Keyboard Shortcuts:**
 
-| Screen  | Key | Action                   |
-| ------- | --- | ------------------------ |
-| Playing | `t` | Add a tag (quick input)  |
-| Playing | `T` | Open Manage Tags dialog  |
+| Screen        | Key | Action                       |
+| ------------- | --- | ---------------------------- |
+| Playing       | `t` | Add a tag (quick input)      |
+| Playing       | `T` | Open Manage Tags dialog      |
 | Browse by Tag | `d` | Delete tag from all stations |
 
 **Tag rules:**
@@ -259,7 +259,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 9):
+Access app configuration from the main menu (Settings: `-`):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -316,11 +316,13 @@ Choose an option:
   2. Search Stations
   3. Most Played
   4. Top Rated
-  5. Manage Lists
-  6. Block List
-  7. I Feel Lucky
-  8. Gist Management
-  9. Settings
+  5. Browse by Tag
+  6. Tag Playlists 
+  7. Manage Lists
+  8. Block List
+  9. I Feel Lucky
+  0. Gist Management
+  -. Settings
 
 ─── Quick Play Favorites ───
   10. Jazz FM • UK • MP3 192kbps
@@ -538,8 +540,10 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
+| `0`      | Gist Management              |
 | `1-9`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
+| `-`.     | Settings                     |
 
 ### Playback Controls
 
