@@ -17,9 +17,10 @@ import (
 type browseTagsState int
 
 const (
-	browseTagsStateList    browseTagsState = iota // list of all tags
-	browseTagsStateDetail                         // stations for a selected tag
-	browseTagsStatePlaying                        // playing a station from a tag
+	browseTagsStateList     browseTagsState = iota // list of all tags
+	browseTagsStateDetail                          // stations for a selected tag
+	browseTagsStatePlaying                         // playing a station from a tag
+	browseTagsStateTagInput                        // entering a new tag
 )
 
 // tagStat holds a tag name and how many stations carry it.
@@ -52,7 +53,7 @@ type BrowseTagsModel struct {
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	ratingMode      bool
-	// ratingsManager2 *storage.RatingsManager // removed unused field
+	tagInput        components.TagInput
 
 	// Shared state
 	saveMessage     string
@@ -111,6 +112,22 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case components.TagSubmittedMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = browseTagsStatePlaying
+		return m, nil
+
+	case components.TagCancelledMsg:
+		m.state = browseTagsStatePlaying
+		return m, nil
+
 	case tea.KeyMsg:
 		switch m.state {
 		case browseTagsStateList:
@@ -119,6 +136,10 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 			return m.updateDetail(msg)
 		case browseTagsStatePlaying:
 			return m.updatePlaying(msg)
+		case browseTagsStateTagInput:
+			var cmd tea.Cmd
+			m.tagInput, cmd = m.tagInput.Update(msg)
+			return m, cmd
 		}
 
 	case playbackStartedMsg:
@@ -260,6 +281,12 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			}
 			m.saveMessageTime = messageDisplayShort
 		}
+	case "t":
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.state = browseTagsStateTagInput
+		}
 	}
 	return m, nil
 }
@@ -355,8 +382,25 @@ func (m BrowseTagsModel) View() string {
 		return m.viewDetail()
 	case browseTagsStatePlaying:
 		return m.viewPlaying()
+	case browseTagsStateTagInput:
+		return m.viewTagInput()
 	}
 	return ""
+}
+
+// viewTagInput renders the tag input overlay.
+func (m BrowseTagsModel) viewTagInput() string {
+	var sb strings.Builder
+	if m.selectedStation != nil {
+		sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		sb.WriteString("\n\n")
+	}
+	sb.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: sb.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
+	}, m.height)
 }
 
 func (m BrowseTagsModel) viewTagList() string {
@@ -489,7 +533,7 @@ func (m BrowseTagsModel) viewPlaying() string {
 		}
 	}
 
-	helpText := "Space: Pause/Play • r: Rate • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
+	helpText := "Space: Pause/Play • r: Rate • t: Add tag • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),

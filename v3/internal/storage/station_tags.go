@@ -51,14 +51,17 @@ type TagsManager struct {
 	mu          sync.RWMutex
 	savePending atomic.Bool
 	lastSave    time.Time
+	cancel      context.CancelFunc
 }
 
 var tagRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9\-_ ]*[a-z0-9]$|^[a-z0-9]$`)
 
 // NewTagsManager creates a new TagsManager and starts the background save goroutine.
 func NewTagsManager(dataPath string) (*TagsManager, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	tm := &TagsManager{
 		dataPath: dataPath,
+		cancel:   cancel,
 		store: &TagsStore{
 			StationTags:  make(map[string]*StationTags),
 			AllTags:      []string{},
@@ -72,8 +75,17 @@ func NewTagsManager(dataPath string) (*TagsManager, error) {
 		_ = err
 	}
 
-	go tm.saveLoop(context.Background())
+	go tm.saveLoop(ctx)
 	return tm, nil
+}
+
+// Close stops the background save loop and flushes any pending changes to disk.
+func (t *TagsManager) Close() error {
+	t.cancel()
+	if t.savePending.Load() {
+		return t.Save()
+	}
+	return nil
 }
 
 // Load reads tags from disk.
@@ -397,7 +409,16 @@ func (t *TagsManager) CreatePlaylist(name string, tags []string, matchMode strin
 		if err != nil {
 			return err
 		}
-		normalizedTags = append(normalizedTags, n)
+		isDup := false
+		for _, existing := range normalizedTags {
+			if existing == n {
+				isDup = true
+				break
+			}
+		}
+		if !isDup {
+			normalizedTags = append(normalizedTags, n)
+		}
 	}
 
 	t.mu.Lock()

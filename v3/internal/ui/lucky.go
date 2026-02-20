@@ -164,6 +164,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string, blocklistManager 
 		shuffleEnabled:   false,
 		shuffleConfig:    shuffleConfig,
 		blocklistManager: blocklistManager,
+		tagRenderer:      components.NewTagRenderer(),
 	}
 
 	// Build menu with history items

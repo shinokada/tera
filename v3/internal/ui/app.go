@@ -273,6 +273,10 @@ func (a *App) Cleanup() {
 		if a.ratingsManager != nil {
 			_ = a.ratingsManager.Close()
 		}
+		// Close tags manager to stop background goroutine and flush pending changes
+		if a.tagsManager != nil {
+			_ = a.tagsManager.Close()
+		}
 	})
 }
 
@@ -458,8 +462,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.browseTagsScreen.width = a.width
 					a.browseTagsScreen.height = a.height
 				}
+				return a, a.browseTagsScreen.Init()
 			}
-			return a, a.browseTagsScreen.Init()
+			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenTagPlaylists:
 			if a.tagsManager != nil {
 				a.tagPlaylistsScreen = NewTagPlaylistsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
@@ -467,8 +472,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.tagPlaylistsScreen.width = a.width
 					a.tagPlaylistsScreen.height = a.height
 				}
+				return a, a.tagPlaylistsScreen.Init()
 			}
-			return a, a.tagPlaylistsScreen.Init()
+			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
 			// Set dimensions immediately if we have them

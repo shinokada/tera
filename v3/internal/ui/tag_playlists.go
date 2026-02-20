@@ -385,18 +385,32 @@ func (m TagPlaylistsModel) commitPlaylist() (TagPlaylistsModel, tea.Cmd) {
 	name := strings.TrimSpace(m.inputBuffer)
 	tags := m.selectedTagsList()
 
+	// When editing a renamed playlist, create first so the old entry is preserved
+	// if CreatePlaylist fails validation. For same-name edits, delete first since
+	// CreatePlaylist rejects duplicates.
 	var err error
-	if m.isEditing {
-		// Delete old playlist first (handles rename).
+	if m.isEditing && name != m.editName {
+		// Rename: create new entry first, then delete old on success.
+		err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
+		if err != nil {
+			m.saveMessage = fmt.Sprintf("✗ %v", err)
+			m.saveMessageTime = messageDisplayShort
+			m.step = createStepName
+			return m, nil
+		}
 		_ = m.tagsManager.DeletePlaylist(m.editName)
-	}
-	err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
-
-	if err != nil {
-		m.saveMessage = fmt.Sprintf("✗ %v", err)
-		m.saveMessageTime = messageDisplayShort
-		m.step = createStepName
-		return m, nil
+	} else {
+		// New playlist or same-name update: delete old (if editing) then create.
+		if m.isEditing {
+			_ = m.tagsManager.DeletePlaylist(m.editName)
+		}
+		err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
+		if err != nil {
+			m.saveMessage = fmt.Sprintf("✗ %v", err)
+			m.saveMessageTime = messageDisplayShort
+			m.step = createStepName
+			return m, nil
+		}
 	}
 
 	m.loadPlaylists()
@@ -880,7 +894,7 @@ func (m TagPlaylistsModel) viewPlaying() string {
 		if len(tags) > 0 {
 			fmt.Fprintf(&sb, "Tags: %s", m.tagRenderer.RenderList(tags))
 		} else {
-			sb.WriteString(dimStyle().Render("No tags — press t while playing to add one"))
+			sb.WriteString(dimStyle().Render("No tags"))
 		}
 	}
 

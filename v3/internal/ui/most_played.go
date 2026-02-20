@@ -145,6 +145,7 @@ func NewMostPlayedModel(metadataManager *storage.MetadataManager, favoritePath s
 		favoritePath:     favoritePath,
 		blocklistManager: blocklistManager,
 		helpModel:        components.NewHelpModel(createMostPlayedHelp()),
+		tagRenderer:      components.NewTagRenderer(),
 	}
 
 	// Load voted stations
