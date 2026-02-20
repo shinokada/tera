@@ -292,7 +292,6 @@ func (m *MostPlayedModel) refreshStationList() {
 	// Future enhancement: cache station info in metadata
 
 	// Convert to list items, filtering out stations without valid names
-	tr := components.NewTagRenderer()
 	m.stationItems = make([]list.Item, 0, len(m.stations))
 	for _, s := range m.stations {
 		// Skip stations that have no name and no UUID (completely invalid)
@@ -300,9 +299,9 @@ func (m *MostPlayedModel) refreshStationList() {
 			continue
 		}
 		tagPills := ""
-		if m.tagsManager != nil {
+		if m.tagsManager != nil && m.tagRenderer != nil {
 			if tags := m.tagsManager.GetTags(s.Station.StationUUID); len(tags) > 0 {
-				tagPills = tr.RenderPills(tags)
+				tagPills = m.tagRenderer.RenderPills(tags)
 			}
 		}
 		m.stationItems = append(m.stationItems, mostPlayedStationItem{
@@ -316,14 +315,13 @@ func (m *MostPlayedModel) refreshStationList() {
 
 // refreshStationTagPills updates tag pills for a single station in the list.
 func (m *MostPlayedModel) refreshStationTagPills(stationUUID string) {
-	if m.tagsManager == nil || m.stationListModel.Items() == nil {
+	if m.tagsManager == nil || m.tagRenderer == nil || m.stationListModel.Items() == nil {
 		return
 	}
-	tr := components.NewTagRenderer()
 	tags := m.tagsManager.GetTags(stationUUID)
 	pills := ""
 	if len(tags) > 0 {
-		pills = tr.RenderPills(tags)
+		pills = m.tagRenderer.RenderPills(tags)
 	}
 	items := m.stationListModel.Items()
 	for i, item := range items {

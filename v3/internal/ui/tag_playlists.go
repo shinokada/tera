@@ -726,9 +726,7 @@ func (m TagPlaylistsModel) viewCreateTags(title string) string {
 	sb.WriteString(boldStyle().Render("Select tags (Space/Enter to toggle):"))
 	sb.WriteString("\n\n")
 
-	total := len(m.allTags) + 1 // +1 for Next row
 	for i, tag := range m.allTags {
-		_ = total
 		selected := m.selectedTags[tag]
 		var box string
 		if selected {

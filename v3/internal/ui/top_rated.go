@@ -106,7 +106,8 @@ type TopRatedModel struct {
 	ratingsManager     *storage.RatingsManager
 	metadataManager    *storage.MetadataManager
 	starRenderer       *components.StarRenderer
-	tagsManager        *storage.TagsManager // for tag pill display
+	tagsManager        *storage.TagsManager   // for tag pill display
+	tagRenderer        *components.TagRenderer // for rendering tag pills
 	favoritePath       string
 	saveMessage        string
 	saveMessageSuccess bool
@@ -336,13 +337,12 @@ func (m *TopRatedModel) refreshStationList() {
 	}
 
 	// Convert to list items
-	tr := components.NewTagRenderer()
 	m.stationItems = make([]list.Item, len(m.stations))
 	for i, s := range m.stations {
 		tagPills := ""
-		if m.tagsManager != nil {
+		if m.tagsManager != nil && m.tagRenderer != nil {
 			if tags := m.tagsManager.GetTags(s.Station.StationUUID); len(tags) > 0 {
-				tagPills = tr.RenderPills(tags)
+				tagPills = m.tagRenderer.RenderPills(tags)
 			}
 		}
 		m.stationItems[i] = topRatedStationItem{

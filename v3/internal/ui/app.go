@@ -448,6 +448,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Set tags manager for tag pill display
 			if a.tagsManager != nil {
 				a.topRatedScreen.tagsManager = a.tagsManager
+				a.topRatedScreen.tagRenderer = components.NewTagRenderer()
 			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
@@ -458,6 +459,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenBrowseTags:
 			if a.tagsManager != nil {
 				a.browseTagsScreen = NewBrowseTagsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				// Set metadata manager for play tracking
+				if a.metadataManager != nil && a.browseTagsScreen.player != nil {
+					a.browseTagsScreen.player.SetMetadataManager(a.metadataManager)
+				}
 				if a.width > 0 && a.height > 0 {
 					a.browseTagsScreen.width = a.width
 					a.browseTagsScreen.height = a.height
@@ -468,6 +473,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenTagPlaylists:
 			if a.tagsManager != nil {
 				a.tagPlaylistsScreen = NewTagPlaylistsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				// Set metadata manager for play tracking
+				if a.metadataManager != nil && a.tagPlaylistsScreen.player != nil {
+					a.tagPlaylistsScreen.player.SetMetadataManager(a.metadataManager)
+				}
 				if a.width > 0 && a.height > 0 {
 					a.tagPlaylistsScreen.width = a.width
 					a.tagPlaylistsScreen.height = a.height

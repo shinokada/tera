@@ -1767,6 +1767,17 @@ func (m LuckyModel) viewShufflePlaying() string {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}
 
+	// Tag display (mirrors viewPlaying)
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags — press t to add one"))
+		}
+	}
+
 	// Shuffle info
 	content.WriteString("\n\n")
 	shuffleInfo := m.shuffleManager.GetStatus()
@@ -1856,7 +1867,11 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "Space: Pause/Play • b: Block • u: Undo • r: Rate • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
+	helpBase := "Space: Pause/Play • b: Block • u: Undo • r: Rate • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle"
+	if m.tagsManager != nil {
+		helpBase += " • t: Add tag • T: Manage tags"
+	}
+	help := helpBase + " • ?: Help"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,

@@ -184,7 +184,7 @@ Rate your favorite stations from 1-5 stars to build your personal collection of 
 - Stars appear in search results, favorites, and the playing screen
 
 **Top-Rated View:**
-From main menu, select "5. Top Rated" to:
+From main menu, select "4. Top Rated" to:
 - Browse all your rated stations sorted by rating
 - Filter by minimum star rating (press `f`)
 - Sort by rating high/low or recently rated (press `s`)
@@ -344,7 +344,7 @@ Type 10-12 to play instantly!
 
 The easiest way to change themes is through the Settings menu:
 
-1. Press `9` from the main menu to open Settings
+1. Press `-` from the main menu to open Settings
 2. Select "Theme / Colors"
 3. Choose from predefined themes:
    - **Default** - Cyan and blue tones
@@ -386,7 +386,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `9` from the main menu to open Settings
+1. Press `-` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version
@@ -419,7 +419,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### How It Works
 
-1. Navigate to **I Feel Lucky** from the main menu (option 7)
+1. Navigate to **I Feel Lucky** from the main menu (option 9)
 2. Press `t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
@@ -628,7 +628,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 8) Gist Management → 6) Token Management
+1. Go to: Main Menu → 0) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!

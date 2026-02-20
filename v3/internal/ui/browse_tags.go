@@ -447,8 +447,11 @@ func (m BrowseTagsModel) viewDetail() string {
 		sb.WriteString(infoStyle().Render("No stations with this tag."))
 	} else {
 		for i, s := range m.detailStations {
-			name := s.TrimName()
 			var parts []string
+			name := s.TrimName()
+			if s.URLResolved == "" {
+				name += dimStyle().Render(" (no URL)")
+			}
 			parts = append(parts, name)
 			if s.Country != "" {
 				parts = append(parts, s.Country)
