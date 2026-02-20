@@ -416,3 +416,212 @@ func TestFormatDuration(t *testing.T) {
 		})
 	}
 }
+
+// Additional edge case tests
+
+func TestGetCachedStation(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-cached-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	mgr, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create metadata manager: %v", err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	station := testStation("cached-uuid")
+	station.Country = "USA"
+	station.Language = "english"
+	station.Tags = "rock,pop"
+
+	_ = mgr.StartPlay(station)
+
+	cached := mgr.GetCachedStation("cached-uuid")
+	if cached == nil {
+		t.Fatal("Expected cached station, got nil")
+	}
+
+	if cached.Name != station.Name {
+		t.Errorf("Expected cached name %q, got %q", station.Name, cached.Name)
+	}
+	if cached.Country != station.Country {
+		t.Errorf("Expected cached country %q, got %q", station.Country, cached.Country)
+	}
+}
+
+func TestGetMetadataReturnsCopy(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-copy-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	mgr, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create metadata manager: %v", err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	_ = mgr.StartPlay(testStation("copy-test"))
+
+	// Get metadata twice
+	meta1 := mgr.GetMetadata("copy-test")
+	meta2 := mgr.GetMetadata("copy-test")
+
+	if meta1 == nil || meta2 == nil {
+		t.Fatal("Expected metadata")
+	}
+
+	// Modify first copy
+	meta1.PlayCount = 999
+
+	// Second copy should be unchanged
+	if meta2.PlayCount == 999 {
+		t.Error("GetMetadata should return independent copies")
+	}
+}
+
+func TestFormatDurationEdgeCases(t *testing.T) {
+	tests := []struct {
+		seconds  int64
+		expected string
+	}{
+		{0, "0s"},
+		{-1, "0s"},
+		{59, "59s"},
+		{120, "2m"},
+		{3599, "59m 59s"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.expected, func(t *testing.T) {
+			result := FormatDuration(tc.seconds)
+			if result != tc.expected {
+				t.Errorf("FormatDuration(%d): expected '%s', got '%s'", tc.seconds, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestFormatLastPlayedAboutYear(t *testing.T) {
+	// Test boundary around 12 months
+	elevenMonths := time.Now().Add(-11 * 30 * 24 * time.Hour)
+	result := FormatLastPlayed(elevenMonths)
+	if result != "11 months ago" {
+		t.Errorf("Expected '11 months ago', got %q", result)
+	}
+
+	// Just under a year should say "About a year ago"
+	almostYear := time.Now().Add(-360 * 24 * time.Hour)
+	result = FormatLastPlayed(almostYear)
+	if result != "About a year ago" {
+		t.Errorf("Expected 'About a year ago', got %q", result)
+	}
+}
+
+func TestStopPlayNonExistent(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-stop-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	mgr, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create metadata manager: %v", err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	// Stopping a non-playing station should not error
+	err = mgr.StopPlay("nonexistent")
+	if err != nil {
+		t.Errorf("Expected no error for stopping nonexistent station, got %v", err)
+	}
+}
+
+func TestGetFirstPlayed(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-first-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	mgr, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create metadata manager: %v", err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	// Play stations with delays
+	_ = mgr.StartPlay(testStation("first-station"))
+	_ = mgr.StopPlay("first-station")
+	time.Sleep(50 * time.Millisecond)
+
+	_ = mgr.StartPlay(testStation("second-station"))
+	_ = mgr.StopPlay("second-station")
+
+	// Get first played
+	first := mgr.GetFirstPlayed(1)
+	if len(first) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(first))
+	}
+
+	if first[0].Station.StationUUID != "first-station" {
+		t.Errorf("Expected first-station, got %s", first[0].Station.StationUUID)
+	}
+}
+
+func TestGetAllStationUUIDs(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-all-uuids-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	mgr, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create metadata manager: %v", err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	// Add stations in unsorted order
+	_ = mgr.StartPlay(testStation("uuid-c"))
+	_ = mgr.StartPlay(testStation("uuid-a"))
+	_ = mgr.StartPlay(testStation("uuid-b"))
+
+	uuids := mgr.GetAllStationUUIDs()
+	if len(uuids) != 3 {
+		t.Fatalf("Expected 3 UUIDs, got %d", len(uuids))
+	}
+
+	// Should be sorted
+	if uuids[0] != "uuid-a" || uuids[1] != "uuid-b" || uuids[2] != "uuid-c" {
+		t.Errorf("Expected sorted UUIDs [uuid-a uuid-b uuid-c], got %v", uuids)
+	}
+}
+
+func TestCloseStopsCurrentPlay(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-close-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	mgr, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create metadata manager: %v", err)
+	}
+
+	// Start playing
+	_ = mgr.StartPlay(testStation("close-playing"))
+	time.Sleep(100 * time.Millisecond)
+
+	// Close should stop and record duration
+	err = mgr.Close()
+	if err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+}
