@@ -49,6 +49,7 @@ type TagsManager struct {
 	dataPath    string
 	store       *TagsStore
 	mu          sync.RWMutex
+	saveMu      sync.Mutex // serializes concurrent Save() calls
 	savePending atomic.Bool
 	lastSave    time.Time
 	cancel      context.CancelFunc
@@ -110,6 +111,8 @@ func (t *TagsManager) Load() error {
 
 // Save writes tags to disk atomically via a temp file.
 func (t *TagsManager) Save() error {
+	t.saveMu.Lock()
+	defer t.saveMu.Unlock()
 	t.mu.RLock()
 	data, err := json.MarshalIndent(t.store, "", "  ")
 	t.mu.RUnlock()

@@ -461,16 +461,28 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.saveMessageTime = messageDisplayShort
 		}
-		m.state = luckyStatePlaying
-		return m, nil
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
 
 	case components.TagCancelledMsg:
 		if m.state == luckyStateManageTags {
 			m.manageTags = m.manageTags.HandleTagCancelled()
 			return m, nil
 		}
-		m.state = luckyStatePlaying
-		return m, nil
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
 
 	case components.ManageTagsDoneMsg:
 		if m.selectedStation != nil && m.tagsManager != nil {
@@ -483,12 +495,24 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.saveMessageTime = messageDisplayShort
 		}
-		m.state = luckyStatePlaying
-		return m, nil
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
 
 	case components.ManageTagsCancelledMsg:
-		m.state = luckyStatePlaying
-		return m, nil
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
 	}
 
 	var cmd tea.Cmd
@@ -1665,6 +1689,25 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
 			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.state = luckyStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = luckyStateManageTags
 			return m, nil
 		}
 		return m, nil

@@ -543,7 +543,7 @@ You can edit this file directly or use the Settings menu.
 | `0`      | Gist Management              |
 | `1-9`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
-| `-`.     | Settings                     |
+| `-`      | Settings                     |
 
 ### Playback Controls
 

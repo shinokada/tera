@@ -2,6 +2,7 @@ package storage
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -384,7 +385,7 @@ func TestRatingsManager(t *testing.T) {
 		corruptDir := t.TempDir()
 
 		// Write invalid JSON
-		err := os.WriteFile(corruptDir+"/station_ratings.json", []byte("not valid json"), 0644)
+		err := os.WriteFile(filepath.Join(corruptDir, "station_ratings.json"), []byte("not valid json"), 0644)
 		if err != nil {
 			t.Fatalf("Failed to write corrupt file: %v", err)
 		}
@@ -469,7 +470,7 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 	// Run concurrent operations
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
-		go func(n int) {
+		go func() {
 			for j := 0; j < 100; j++ {
 				stationUUID := "station-concurrent"
 				rating := (j % 5) + 1
@@ -478,7 +479,7 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 				_ = mgr.GetTopRated(10)
 			}
 			done <- true
-		}(i)
+		}()
 	}
 
 	// Wait for all goroutines
@@ -486,9 +487,9 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 		<-done
 	}
 
-	// Verify no panic and data is consistent
+	// All 1000 calls target the same UUID, so exactly 1 entry should exist.
 	total := mgr.GetTotalRated()
-	if total < 1 {
-		t.Errorf("Expected at least 1 rated station, got %d", total)
+	if total != 1 {
+		t.Errorf("Expected exactly 1 rated station, got %d", total)
 	}
 }

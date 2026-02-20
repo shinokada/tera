@@ -183,6 +183,7 @@ func NewTopRatedModel(ratingsManager *storage.RatingsManager, metadataManager *s
 		ratingsManager:   ratingsManager,
 		metadataManager:  metadataManager,
 		starRenderer:     starRenderer,
+		tagRenderer:      components.NewTagRenderer(),
 		favoritePath:     favoritePath,
 		blocklistManager: blocklistManager,
 		helpModel:        components.NewHelpModel(createTopRatedHelp()),

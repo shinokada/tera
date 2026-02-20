@@ -469,6 +469,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return a, a.browseTagsScreen.Init()
 			}
+			a.screen = screenMainMenu
 			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenTagPlaylists:
 			if a.tagsManager != nil {
@@ -483,6 +484,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return a, a.tagPlaylistsScreen.Init()
 			}
+			a.screen = screenMainMenu
 			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
@@ -884,22 +886,24 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 				a.numberBuffer = ""
 
-				// '0' shortcut → Gist Management
-				if num == 0 {
-					a.unifiedMenuIndex = 9
-					return a.executeMenuAction(9)
-				}
-				// Menu items 1–11
-				if num >= 1 && num <= mainMenuItemCount {
-					a.unifiedMenuIndex = num - 1
-					return a.executeMenuAction(num - 1)
-				}
-				// Quick favorites 10+
+				// Quick favorites 10+ must be checked before the menu-item range,
+				// which also covers 10 and 11 (mainMenuItemCount == 11).
 				if num >= 10 {
 					idx := num - 10
 					if idx < len(a.quickFavorites) {
 						return a.playQuickFavorite(idx)
 					}
+					return a, nil
+				}
+				// '0' shortcut → Gist Management
+				if num == 0 {
+					a.unifiedMenuIndex = 9
+					return a.executeMenuAction(9)
+				}
+				// Menu items 1–9
+				if num >= 1 && num <= mainMenuItemCount {
+					a.unifiedMenuIndex = num - 1
+					return a.executeMenuAction(num - 1)
 				}
 				return a, nil
 			}
