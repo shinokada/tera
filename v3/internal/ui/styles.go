@@ -388,15 +388,15 @@ func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata 
 	var s strings.Builder
 	s.WriteString(base)
 	s.WriteString("\n")
-	dimStyle := lipgloss.NewStyle().Foreground(colorGray())
+	ds := dimStyle()
 	if metadata.PlayCount == 1 {
-		s.WriteString(dimStyle.Render("🎵 Played 1 time"))
+		s.WriteString(ds.Render("🎵 Played 1 time"))
 	} else {
-		s.WriteString(dimStyle.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+		s.WriteString(ds.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
 	}
 	s.WriteString("\n")
 	if !metadata.LastPlayed.IsZero() {
-		s.WriteString(dimStyle.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
+		s.WriteString(ds.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
 		s.WriteString("\n")
 	}
 	return s.String()
@@ -419,8 +419,7 @@ func RenderStationDetailsWithRating(station api.Station, voted bool, metadata *s
 			s.WriteString(accentStyle.Render(starRenderer.RenderCompactPlain(rating)))
 		} else {
 			// Show hint to rate (unrated)
-			dimStyle := lipgloss.NewStyle().Foreground(colorGray())
-			s.WriteString(dimStyle.Render("☆ ☆ ☆ ☆ ☆ [r: Rate]"))
+			s.WriteString(dimStyle().Render("☆ ☆ ☆ ☆ ☆ [r: Rate]"))
 		}
 		s.WriteString("\n")
 	}

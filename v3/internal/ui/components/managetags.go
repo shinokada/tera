@@ -77,10 +77,6 @@ func (m ManageTags) Init() tea.Cmd { return nil }
 func (m ManageTags) Update(msg tea.Msg) (ManageTags, tea.Cmd) {
 	// If we're in "add new tag" sub-mode, delegate to TagInput.
 	if m.addingNew {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			_ = msg
-		}
 		var cmd tea.Cmd
 		m.tagInput, cmd = m.tagInput.Update(msg)
 		return m, cmd
@@ -116,11 +112,11 @@ func (m ManageTags) Update(msg tea.Msg) (ManageTags, tea.Cmd) {
 			if m.cursor < len(m.entries) {
 				m.entries[m.cursor].checked = !m.entries[m.cursor].checked
 			}
-		case "j", "down":
+		case "j":
 			if m.cursor < total-1 {
 				m.cursor++
 			}
-		case "k", "up":
+		case "k":
 			if m.cursor > 0 {
 				m.cursor--
 			}
@@ -216,13 +212,12 @@ func (m ManageTags) View() string {
 		sb.WriteString(dimStyle.Render("Space/Enter: Toggle  ↑↓/jk: Navigate  d: Done  Esc: Cancel"))
 		sb.WriteString("\n\n")
 		for i, e := range m.entries {
-			var box, label string
+			label := e.tag
+			var box string
 			if e.checked {
 				box = checkedStyle.Render("[✓]")
-				label = e.tag
 			} else {
 				box = dimStyle.Render("[ ]")
-				label = e.tag
 			}
 			line := fmt.Sprintf("%s %s", box, label)
 			if i == m.cursor {

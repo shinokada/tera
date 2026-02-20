@@ -806,36 +806,64 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
+		// Handle '-' shortcut for Settings (immediate, never a QF prefix)
+		if msg.String() == "-" {
+			a.numberBuffer = ""
+			a.unifiedMenuIndex = mainMenuItemCount - 1 // Settings is last menu item
+			return a.executeMenuAction(mainMenuItemCount - 1)
+		}
+
 		// Handle number input for menu and quick favorites
 		key := msg.String()
 		if len(key) == 1 && key >= "0" && key <= "9" {
 			a.numberBuffer += key
 
-			// For numbers >= 10, we need at least 2 digits
-			// Allow up to 3 digits for larger lists (e.g., 100+)
+			// maxFavNum is the highest valid QF number (quick favorites start at 10)
+			maxFavNum := 9 + len(a.quickFavorites)
+
+			// For 2+ digit buffers, check for QF matches
 			if len(a.numberBuffer) >= 2 {
-				// Check if this could be a valid selection
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 
-				// Calculate max valid number
-				maxFavNum := 9 + len(a.quickFavorites) // 10-based indexing
-
-				// If the number is valid for favorites, play it
+				// Valid QF number — play it immediately
 				if num >= 10 && num <= maxFavNum {
 					idx := num - 10
-					a.numberBuffer = "" // Clear buffer
+					a.numberBuffer = ""
 					return a.playQuickFavorite(idx)
 				}
 
-				// If number is too large or we have 3+ digits, clear and ignore
+				// Out of range or 3+ digits — clear and ignore
 				if num > maxFavNum || len(a.numberBuffer) >= 3 {
 					a.numberBuffer = ""
 					return a, nil
 				}
 			}
 
-			// Single digit - could be menu shortcut (1-6) or start of larger number
+			// Single digit: execute immediately if it cannot start a valid QF number.
+			// A digit d can start a QF number only if d*10..d*10+9 overlaps [10, maxFavNum],
+			// i.e. d >= 1 && d*10 <= maxFavNum.
+			// '0' never starts a QF (00-09 < 10), so always execute immediately.
+			if len(a.numberBuffer) == 1 {
+				digit := 0
+				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &digit)
+				canStartQF := digit >= 1 && digit*10 <= maxFavNum
+				if !canStartQF {
+					a.numberBuffer = ""
+					if digit == 0 {
+						// '0' → Gist Management
+						a.unifiedMenuIndex = 9
+						return a.executeMenuAction(9)
+					}
+					if digit >= 1 && digit <= mainMenuItemCount {
+						a.unifiedMenuIndex = digit - 1
+						return a.executeMenuAction(digit - 1)
+					}
+					return a, nil
+				}
+			}
+
+			// Ambiguous single digit (could start a QF number) — buffer and wait
 			return a, nil
 		}
 
@@ -845,14 +873,19 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.numberBuffer != "" {
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
-				a.numberBuffer = "" // Clear buffer
+				a.numberBuffer = ""
 
-				// Numbers 1-6 are for menu items
+				// '0' shortcut → Gist Management
+				if num == 0 {
+					a.unifiedMenuIndex = 9
+					return a.executeMenuAction(9)
+				}
+				// Menu items 1–11
 				if num >= 1 && num <= mainMenuItemCount {
 					a.unifiedMenuIndex = num - 1
 					return a.executeMenuAction(num - 1)
 				}
-				// Numbers 10+ are for quick favorites
+				// Quick favorites 10+
 				if num >= 10 {
 					idx := num - 10
 					if idx < len(a.quickFavorites) {
@@ -1174,7 +1207,7 @@ func (a *App) viewMainMenu() string {
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-9: Menu • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-0/-: Menu shortcuts • 10+: Quick Play • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)

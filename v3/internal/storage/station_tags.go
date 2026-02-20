@@ -89,6 +89,8 @@ func (t *TagsManager) Close() error {
 }
 
 // Load reads tags from disk.
+// It unmarshals into a temporary TagsStore first and only swaps on success,
+// preventing partial corruption of the in-memory store on malformed JSON.
 func (t *TagsManager) Load() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -98,7 +100,12 @@ func (t *TagsManager) Load() error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, t.store)
+	var tmp TagsStore
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	*t.store = tmp
+	return nil
 }
 
 // Save writes tags to disk atomically via a temp file.

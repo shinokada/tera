@@ -381,14 +381,10 @@ func TestRatingsManager(t *testing.T) {
 
 	t.Run("CorruptedFile", func(t *testing.T) {
 		// Create a corrupted ratings file
-		corruptDir, err := os.MkdirTemp("", "tera-ratings-corrupt")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-		defer func() { _ = os.RemoveAll(corruptDir) }()
+		corruptDir := t.TempDir()
 
 		// Write invalid JSON
-		err = os.WriteFile(corruptDir+"/station_ratings.json", []byte("not valid json"), 0644)
+		err := os.WriteFile(corruptDir+"/station_ratings.json", []byte("not valid json"), 0644)
 		if err != nil {
 			t.Fatalf("Failed to write corrupt file: %v", err)
 		}
@@ -462,11 +458,7 @@ func TestRenderStarsCompact(t *testing.T) {
 }
 
 func TestRatingsConcurrentAccess(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "tera-ratings-concurrent")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	tmpDir := t.TempDir()
 
 	mgr, err := NewRatingsManager(tmpDir)
 	if err != nil {
