@@ -461,7 +461,7 @@ func TestRenderStarsCompact(t *testing.T) {
 	}
 }
 
-func TestConcurrentAccess(t *testing.T) {
+func TestRatingsConcurrentAccess(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "tera-ratings-concurrent")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)

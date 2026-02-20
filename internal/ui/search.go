@@ -1261,19 +1261,19 @@ func (m SearchModel) View() string {
 			if m.searchType == api.SearchAdvanced {
 				criteria.WriteString("Search criteria:\n")
 				if tag := strings.TrimSpace(m.advancedInputs[0].Value()); tag != "" {
-					criteria.WriteString(fmt.Sprintf("  Tag: %s\n", tag))
+					fmt.Fprintf(&criteria, "  Tag: %s\n", tag)
 				}
 				if lang := strings.TrimSpace(m.advancedInputs[1].Value()); lang != "" {
-					criteria.WriteString(fmt.Sprintf("  Language: %s\n", lang))
+					fmt.Fprintf(&criteria, "  Language: %s\n", lang)
 				}
 				if country := strings.TrimSpace(m.advancedInputs[2].Value()); country != "" {
-					criteria.WriteString(fmt.Sprintf("  Country: %s\n", country))
+					fmt.Fprintf(&criteria, "  Country: %s\n", country)
 				}
 				if state := strings.TrimSpace(m.advancedInputs[3].Value()); state != "" {
-					criteria.WriteString(fmt.Sprintf("  State: %s\n", state))
+					fmt.Fprintf(&criteria, "  State: %s\n", state)
 				}
 				if name := strings.TrimSpace(m.advancedInputs[4].Value()); name != "" {
-					criteria.WriteString(fmt.Sprintf("  Name: %s\n", name))
+					fmt.Fprintf(&criteria, "  Name: %s\n", name)
 				}
 				if m.advancedBitrate != "" {
 					bitrateText := map[string]string{
@@ -1281,7 +1281,7 @@ func (m SearchModel) View() string {
 						"2": "Medium (96-128 kbps)",
 						"3": "High (≥ 192 kbps)",
 					}
-					criteria.WriteString(fmt.Sprintf("  Bitrate: %s\n", bitrateText[m.advancedBitrate]))
+					fmt.Fprintf(&criteria, "  Bitrate: %s\n", bitrateText[m.advancedBitrate])
 				}
 			}
 

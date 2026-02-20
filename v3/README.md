@@ -8,6 +8,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎲 **I Feel Lucky** - Random station discovery by keyword
 - 💾 **Favorites** - Organize stations into custom lists with duplicate detection
 - ⭐ **Star Ratings** - Rate stations 1-5 stars and browse your top-rated collection
+- 🏷️ **Custom Tags** - Tag stations with personal labels and build dynamic playlists
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
 - 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
 - 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
@@ -102,11 +103,13 @@ tera
 # 2) Search Stations     - Find new stations
 # 3) Most Played         - Your listening statistics
 # 4) Top Rated           - Browse your highest-rated stations
-# 5) Manage Lists        - Create/edit/delete favorite lists
-# 6) Block List          - Manage blocked stations
-# 7) I Feel Lucky        - Random station by keyword
-# 8) Gist Management     - Backup/restore via *GitHub*
-# 9) Settings            - Configure TERA
+# 5) Browse by Tag       - Browse stations by your custom tags
+# 6) Tag Playlists       - Dynamic playlists from tag combinations
+# 7) Manage Lists        - Create/edit/delete favorite lists
+# 8) Block List          - Manage blocked stations
+# 9) I Feel Lucky        - Random station by keyword
+# 0) Gist Management     - Backup/restore via GitHub
+# -) Settings            - Configure TERA
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
@@ -200,6 +203,46 @@ From main menu, select "5. Top Rated" to:
 - Linux: `~/.config/tera/data/station_ratings.json`
 - macOS: `~/Library/Application Support/tera/data/station_ratings.json`
 - Windows: `%APPDATA%\tera\data\station_ratings.json`
+
+### Custom Tags
+
+Organize stations with your own personal labels. Tags are stored locally and never transmitted.
+
+**How to Tag:**
+- While playing any station, press `t` to add a single tag
+- Press `T` (shift+t) to open the **Manage Tags** dialog and toggle multiple tags at once
+- The tag input has autocomplete — start typing and press Tab to complete from existing tags
+
+**Browse by Tag (menu option 5):**
+- See all your tags and how many stations each one covers
+- Select a tag to browse and play the matching stations
+- Press `d` on a tag to remove it from every station at once
+
+**Tag Playlists (menu option 6):**
+- Create named playlists that dynamically pull in stations matching a tag combination
+- Choose **any** (OR) or **all** (AND) matching
+- Edit or delete playlists at any time; the station list updates automatically
+
+**Tag pills in lists:**
+Tagged stations show `[tag]` pills inline in every list view — Favorites, Search, Most Played, and Top Rated — so you can see your labels at a glance.
+
+**Keyboard Shortcuts:**
+
+| Screen  | Key | Action                   |
+| ------- | --- | ------------------------ |
+| Playing | `t` | Add a tag (quick input)  |
+| Playing | `T` | Open Manage Tags dialog  |
+| Browse by Tag | `d` | Delete tag from all stations |
+
+**Tag rules:**
+- Lowercase only (normalized automatically)
+- Up to 50 characters; alphanumeric, spaces, hyphens, underscores
+- Up to 20 tags per station
+
+**Storage Location:**
+- Linux: `~/.config/tera/data/station_tags.json`
+- macOS: `~/Library/Application Support/tera/data/station_tags.json`
+- Windows: `%APPDATA%\tera\data\station_tags.json`
 
 ### I Feel Lucky
 
@@ -517,6 +560,8 @@ You can edit this file directly or use the Settings menu.
 | `f` | Save to My-favorites |
 | `s` | Save to another list |
 | `v` | Vote for station     |
+| `t` | Add tag              |
+| `T` | Manage tags          |
 
 ### List Management
 
@@ -620,7 +665,8 @@ tera/
 │   └── github_token        # GitHub Personal Access Token
 ├── data/
 │   ├── station_metadata.json  # Play statistics
-│   └── station_ratings.json   # Star ratings
+│   ├── station_ratings.json   # Star ratings
+│   └── station_tags.json      # Custom tags and tag playlists
 └── favorites/
     ├── My-favorites.json   # Quick play list (main menu 10+)
     ├── Rock.json           # Your custom lists

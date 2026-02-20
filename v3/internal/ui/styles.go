@@ -104,6 +104,11 @@ func helpStyle() lipgloss.Style {
 		Foreground(colorGray())
 }
 
+func dimStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colorGray())
+}
+
 func infoStyle() lipgloss.Style {
 	t := theme.Current()
 	return lipgloss.NewStyle().

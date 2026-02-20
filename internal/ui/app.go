@@ -858,7 +858,7 @@ func (a App) viewMainMenu() string {
 				stationInfo.WriteString(" • ")
 				stationInfo.WriteString(station.Codec)
 				if station.Bitrate > 0 {
-					stationInfo.WriteString(fmt.Sprintf(" %dkbps", station.Bitrate))
+					fmt.Fprintf(&stationInfo, " %dkbps", station.Bitrate)
 				}
 			}
 
