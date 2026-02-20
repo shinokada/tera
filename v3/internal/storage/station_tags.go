@@ -73,7 +73,7 @@ func NewTagsManager(dataPath string) (*TagsManager, error) {
 
 	if err := tm.Load(); err != nil && !os.IsNotExist(err) {
 		// Corrupted file — log warning and continue with empty store.
-		_ = err
+		fmt.Fprintf(os.Stderr, "[WARN] station_tags: failed to load %s: %v (starting with empty store)\n", filepath.Join(dataPath, "station_tags.json"), err)
 	}
 
 	go tm.saveLoop(ctx)
@@ -104,6 +104,15 @@ func (t *TagsManager) Load() error {
 	var tmp TagsStore
 	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
+	}
+	if tmp.StationTags == nil {
+		tmp.StationTags = make(map[string]*StationTags)
+	}
+	if tmp.TagPlaylists == nil {
+		tmp.TagPlaylists = make(map[string]*TagPlaylist)
+	}
+	if tmp.AllTags == nil {
+		tmp.AllTags = []string{}
 	}
 	*t.store = tmp
 	return nil
@@ -145,9 +154,10 @@ func (t *TagsManager) saveLoop(ctx context.Context) {
 			}
 			return
 		case <-ticker.C:
-			if t.savePending.Load() {
-				if err := t.Save(); err == nil {
-					t.savePending.Store(false)
+			if t.savePending.CompareAndSwap(true, false) {
+				if err := t.Save(); err != nil {
+					t.savePending.Store(true) // re-arm on failure
+				} else {
 					t.lastSave = time.Now()
 				}
 			}
@@ -291,6 +301,7 @@ func (t *TagsManager) SetTags(stationUUID string, tags []string) error {
 	} else {
 		existing.Tags = normalized
 		existing.UpdatedAt = now
+		t.pruneAllTags()
 	}
 
 	for _, tag := range normalized {

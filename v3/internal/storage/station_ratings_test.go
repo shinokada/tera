@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -468,9 +469,11 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 	defer func() { _ = mgr.Close() }()
 
 	// Run concurrent operations
-	done := make(chan struct{})
+	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				stationUUID := "station-concurrent"
 				rating := (j % 5) + 1
@@ -478,14 +481,9 @@ func TestRatingsConcurrentAccess(t *testing.T) {
 				_ = mgr.GetRating(stationUUID)
 				_ = mgr.GetTopRated(10)
 			}
-			done <- struct{}{}
 		}()
 	}
-
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
-		<-done
-	}
+	wg.Wait()
 
 	// All 1000 calls target the same UUID, so exactly 1 entry should exist.
 	total := mgr.GetTotalRated()
