@@ -155,6 +155,11 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 		return m, tickEverySecond()
 
 	case components.TagSubmittedMsg:
+		if m.state == tagPlaylistsStateManageTags {
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
 		if m.state == tagPlaylistsStateTagInput && m.selectedStation != nil && m.tagsManager != nil {
 			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
 				m.saveMessage = fmt.Sprintf("✗ %v", err)
@@ -167,6 +172,10 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 		return m, nil
 
 	case components.TagCancelledMsg:
+		if m.state == tagPlaylistsStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
 		m.state = tagPlaylistsStatePlaying
 		return m, nil
 
@@ -176,6 +185,7 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✗ %v", err)
 			} else {
 				m.saveMessage = "✓ Tags updated"
+				m.loadPlaylists() // refresh counts in case tag changes affect playlist membership
 			}
 			m.saveMessageTime = messageDisplayShort
 		}
@@ -494,6 +504,7 @@ func (m TagPlaylistsModel) updateDetail(msg tea.KeyMsg) (TagPlaylistsModel, tea.
 	case "esc":
 		m.state = tagPlaylistsStateList
 		m.selectedPlaylist = nil
+		m.loadPlaylists() // refresh counts in case tags changed while browsing this playlist
 	case "up", "k":
 		if m.stationCursor > 0 {
 			m.stationCursor--
@@ -584,7 +595,11 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 	case "t":
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			w := m.width - 4
+			if w < 20 {
+				w = 20
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = tagPlaylistsStateTagInput
 		}
 	case "T":

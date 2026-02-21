@@ -120,6 +120,11 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		return m, nil
 
 	case components.TagSubmittedMsg:
+		if m.state == browseTagsStateManageTags {
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
 		if m.selectedStation != nil && m.tagsManager != nil {
 			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
 				m.saveMessage = fmt.Sprintf("✗ %v", err)
@@ -133,6 +138,10 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		return m, nil
 
 	case components.TagCancelledMsg:
+		if m.state == browseTagsStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
 		m.state = browseTagsStatePlaying
 		return m, nil
 
@@ -344,7 +353,11 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 	case "t":
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			w := m.width - 4
+			if w < 20 {
+				w = 20
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = browseTagsStateTagInput
 		}
 	case "T":
