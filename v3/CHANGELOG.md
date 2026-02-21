@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Main menu items renumbered to accommodate Browse by Tag (5) and Tag Playlists (6)
-  - Manage Lists → 7, Block List → 8, I Feel Lucky → 9, Gist Management → 0, - Settings → `-` (hyphen key)
+  - Manage Lists → 7, Block List → 8, I Feel Lucky → 9, Gist Management → 0, Settings → `-` (hyphen key)
 
 ## [3.3.0] - 2026-02-18
 

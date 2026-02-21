@@ -419,30 +419,6 @@ func renderSaveMessage(sb *strings.Builder, msg string) {
 	}
 }
 
-// hydrateStations hydrates station metadata for a list of UUIDs from the cache.
-// Stations with no cached entry get the UUID as a fallback name.
-func hydrateStations(mm *storage.MetadataManager, uuids []string) []api.Station {
-	stations := make([]api.Station, 0, len(uuids))
-	for _, uuid := range uuids {
-		var s api.Station
-		s.StationUUID = uuid
-		if mm != nil {
-			if cached := mm.GetCachedStation(uuid); cached != nil {
-				s.Name = cached.Name
-				s.Country = cached.Country
-				s.Codec = cached.Codec
-				s.Bitrate = cached.Bitrate
-				s.URLResolved = cached.URL
-			}
-		}
-		if s.Name == "" {
-			s.Name = uuid
-		}
-		stations = append(stations, s)
-	}
-	return stations
-}
-
 // RenderStationDetailsWithRating renders station details with play statistics and star rating
 func RenderStationDetailsWithRating(station api.Station, voted bool, metadata *storage.StationMetadata, rating int, starRenderer *components.StarRenderer) string {
 	// Delegate base formatting (includes metadata) to avoid duplication

@@ -17,10 +17,11 @@ import (
 type browseTagsState int
 
 const (
-	browseTagsStateList     browseTagsState = iota // list of all tags
-	browseTagsStateDetail                          // stations for a selected tag
-	browseTagsStatePlaying                         // playing a station from a tag
-	browseTagsStateTagInput                        // entering a new tag
+	browseTagsStateList       browseTagsState = iota // list of all tags
+	browseTagsStateDetail                            // stations for a selected tag
+	browseTagsStatePlaying                           // playing a station from a tag
+	browseTagsStateTagInput                          // entering a new tag (single via 't')
+	browseTagsStateManageTags                        // full tag manager via 'T'
 )
 
 // tagStat holds a tag name and how many stations carry it.
@@ -54,7 +55,8 @@ type BrowseTagsModel struct {
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	ratingMode      bool
-	tagInput        components.TagInput
+	tagInput    components.TagInput
+	manageTags  components.ManageTags
 
 	// Shared state
 	saveMessage     string
@@ -130,6 +132,23 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		m.state = browseTagsStatePlaying
 		return m, nil
 
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = "✓ Tags updated"
+				m.loadTagStats()
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = browseTagsStatePlaying
+		return m, nil
+
+	case components.ManageTagsCancelledMsg:
+		m.state = browseTagsStatePlaying
+		return m, nil
+
 	case tea.KeyMsg:
 		switch m.state {
 		case browseTagsStateList:
@@ -141,6 +160,10 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		case browseTagsStateTagInput:
 			var cmd tea.Cmd
 			m.tagInput, cmd = m.tagInput.Update(msg)
+			return m, cmd
+		case browseTagsStateManageTags:
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.Update(msg)
 			return m, cmd
 		}
 
@@ -319,6 +342,13 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			m.tagInput = components.NewTagInput(allTags, m.width-4)
 			m.state = browseTagsStateTagInput
 		}
+	case "T":
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = browseTagsStateManageTags
+		}
 	}
 	return m, nil
 }
@@ -405,8 +435,19 @@ func (m BrowseTagsModel) View() string {
 		return m.viewPlaying()
 	case browseTagsStateTagInput:
 		return m.viewTagInput()
+	case browseTagsStateManageTags:
+		return m.viewManageTags()
 	}
 	return ""
+}
+
+// viewManageTags renders the ManageTags dialog overlay.
+func (m BrowseTagsModel) viewManageTags() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Manage Tags",
+		Content: m.manageTags.View(),
+		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+	}, m.height)
 }
 
 // viewTagInput renders the tag input overlay.
@@ -550,7 +591,7 @@ func (m BrowseTagsModel) viewPlaying() string {
 	}
 	renderSaveMessage(&sb, m.saveMessage)
 
-	helpText := "Space: Pause/Play • r: Rate • t: Add tag • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
+	helpText := "Space: Pause/Play • r: Rate • t: Add tag • T: Manage tags • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),

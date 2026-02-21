@@ -17,10 +17,12 @@ import (
 type tagPlaylistsState int
 
 const (
-	tagPlaylistsStateList    tagPlaylistsState = iota // list of playlists
-	tagPlaylistsStateCreate                           // multi-step create/edit dialog
-	tagPlaylistsStateDetail                           // stations for selected playlist
-	tagPlaylistsStatePlaying                          // playing a station
+	tagPlaylistsStateList       tagPlaylistsState = iota // list of playlists
+	tagPlaylistsStateCreate                              // multi-step create/edit dialog
+	tagPlaylistsStateDetail                              // stations for selected playlist
+	tagPlaylistsStatePlaying                             // playing a station
+	tagPlaylistsStateTagInput                            // single tag input via 't'
+	tagPlaylistsStateManageTags                          // full tag manager via 'T'
 )
 
 // createStep tracks which step of the create/edit wizard is active.
@@ -76,6 +78,8 @@ type TagPlaylistsModel struct {
 	// Playing
 	selectedStation *api.Station
 	ratingMode      bool
+	tagInput        components.TagInput
+	manageTags      components.ManageTags
 
 	// Shared
 	saveMessage     string
@@ -131,6 +135,14 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 			return m.updateDetail(msg)
 		case tagPlaylistsStatePlaying:
 			return m.updatePlaying(msg)
+		case tagPlaylistsStateTagInput:
+			var cmd tea.Cmd
+			m.tagInput, cmd = m.tagInput.Update(msg)
+			return m, cmd
+		case tagPlaylistsStateManageTags:
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.Update(msg)
+			return m, cmd
 		}
 
 	case tickMsg:
@@ -141,6 +153,38 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 			}
 		}
 		return m, tickEverySecond()
+
+	case components.TagSubmittedMsg:
+		if m.state == tagPlaylistsStateTagInput && m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = tagPlaylistsStatePlaying
+		return m, nil
+
+	case components.TagCancelledMsg:
+		m.state = tagPlaylistsStatePlaying
+		return m, nil
+
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = "✓ Tags updated"
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = tagPlaylistsStatePlaying
+		return m, nil
+
+	case components.ManageTagsCancelledMsg:
+		m.state = tagPlaylistsStatePlaying
+		return m, nil
 
 	case playbackStartedMsg:
 		return m, nil
@@ -534,6 +578,19 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 			}
 			m.saveMessageTime = messageDisplayShort
 		}
+	case "t":
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.state = tagPlaylistsStateTagInput
+		}
+	case "T":
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = tagPlaylistsStateManageTags
+		}
 	}
 	return m, nil
 }
@@ -635,8 +692,36 @@ func (m TagPlaylistsModel) View() string {
 		return m.viewDetail()
 	case tagPlaylistsStatePlaying:
 		return m.viewPlaying()
+	case tagPlaylistsStateTagInput:
+		return m.viewTagInput()
+	case tagPlaylistsStateManageTags:
+		return m.viewManageTags()
 	}
 	return ""
+}
+
+// viewTagInput renders the single-tag input overlay.
+func (m TagPlaylistsModel) viewTagInput() string {
+	var sb strings.Builder
+	if m.selectedStation != nil {
+		sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		sb.WriteString("\n\n")
+	}
+	sb.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: sb.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
+	}, m.height)
+}
+
+// viewManageTags renders the ManageTags dialog overlay.
+func (m TagPlaylistsModel) viewManageTags() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Manage Tags",
+		Content: m.manageTags.View(),
+		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+	}, m.height)
 }
 
 func (m TagPlaylistsModel) viewList() string {
@@ -902,6 +987,6 @@ func (m TagPlaylistsModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),
-		Help:    "Space: Pause/Play • r: Rate • /*: Volume • m: Mute • 0: Main Menu • Esc: Back",
+		Help:    "Space: Pause/Play • r: Rate • t: Add tag • T: Manage tags • /*: Volume • m: Mute • 0: Main Menu • Esc: Back",
 	}, m.height)
 }
