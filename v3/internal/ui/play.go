@@ -141,6 +141,7 @@ func NewPlayModel(favoritePath string, blocklistManager *blocklist.Manager) Play
 		helpModel:        components.NewHelpModel(components.CreateFavoritesHelp()),
 		votedStations:    votedStations,
 		blocklistManager: blocklistManager,
+		tagRenderer:      components.NewTagRenderer(),
 	}
 }
 
@@ -502,6 +503,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			startTick := m.saveMessageTime == 0
 			m.saveMessageTime = messageDisplayShort
+			m.state = playStatePlaying
 			if startTick {
 				return m, tickEverySecond()
 			}
@@ -530,6 +532,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			startTick := m.saveMessageTime == 0
 			m.saveMessageTime = messageDisplayShort
+			m.state = playStatePlaying
 			if startTick {
 				return m, tickEverySecond()
 			}
@@ -560,7 +563,6 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stationsLoadedMsg:
 		m.stations = msg.stations
 		m.stationItems = make([]list.Item, len(msg.stations))
-		tr := components.NewTagRenderer()
 		for i, station := range msg.stations {
 			isBlocked := false
 			if m.blocklistManager != nil {
@@ -569,7 +571,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tagPills := ""
 			if m.tagsManager != nil {
 				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
-					tagPills = tr.RenderPills(tags)
+					tagPills = m.tagRenderer.RenderPills(tags)
 				}
 			}
 			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked, tagPills: tagPills}
@@ -1087,11 +1089,10 @@ func (m *PlayModel) refreshStationTagPills(stationUUID string) {
 	if m.tagsManager == nil || m.stationListModel.Items() == nil {
 		return
 	}
-	tr := components.NewTagRenderer()
 	tags := m.tagsManager.GetTags(stationUUID)
 	pills := ""
 	if len(tags) > 0 {
-		pills = tr.RenderPills(tags)
+		pills = m.tagRenderer.RenderPills(tags)
 	}
 	items := m.stationListModel.Items()
 	for i, item := range items {

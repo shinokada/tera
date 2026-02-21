@@ -534,6 +534,9 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 		}
 		m.state = tagPlaylistsStateDetail
 		m.selectedStation = nil
+		if m.selectedPlaylist != nil {
+			m.loadDetailStations() // refresh in case tags were modified while playing
+		}
 	case "0":
 		if m.player != nil {
 			_ = m.player.Stop()

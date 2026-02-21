@@ -296,6 +296,7 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 		}
 		m.state = browseTagsStateDetail
 		m.selectedStation = nil
+		m.loadDetailStations() // refresh in case tags were modified while playing
 	case "0":
 		if m.player != nil {
 			_ = m.player.Stop()
