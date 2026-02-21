@@ -400,16 +400,38 @@ func (m TagPlaylistsModel) commitPlaylist() (TagPlaylistsModel, tea.Cmd) {
 		}
 		_ = m.tagsManager.DeletePlaylist(m.editName)
 	} else {
-		// New playlist or same-name update: delete old (if editing) then create.
+		// New playlist: just create.
+		// Same-name update: use a temp name to stage the new entry before
+		// deleting the old one, preventing data loss if CreatePlaylist fails.
 		if m.isEditing {
+			// Stage under a temporary name, then swap atomically.
+			tempName := name + ".__edit_tmp__"
+			if err = m.tagsManager.CreatePlaylist(tempName, tags, m.matchMode); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+				m.saveMessageTime = messageDisplayShort
+				m.step = createStepName
+				return m, nil
+			}
 			_ = m.tagsManager.DeletePlaylist(m.editName)
-		}
-		err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
-		if err != nil {
-			m.saveMessage = fmt.Sprintf("✗ %v", err)
-			m.saveMessageTime = messageDisplayShort
-			m.step = createStepName
-			return m, nil
+			_ = m.tagsManager.DeletePlaylist(name) // remove old same-name entry if present
+			// Rename temp to final name.
+			if err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode); err != nil {
+				// Unlikely (temp guaranteed unique), but clean up temp on failure.
+				_ = m.tagsManager.DeletePlaylist(tempName)
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+				m.saveMessageTime = messageDisplayShort
+				m.step = createStepName
+				return m, nil
+			}
+			_ = m.tagsManager.DeletePlaylist(tempName)
+		} else {
+			err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
+			if err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+				m.saveMessageTime = messageDisplayShort
+				m.step = createStepName
+				return m, nil
+			}
 		}
 	}
 

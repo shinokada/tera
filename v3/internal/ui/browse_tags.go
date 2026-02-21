@@ -40,8 +40,9 @@ type BrowseTagsModel struct {
 	tagRenderer      *components.TagRenderer
 
 	// Tag list view
-	tagStats  []tagStat
-	tagCursor int
+	tagStats        []tagStat
+	tagCursor       int
+	deleteConfirm   bool // true = waiting for second 'd' to confirm tag deletion
 
 	// Station detail view
 	selectedTag    string
@@ -167,6 +168,12 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 func (m BrowseTagsModel) updateTagList(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "m":
+		if m.deleteConfirm {
+			m.deleteConfirm = false
+			m.saveMessage = ""
+			m.saveMessageTime = 0
+			return m, nil
+		}
 		return m, func() tea.Msg { return backToMainMsg{} }
 	case "up", "k":
 		if m.tagCursor > 0 {
@@ -180,16 +187,25 @@ func (m BrowseTagsModel) updateTagList(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 		if len(m.tagStats) == 0 {
 			break
 		}
+		m.deleteConfirm = false
+		m.saveMessage = ""
 		m.selectedTag = m.tagStats[m.tagCursor].tag
 		m.loadDetailStations()
 		m.stationCursor = 0
 		m.state = browseTagsStateDetail
 	case "d":
-		// Delete tag from all stations.
+		// Delete tag from all stations (requires a second 'd' to confirm).
 		if len(m.tagStats) == 0 {
 			break
 		}
 		tag := m.tagStats[m.tagCursor].tag
+		if !m.deleteConfirm {
+			m.deleteConfirm = true
+			m.saveMessage = fmt.Sprintf("⚠ Delete tag \"%s\" from all stations? Press d again to confirm, Esc to cancel", tag)
+			m.saveMessageTime = -1
+			break
+		}
+		m.deleteConfirm = false
 		m.deleteTagFromAll(tag)
 		m.loadTagStats()
 		if m.tagCursor >= len(m.tagStats) && m.tagCursor > 0 {
@@ -219,6 +235,11 @@ func (m BrowseTagsModel) updateDetail(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd)
 			break
 		}
 		station := m.detailStations[m.stationCursor]
+		if station.URLResolved == "" {
+			m.saveMessage = "✗ No URL cached for this station — play it from search first"
+			m.saveMessageTime = messageDisplayShort
+			break
+		}
 		m.selectedStation = &station
 		m.state = browseTagsStatePlaying
 		return m, m.playSelected()
@@ -433,7 +454,7 @@ func (m BrowseTagsModel) viewTagList() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Browse by Tag",
 		Content: sb.String(),
-		Help:    "↑↓/jk: Navigate • Enter: View stations • d: Delete tag • Esc: Back",
+		Help:    "↑↓/jk: Navigate • Enter: View stations • d: Delete tag (confirm) • Esc: Back",
 	}, m.height)
 }
 
