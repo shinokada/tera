@@ -308,7 +308,9 @@ func (m TagPlaylistsModel) updateCreateName(msg tea.KeyMsg) (TagPlaylistsModel, 
 			m.inputBuffer = string(runes[:len(runes)-1])
 		}
 	case tea.KeyRunes:
-		m.inputBuffer += msg.String()
+		if len([]rune(m.inputBuffer)) < 100 {
+			m.inputBuffer += msg.String()
+		}
 	}
 	return m, nil
 }
@@ -599,25 +601,7 @@ func (m *TagPlaylistsModel) loadDetailStations() {
 		m.selectedPlaylist.tags,
 		m.selectedPlaylist.matchMode == "all",
 	)
-	m.detailStations = make([]api.Station, 0, len(uuids))
-	for _, uuid := range uuids {
-		var s api.Station
-		s.StationUUID = uuid
-		// Hydrate from cached station info if available.
-		if m.metadataManager != nil {
-			if cached := m.metadataManager.GetCachedStation(uuid); cached != nil {
-				s.Name = cached.Name
-				s.Country = cached.Country
-				s.Codec = cached.Codec
-				s.Bitrate = cached.Bitrate
-				s.URLResolved = cached.URL
-			}
-		}
-		if s.Name == "" {
-			s.Name = uuid
-		}
-		m.detailStations = append(m.detailStations, s)
-	}
+	m.detailStations = hydrateStations(m.metadataManager, uuids)
 	sort.Slice(m.detailStations, func(i, j int) bool {
 		return strings.ToLower(m.detailStations[i].TrimName()) <
 			strings.ToLower(m.detailStations[j].TrimName())
@@ -683,16 +667,7 @@ func (m TagPlaylistsModel) viewList() string {
 		}
 	}
 
-	if m.saveMessage != "" {
-		sb.WriteString("\n")
-		if strings.Contains(m.saveMessage, "✓") {
-			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else if strings.Contains(m.saveMessage, "✗") {
-			sb.WriteString(errorStyle().Render(m.saveMessage))
-		} else {
-			sb.WriteString(infoStyle().Render(m.saveMessage))
-		}
-	}
+	renderSaveMessage(&sb, m.saveMessage)
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Tag Playlists",
@@ -870,16 +845,7 @@ func (m TagPlaylistsModel) viewDetail() string {
 		}
 	}
 
-	if m.saveMessage != "" {
-		sb.WriteString("\n")
-		if strings.Contains(m.saveMessage, "✓") {
-			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else if strings.Contains(m.saveMessage, "✗") {
-			sb.WriteString(errorStyle().Render(m.saveMessage))
-		} else {
-			sb.WriteString(infoStyle().Render(m.saveMessage))
-		}
-	}
+	renderSaveMessage(&sb, m.saveMessage)
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   fmt.Sprintf("🎵 %s", m.selectedPlaylist.name),
@@ -929,15 +895,9 @@ func (m TagPlaylistsModel) viewPlaying() string {
 	}
 
 	if m.saveMessage != "" {
-		sb.WriteString("\n\n")
-		if strings.Contains(m.saveMessage, "✓") {
-			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else if strings.Contains(m.saveMessage, "✗") {
-			sb.WriteString(errorStyle().Render(m.saveMessage))
-		} else {
-			sb.WriteString(infoStyle().Render(m.saveMessage))
-		}
+		sb.WriteString("\n")
 	}
+	renderSaveMessage(&sb, m.saveMessage)
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",

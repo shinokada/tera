@@ -119,6 +119,7 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✗ %v", err)
 			} else {
 				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+				m.loadTagStats() // keep list counts fresh after a new tag is added
 			}
 			m.saveMessageTime = messageDisplayShort
 		}
@@ -224,6 +225,10 @@ func (m BrowseTagsModel) updateDetail(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd)
 	case "esc":
 		m.state = browseTagsStateList
 		m.detailStations = nil
+		m.loadTagStats()
+		if m.tagCursor >= len(m.tagStats) && m.tagCursor > 0 {
+			m.tagCursor = len(m.tagStats) - 1
+		}
 	case "up", "k":
 		if m.stationCursor > 0 {
 			m.stationCursor--
@@ -352,25 +357,7 @@ func (m BrowseTagsModel) handleRatingInput(msg tea.KeyMsg) (BrowseTagsModel, tea
 // them from metadata (using stored name/country/codec/bitrate).
 func (m *BrowseTagsModel) loadDetailStations() {
 	m.taggedUUIDs = m.tagsManager.GetStationsByTag(m.selectedTag)
-	m.detailStations = make([]api.Station, 0, len(m.taggedUUIDs))
-	for _, uuid := range m.taggedUUIDs {
-		var s api.Station
-		s.StationUUID = uuid
-		// Hydrate from cached station info if available.
-		if m.metadataManager != nil {
-			if cached := m.metadataManager.GetCachedStation(uuid); cached != nil {
-				s.Name = cached.Name
-				s.Country = cached.Country
-				s.Codec = cached.Codec
-				s.Bitrate = cached.Bitrate
-				s.URLResolved = cached.URL
-			}
-		}
-		if s.Name == "" {
-			s.Name = uuid // fallback
-		}
-		m.detailStations = append(m.detailStations, s)
-	}
+	m.detailStations = hydrateStations(m.metadataManager, m.taggedUUIDs)
 	sort.Slice(m.detailStations, func(i, j int) bool {
 		return strings.ToLower(m.detailStations[i].TrimName()) < strings.ToLower(m.detailStations[j].TrimName())
 	})
@@ -450,16 +437,7 @@ func (m BrowseTagsModel) viewTagList() string {
 		}
 	}
 
-	if m.saveMessage != "" {
-		sb.WriteString("\n")
-		if strings.Contains(m.saveMessage, "✓") {
-			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else if strings.Contains(m.saveMessage, "✗") {
-			sb.WriteString(errorStyle().Render(m.saveMessage))
-		} else {
-			sb.WriteString(infoStyle().Render(m.saveMessage))
-		}
-	}
+	renderSaveMessage(&sb, m.saveMessage)
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Browse by Tag",
@@ -509,16 +487,7 @@ func (m BrowseTagsModel) viewDetail() string {
 		}
 	}
 
-	if m.saveMessage != "" {
-		sb.WriteString("\n")
-		if strings.Contains(m.saveMessage, "✓") {
-			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else if strings.Contains(m.saveMessage, "✗") {
-			sb.WriteString(errorStyle().Render(m.saveMessage))
-		} else {
-			sb.WriteString(infoStyle().Render(m.saveMessage))
-		}
-	}
+	renderSaveMessage(&sb, m.saveMessage)
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   fmt.Sprintf("🏷 Tag: %s", m.selectedTag),
@@ -568,15 +537,9 @@ func (m BrowseTagsModel) viewPlaying() string {
 	}
 
 	if m.saveMessage != "" {
-		sb.WriteString("\n\n")
-		if strings.Contains(m.saveMessage, "✓") {
-			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else if strings.Contains(m.saveMessage, "✗") {
-			sb.WriteString(errorStyle().Render(m.saveMessage))
-		} else {
-			sb.WriteString(infoStyle().Render(m.saveMessage))
-		}
+		sb.WriteString("\n")
 	}
+	renderSaveMessage(&sb, m.saveMessage)
 
 	helpText := "Space: Pause/Play • r: Rate • t: Add tag • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
 	return RenderPageWithBottomHelp(PageLayout{
