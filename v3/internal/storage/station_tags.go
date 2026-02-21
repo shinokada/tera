@@ -51,7 +51,6 @@ type TagsManager struct {
 	mu          sync.RWMutex
 	saveMu      sync.Mutex // serializes concurrent Save() calls
 	savePending atomic.Bool
-	lastSave    time.Time
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 }
@@ -161,8 +160,6 @@ func (t *TagsManager) saveLoop(ctx context.Context) {
 			if t.savePending.CompareAndSwap(true, false) {
 				if err := t.Save(); err != nil {
 					t.savePending.Store(true) // re-arm on failure
-				} else {
-					t.lastSave = time.Now()
 				}
 			}
 		}
@@ -171,7 +168,7 @@ func (t *TagsManager) saveLoop(ctx context.Context) {
 
 // normalizeTag lowercases, trims, and validates a tag string.
 func normalizeTag(tag string) (string, error) {
-	tag = strings.TrimSpace(strings.ToLower(tag))
+	tag = strings.Join(strings.Fields(strings.ToLower(tag)), " ")
 	if tag == "" {
 		return "", fmt.Errorf("tag cannot be empty")
 	}
@@ -559,7 +556,7 @@ func (t *TagsManager) pruneAllTags() {
 			inUse[tag] = struct{}{}
 		}
 	}
-	filtered := t.store.AllTags[:0]
+	filtered := make([]string, 0, len(t.store.AllTags))
 	for _, tag := range t.store.AllTags {
 		if _, ok := inUse[tag]; ok {
 			filtered = append(filtered, tag)
