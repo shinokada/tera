@@ -209,12 +209,16 @@ func (m BrowseTagsModel) updateTagList(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			break
 		}
 		m.deleteConfirm = false
-		m.deleteTagFromAll(tag)
+		failures := m.deleteTagFromAll(tag)
 		m.loadTagStats()
 		if m.tagCursor >= len(m.tagStats) && m.tagCursor > 0 {
 			m.tagCursor = len(m.tagStats) - 1
 		}
-		m.saveMessage = fmt.Sprintf("✓ Deleted tag: %s", tag)
+		if failures == 0 {
+			m.saveMessage = fmt.Sprintf("✓ Deleted tag: %s", tag)
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Deleted tag: %s (%d station(s) could not be updated)", tag, failures)
+		}
 		m.saveMessageTime = messageDisplayShort
 	}
 	return m, nil
@@ -364,11 +368,16 @@ func (m *BrowseTagsModel) loadDetailStations() {
 }
 
 // deleteTagFromAll removes a tag from every station that has it.
-func (m *BrowseTagsModel) deleteTagFromAll(tag string) {
+// Returns the number of stations from which removal failed.
+func (m *BrowseTagsModel) deleteTagFromAll(tag string) int {
 	uuids := m.tagsManager.GetStationsByTag(tag)
+	var failures int
 	for _, uuid := range uuids {
-		_ = m.tagsManager.RemoveTag(uuid, tag)
+		if err := m.tagsManager.RemoveTag(uuid, tag); err != nil {
+			failures++
+		}
 	}
+	return failures
 }
 
 // playSelected starts playing the currently selected station.
