@@ -254,7 +254,7 @@ func (m TagPlaylistsModel) updateList(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cm
 		if !m.deleteConfirm {
 			m.deleteConfirm = true
 			m.saveMessage = fmt.Sprintf("⚠ Delete playlist \"%s\"? Press d again to confirm, Esc to cancel", name)
-			m.saveMessageTime = -1
+			m.saveMessageTime = messageDisplayPersistent
 			break
 		}
 		m.deleteConfirm = false
@@ -554,7 +554,7 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove, Esc to cancel"
-			m.saveMessageTime = -1
+			m.saveMessageTime = messageDisplayPersistent
 		}
 	case "/":
 		if m.player != nil {

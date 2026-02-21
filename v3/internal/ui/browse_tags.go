@@ -91,6 +91,10 @@ func NewBrowseTagsModel(
 
 // loadTagStats recomputes the tagStats slice from the TagsManager.
 func (m *BrowseTagsModel) loadTagStats() {
+	if m.tagsManager == nil {
+		m.tagStats = nil
+		return
+	}
 	allTags := m.tagsManager.GetAllTags()
 	m.tagStats = make([]tagStat, 0, len(allTags))
 	for _, tag := range allTags {
@@ -228,7 +232,7 @@ func (m BrowseTagsModel) updateTagList(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 		if !m.deleteConfirm {
 			m.deleteConfirm = true
 			m.saveMessage = fmt.Sprintf("⚠ Delete tag \"%s\" from all stations? Press d again to confirm, Esc to cancel", tag)
-			m.saveMessageTime = -1
+			m.saveMessageTime = messageDisplayPersistent
 			break
 		}
 		m.deleteConfirm = false
@@ -312,7 +316,7 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove, Esc to cancel"
-			m.saveMessageTime = -1
+			m.saveMessageTime = messageDisplayPersistent
 		}
 	case "/":
 		if m.player != nil {

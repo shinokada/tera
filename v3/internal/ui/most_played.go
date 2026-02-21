@@ -457,7 +457,7 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
 			m.saveMessageSuccess = true
-			m.saveMessageTime = -1 // Persistent until action
+			m.saveMessageTime = messageDisplayPersistent
 			return m, nil
 		}
 	case "t":

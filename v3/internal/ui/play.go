@@ -347,7 +347,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
 		// Only start tick if not already running (saveMessageTime == 0 means no tick;
-		// -1 means persistent/rating prompt with no tick dispatched yet)
+		// messageDisplayPersistent means persistent/rating prompt with no tick dispatched yet)
 		if m.saveMessageTime <= 0 {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
@@ -742,7 +742,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.player.IsPaused() {
 				// Paused - show persistent message
 				m.saveMessage = "⏸ Paused - Press Space to resume"
-				m.saveMessageTime = -1 // Persistent (negative means persistent)
+				m.saveMessageTime = messageDisplayPersistent
 			} else {
 				// Resumed - show temporary message
 				m.saveMessage = "▶ Resumed"
@@ -850,7 +850,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
-			m.saveMessageTime = -1 // Persistent until action
+			m.saveMessageTime = messageDisplayPersistent
 			return m, nil
 		}
 		return m, nil
