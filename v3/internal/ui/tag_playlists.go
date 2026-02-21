@@ -52,8 +52,9 @@ type TagPlaylistsModel struct {
 	player           *player.MPVPlayer
 
 	// Playlist list view
-	playlists  []playlistEntry
-	listCursor int
+	playlists      []playlistEntry
+	listCursor     int
+	deleteConfirm  bool // true = waiting for second 'd' to confirm playlist deletion
 
 	// Create / edit wizard
 	isEditing    bool   // true = editing existing playlist
@@ -161,12 +162,20 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 func (m TagPlaylistsModel) updateList(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "m":
+		if m.deleteConfirm {
+			m.deleteConfirm = false
+			m.saveMessage = ""
+			m.saveMessageTime = 0
+			return m, nil
+		}
 		return m, func() tea.Msg { return backToMainMsg{} }
 	case "up", "k":
+		m.deleteConfirm = false
 		if m.listCursor > 0 {
 			m.listCursor--
 		}
 	case "down", "j":
+		m.deleteConfirm = false
 		if m.listCursor < len(m.playlists)-1 {
 			m.listCursor++
 		}
@@ -174,6 +183,8 @@ func (m TagPlaylistsModel) updateList(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cm
 		if len(m.playlists) == 0 {
 			break
 		}
+		m.deleteConfirm = false
+		m.saveMessage = ""
 		pl := m.playlists[m.listCursor]
 		m.selectedPlaylist = &pl
 		m.loadDetailStations()
@@ -182,18 +193,27 @@ func (m TagPlaylistsModel) updateList(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cm
 
 	case "n":
 		// New playlist
+		m.deleteConfirm = false
 		m.beginCreate(false, "")
 	case "e":
 		// Edit selected playlist
+		m.deleteConfirm = false
 		if len(m.playlists) > 0 {
 			m.beginCreate(true, m.playlists[m.listCursor].name)
 		}
 	case "d":
-		// Delete selected playlist
+		// Delete selected playlist (requires a second 'd' to confirm).
 		if len(m.playlists) == 0 {
 			break
 		}
 		name := m.playlists[m.listCursor].name
+		if !m.deleteConfirm {
+			m.deleteConfirm = true
+			m.saveMessage = fmt.Sprintf("⚠ Delete playlist \"%s\"? Press d again to confirm, Esc to cancel", name)
+			m.saveMessageTime = -1
+			break
+		}
+		m.deleteConfirm = false
 		if err := m.tagsManager.DeletePlaylist(name); err == nil {
 			m.saveMessage = fmt.Sprintf("✓ Deleted: %s", name)
 			m.saveMessageTime = messageDisplayShort
@@ -412,11 +432,16 @@ func (m TagPlaylistsModel) commitPlaylist() (TagPlaylistsModel, tea.Cmd) {
 				m.step = createStepName
 				return m, nil
 			}
+			// Capture original for rollback before deleting.
+			originalPl := m.tagsManager.GetPlaylist(m.editName)
 			_ = m.tagsManager.DeletePlaylist(m.editName)
 			_ = m.tagsManager.DeletePlaylist(name) // remove old same-name entry if present
 			// Rename temp to final name.
 			if err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode); err != nil {
-				// Unlikely (temp guaranteed unique), but clean up temp on failure.
+				// Restore original on failure, then clean up temp.
+				if originalPl != nil {
+					_ = m.tagsManager.CreatePlaylist(m.editName, originalPl.Tags, originalPl.MatchMode)
+				}
 				_ = m.tagsManager.DeletePlaylist(tempName)
 				m.saveMessage = fmt.Sprintf("✗ %v", err)
 				m.saveMessageTime = messageDisplayShort
@@ -475,6 +500,11 @@ func (m TagPlaylistsModel) updateDetail(msg tea.KeyMsg) (TagPlaylistsModel, tea.
 			break
 		}
 		station := m.detailStations[m.stationCursor]
+		if station.URLResolved == "" {
+			m.saveMessage = "✗ No URL cached for this station — play it from search first"
+			m.saveMessageTime = messageDisplayShort
+			break
+		}
 		m.selectedStation = &station
 		m.state = tagPlaylistsStatePlaying
 		return m, m.startPlayback()
@@ -702,7 +732,7 @@ func (m TagPlaylistsModel) viewList() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Tag Playlists",
 		Content: sb.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Play stations • n: New • e: Edit • d: Delete • Esc: Back",
+		Help:    "↑↓/jk: Navigate • Enter: Play stations • n: New • e: Edit • d: Delete (confirm) • Esc: Back",
 	}, m.height)
 }
 
@@ -843,7 +873,11 @@ func (m TagPlaylistsModel) viewDetail() string {
 	} else {
 		for i, s := range m.detailStations {
 			var parts []string
-			parts = append(parts, s.TrimName())
+			name := s.TrimName()
+			if s.URLResolved == "" {
+				name += dimStyle().Render(" (no URL)")
+			}
+			parts = append(parts, name)
 			if s.Country != "" {
 				parts = append(parts, s.Country)
 			}
