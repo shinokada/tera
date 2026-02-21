@@ -1307,16 +1307,12 @@ func (m PlayModel) viewPlaying() string {
 }
 
 // viewManageTags renders the manage tags dialog overlay.
+// The ManageTags component renders the station name in its own header,
+// so no prepend is needed here.
 func (m PlayModel) viewManageTags() string {
-	var sb strings.Builder
-	if m.selectedStation != nil {
-		sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
-		sb.WriteString("\n\n")
-	}
-	sb.WriteString(m.manageTags.View())
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Manage Tags",
-		Content: sb.String(),
+		Content: m.manageTags.View(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
 	}, m.height)
 }

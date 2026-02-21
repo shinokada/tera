@@ -775,7 +775,7 @@ func (m TagPlaylistsModel) viewList() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Tag Playlists",
 		Content: sb.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Play stations • n: New • e: Edit • d: Delete (confirm) • Esc: Back",
+		Help:    "↑↓/jk: Navigate • Enter: Play stations • n: New • e: Edit • d: Delete (confirm) • Esc/m: Back",
 	}, m.height)
 }
 

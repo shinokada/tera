@@ -510,7 +510,7 @@ func (m BrowseTagsModel) viewTagList() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Browse by Tag",
 		Content: sb.String(),
-		Help:    "↑↓/jk: Navigate • Enter: View stations • d: Delete tag (confirm) • Esc: Back",
+		Help:    "↑↓/jk: Navigate • Enter: View stations • d: Delete tag (confirm) • Esc/m: Back",
 	}, m.height)
 }
 
