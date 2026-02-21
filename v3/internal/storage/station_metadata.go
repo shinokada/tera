@@ -251,6 +251,18 @@ func (m *MetadataManager) stopPlayLocked(stationUUID string) {
 	m.savePending.Store(true)
 }
 
+// GetCachedStation returns the cached station info for a UUID, or nil if not found.
+func (m *MetadataManager) GetCachedStation(stationUUID string) *CachedStation {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if cached, ok := m.store.StationCache[stationUUID]; ok {
+		copy := *cached
+		return &copy
+	}
+	return nil
+}
+
 // GetMetadata returns metadata for a station, or nil if not found
 func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata {
 	m.mu.RLock()

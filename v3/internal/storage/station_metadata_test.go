@@ -437,7 +437,9 @@ func TestGetCachedStation(t *testing.T) {
 	station.Language = "english"
 	station.Tags = "rock,pop"
 
-	_ = mgr.StartPlay(station)
+	if err := mgr.StartPlay(station); err != nil {
+		t.Fatalf("StartPlay failed: %v", err)
+	}
 
 	cached := mgr.GetCachedStation("cached-uuid")
 	if cached == nil {
@@ -465,7 +467,9 @@ func TestGetMetadataReturnsCopy(t *testing.T) {
 	}
 	defer func() { _ = mgr.Close() }()
 
-	_ = mgr.StartPlay(testStation("copy-test"))
+	if err := mgr.StartPlay(testStation("copy-test")); err != nil {
+		t.Fatalf("StartPlay failed: %v", err)
+	}
 
 	// Get metadata twice
 	meta1 := mgr.GetMetadata("copy-test")
@@ -507,15 +511,18 @@ func TestFormatDurationEdgeCases(t *testing.T) {
 }
 
 func TestFormatLastPlayedAboutYear(t *testing.T) {
-	// Test boundary around 12 months
-	elevenMonths := time.Now().Add(-11 * 30 * 24 * time.Hour)
+	// Use a single base time to avoid drift between two time.Now() calls.
+	now := time.Now()
+
+	// 330 days back: months = int(330*24h / (24*30h)) = 11
+	elevenMonths := now.Add(-11 * 30 * 24 * time.Hour)
 	result := FormatLastPlayed(elevenMonths)
 	if result != "11 months ago" {
 		t.Errorf("Expected '11 months ago', got %q", result)
 	}
 
-	// Just under a year should say "About a year ago"
-	almostYear := time.Now().Add(-360 * 24 * time.Hour)
+	// 360 days: still < 365 days, months = int(360*24h / (24*30h)) = 12 → "About a year ago"
+	almostYear := now.Add(-360 * 24 * time.Hour)
 	result = FormatLastPlayed(almostYear)
 	if result != "About a year ago" {
 		t.Errorf("Expected 'About a year ago', got %q", result)
@@ -555,13 +562,23 @@ func TestGetFirstPlayed(t *testing.T) {
 	}
 	defer func() { _ = mgr.Close() }()
 
-	// Play stations with delays
-	_ = mgr.StartPlay(testStation("first-station"))
-	_ = mgr.StopPlay("first-station")
+	// The sleep ensures FirstPlayed timestamps are strictly ordered;
+	// back-to-back StartPlay calls on a fast machine can produce the same
+	// time.Now() value inside the manager's lock.
+	if err := mgr.StartPlay(testStation("first-station")); err != nil {
+		t.Fatalf("StartPlay failed: %v", err)
+	}
+	if err := mgr.StopPlay("first-station"); err != nil {
+		t.Fatalf("StopPlay failed: %v", err)
+	}
 	time.Sleep(50 * time.Millisecond)
 
-	_ = mgr.StartPlay(testStation("second-station"))
-	_ = mgr.StopPlay("second-station")
+	if err := mgr.StartPlay(testStation("second-station")); err != nil {
+		t.Fatalf("StartPlay failed: %v", err)
+	}
+	if err := mgr.StopPlay("second-station"); err != nil {
+		t.Fatalf("StopPlay failed: %v", err)
+	}
 
 	// Get first played
 	first := mgr.GetFirstPlayed(1)
@@ -615,13 +632,30 @@ func TestCloseStopsCurrentPlay(t *testing.T) {
 		t.Fatalf("Failed to create metadata manager: %v", err)
 	}
 
-	// Start playing
-	_ = mgr.StartPlay(testStation("close-playing"))
-	time.Sleep(100 * time.Millisecond)
+	const stationUUID = "close-playing"
+	if err := mgr.StartPlay(testStation(stationUUID)); err != nil {
+		t.Fatalf("StartPlay failed: %v", err)
+	}
 
-	// Close should stop and record duration
-	err = mgr.Close()
-	if err != nil {
+	// Close must stop the current play, flush metadata, and persist to disk.
+	// No sleep needed: we only assert Close() is error-free and that the
+	// station's play count was recorded (duration may be 0 for sub-second plays).
+	if err := mgr.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Reload from disk and verify the play was recorded.
+	mgr2, err := NewMetadataManager(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to reopen metadata manager: %v", err)
+	}
+	defer func() { _ = mgr2.Close() }()
+
+	meta := mgr2.GetMetadata(stationUUID)
+	if meta == nil {
+		t.Fatal("Expected metadata after Close, got nil")
+	}
+	if meta.PlayCount != 1 {
+		t.Errorf("Expected PlayCount 1, got %d", meta.PlayCount)
 	}
 }

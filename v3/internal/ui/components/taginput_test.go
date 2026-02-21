@@ -148,7 +148,7 @@ func TestTagInputUpdateEsc(t *testing.T) {
 	ti := NewTagInput([]string{}, 50)
 
 	// Simulate Esc key
-	ti, cmd := ti.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := ti.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	if cmd == nil {
 		t.Fatal("expected cmd from Esc, got nil")

@@ -133,7 +133,7 @@ func TestNewManageTagsNoDuplicates(t *testing.T) {
 func TestManageTagsUpdateEsc(t *testing.T) {
 	mt := NewManageTags("Station", []string{}, []string{}, 80)
 
-	mt, cmd := mt.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := mt.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	if cmd == nil {
 		t.Fatal("expected cmd from Esc, got nil")
@@ -292,7 +292,7 @@ func TestUpdateDKey(t *testing.T) {
 func TestUpdateQKey(t *testing.T) {
 	mt := NewManageTags("Station", []string{}, []string{}, 80)
 
-	mt, cmd := mt.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	_, cmd := mt.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 
 	if cmd == nil {
 		t.Fatal("expected cmd from 'q', got nil")
