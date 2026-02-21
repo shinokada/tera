@@ -302,8 +302,8 @@ func (m TagPlaylistsModel) updateCreateName(msg tea.KeyMsg) (TagPlaylistsModel, 
 		m.inputBuffer = name
 		m.step = createStepTags
 	case tea.KeyBackspace, tea.KeyDelete:
-		if len(m.inputBuffer) > 0 {
-			m.inputBuffer = m.inputBuffer[:len(m.inputBuffer)-1]
+		if runes := []rune(m.inputBuffer); len(runes) > 0 {
+			m.inputBuffer = string(runes[:len(runes)-1])
 		}
 	case tea.KeyRunes:
 		m.inputBuffer += msg.String()
@@ -434,8 +434,7 @@ func (m TagPlaylistsModel) commitPlaylist() (TagPlaylistsModel, tea.Cmd) {
 			}
 			// Capture original for rollback before deleting.
 			originalPl := m.tagsManager.GetPlaylist(m.editName)
-			_ = m.tagsManager.DeletePlaylist(m.editName)
-			_ = m.tagsManager.DeletePlaylist(name) // remove old same-name entry if present
+			_ = m.tagsManager.DeletePlaylist(m.editName) // also removes 'name' when editName == name
 			// Rename temp to final name.
 			if err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode); err != nil {
 				// Restore original on failure, then clean up temp.
@@ -724,8 +723,10 @@ func (m TagPlaylistsModel) viewList() string {
 		sb.WriteString("\n")
 		if strings.Contains(m.saveMessage, "✓") {
 			sb.WriteString(successStyle().Render(m.saveMessage))
-		} else {
+		} else if strings.Contains(m.saveMessage, "✗") {
 			sb.WriteString(errorStyle().Render(m.saveMessage))
+		} else {
+			sb.WriteString(infoStyle().Render(m.saveMessage))
 		}
 	}
 
@@ -902,6 +903,17 @@ func (m TagPlaylistsModel) viewDetail() string {
 				sb.WriteString(normalItemStyle().Render("  " + line))
 			}
 			sb.WriteString("\n")
+		}
+	}
+
+	if m.saveMessage != "" {
+		sb.WriteString("\n")
+		if strings.Contains(m.saveMessage, "✓") {
+			sb.WriteString(successStyle().Render(m.saveMessage))
+		} else if strings.Contains(m.saveMessage, "✗") {
+			sb.WriteString(errorStyle().Render(m.saveMessage))
+		} else {
+			sb.WriteString(infoStyle().Render(m.saveMessage))
 		}
 	}
 

@@ -448,7 +448,13 @@ func (m BrowseTagsModel) viewTagList() string {
 
 	if m.saveMessage != "" {
 		sb.WriteString("\n")
-		sb.WriteString(successStyle().Render(m.saveMessage))
+		if strings.Contains(m.saveMessage, "✓") {
+			sb.WriteString(successStyle().Render(m.saveMessage))
+		} else if strings.Contains(m.saveMessage, "✗") {
+			sb.WriteString(errorStyle().Render(m.saveMessage))
+		} else {
+			sb.WriteString(infoStyle().Render(m.saveMessage))
+		}
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
@@ -496,6 +502,17 @@ func (m BrowseTagsModel) viewDetail() string {
 				sb.WriteString(normalItemStyle().Render("  " + line))
 			}
 			sb.WriteString("\n")
+		}
+	}
+
+	if m.saveMessage != "" {
+		sb.WriteString("\n")
+		if strings.Contains(m.saveMessage, "✓") {
+			sb.WriteString(successStyle().Render(m.saveMessage))
+		} else if strings.Contains(m.saveMessage, "✗") {
+			sb.WriteString(errorStyle().Render(m.saveMessage))
+		} else {
+			sb.WriteString(infoStyle().Render(m.saveMessage))
 		}
 	}
 
