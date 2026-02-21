@@ -33,10 +33,12 @@ const (
 	screenBlocklist
 	screenMostPlayed
 	screenTopRated
+	screenBrowseTags
+	screenTagPlaylists
 )
 
 // Main menu configuration
-const mainMenuItemCount = 9
+const mainMenuItemCount = 11
 
 type App struct {
 	screen                   Screen
@@ -49,6 +51,8 @@ type App struct {
 	luckyScreen              LuckyModel
 	mostPlayedScreen         MostPlayedModel
 	topRatedScreen           TopRatedModel
+	browseTagsScreen         BrowseTagsModel
+	tagPlaylistsScreen       TagPlaylistsModel
 	gistScreen               GistModel
 	settingsScreen           SettingsModel
 	shuffleSettingsScreen    ShuffleSettingsModel
@@ -59,6 +63,7 @@ type App struct {
 	blocklistManager         *blocklist.Manager
 	metadataManager          *storage.MetadataManager // Track play statistics
 	ratingsManager           *storage.RatingsManager  // Track station ratings
+	tagsManager              *storage.TagsManager     // Custom station tags
 	starRenderer             *components.StarRenderer // Render star ratings
 	favoritePath             string
 	quickFavorites           []api.Station
@@ -136,6 +141,12 @@ func NewApp() *App {
 	// Initialize star renderer
 	starRenderer := components.NewStarRenderer(true) // Use unicode by default
 
+	// Initialize tags manager for custom station tags
+	tagsMgr, err := storage.NewTagsManager(dataPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize tags manager: %v\n", err)
+	}
+
 	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
@@ -145,6 +156,7 @@ func NewApp() *App {
 		blocklistManager: blocklistMgr,
 		metadataManager:  metadataMgr,
 		ratingsManager:   ratingsMgr,
+		tagsManager:      tagsMgr,
 		starRenderer:     starRenderer,
 	}
 
@@ -174,11 +186,13 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Search Stations", "", "2"),
 		components.NewMenuItem("Most Played", "", "3"),
 		components.NewMenuItem("Top Rated", "", "4"),
-		components.NewMenuItem("Manage Lists", "", "5"),
-		components.NewMenuItem("Block List", "", "6"),
-		components.NewMenuItem("I Feel Lucky", "", "7"),
-		components.NewMenuItem("Gist Management", "", "8"),
-		components.NewMenuItem("Settings", "", "9"),
+		components.NewMenuItem("Browse by Tag", "", "5"),
+		components.NewMenuItem("Tag Playlists", "", "6"),
+		components.NewMenuItem("Manage Lists", "", "7"),
+		components.NewMenuItem("Block List", "", "8"),
+		components.NewMenuItem("I Feel Lucky", "", "9"),
+		components.NewMenuItem("Gist Management", "", "0"),
+		components.NewMenuItem("Settings", "", "-"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -245,6 +259,12 @@ func (a *App) Cleanup() {
 		if a.topRatedScreen.player != nil {
 			_ = a.topRatedScreen.player.Stop()
 		}
+		if a.tagPlaylistsScreen.player != nil {
+			_ = a.tagPlaylistsScreen.player.Stop()
+		}
+		if a.browseTagsScreen.player != nil {
+			_ = a.browseTagsScreen.player.Stop()
+		}
 		// Close metadata manager to save pending changes
 		if a.metadataManager != nil {
 			_ = a.metadataManager.Close()
@@ -252,6 +272,10 @@ func (a *App) Cleanup() {
 		// Close ratings manager to save pending changes
 		if a.ratingsManager != nil {
 			_ = a.ratingsManager.Close()
+		}
+		// Close tags manager to stop background goroutine and flush pending changes
+		if a.tagsManager != nil {
+			_ = a.tagsManager.Close()
 		}
 	})
 }
@@ -318,6 +342,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.starRenderer != nil {
 				a.playScreen.starRenderer = a.starRenderer
 			}
+			// Set tags manager and renderer
+			if a.tagsManager != nil {
+				a.playScreen.tagsManager = a.tagsManager
+				a.playScreen.tagRenderer = components.NewTagRenderer()
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -339,6 +368,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if a.starRenderer != nil {
 				a.searchScreen.starRenderer = a.starRenderer
+			}
+			// Set tags manager and renderer
+			if a.tagsManager != nil {
+				a.searchScreen.tagsManager = a.tagsManager
+				a.searchScreen.tagRenderer = components.NewTagRenderer()
 			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
@@ -370,6 +404,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.starRenderer != nil {
 				a.luckyScreen.starRenderer = a.starRenderer
 			}
+			// Set tags manager and renderer
+			if a.tagsManager != nil {
+				a.luckyScreen.tagsManager = a.tagsManager
+				a.luckyScreen.tagRenderer = components.NewTagRenderer()
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.luckyScreen.width = a.width
@@ -389,6 +428,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.starRenderer != nil {
 				a.mostPlayedScreen.starRenderer = a.starRenderer
 			}
+			// Set tags manager for tag pill display
+			if a.tagsManager != nil {
+				a.mostPlayedScreen.tagsManager = a.tagsManager
+				a.mostPlayedScreen.tagRenderer = components.NewTagRenderer()
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.mostPlayedScreen.width = a.width
@@ -401,12 +445,47 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.metadataManager != nil && a.topRatedScreen.player != nil {
 				a.topRatedScreen.player.SetMetadataManager(a.metadataManager)
 			}
+			// Set tags manager for tag pill display
+			if a.tagsManager != nil {
+				a.topRatedScreen.tagsManager = a.tagsManager
+				a.topRatedScreen.tagRenderer = components.NewTagRenderer()
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.topRatedScreen.width = a.width
 				a.topRatedScreen.height = a.height
 			}
 			return a, a.topRatedScreen.Init()
+		case screenBrowseTags:
+			if a.tagsManager != nil {
+				a.browseTagsScreen = NewBrowseTagsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				// Set metadata manager for play tracking
+				if a.metadataManager != nil && a.browseTagsScreen.player != nil {
+					a.browseTagsScreen.player.SetMetadataManager(a.metadataManager)
+				}
+				if a.width > 0 && a.height > 0 {
+					a.browseTagsScreen.width = a.width
+					a.browseTagsScreen.height = a.height
+				}
+				return a, a.browseTagsScreen.Init()
+			}
+			a.screen = screenMainMenu
+			return a, func() tea.Msg { return backToMainMsg{} }
+		case screenTagPlaylists:
+			if a.tagsManager != nil {
+				a.tagPlaylistsScreen = NewTagPlaylistsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				// Set metadata manager for play tracking
+				if a.metadataManager != nil && a.tagPlaylistsScreen.player != nil {
+					a.tagPlaylistsScreen.player.SetMetadataManager(a.metadataManager)
+				}
+				if a.width > 0 && a.height > 0 {
+					a.tagPlaylistsScreen.width = a.width
+					a.tagPlaylistsScreen.height = a.height
+				}
+				return a, a.tagPlaylistsScreen.Init()
+			}
+			a.screen = screenMainMenu
+			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
 			// Set dimensions immediately if we have them
@@ -607,6 +686,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screenTopRated:
 		a.topRatedScreen, cmd = a.topRatedScreen.Update(msg)
 		return a, cmd
+	case screenBrowseTags:
+		a.browseTagsScreen, cmd = a.browseTagsScreen.Update(msg)
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenTagPlaylists:
+		a.tagPlaylistsScreen, cmd = a.tagPlaylistsScreen.Update(msg)
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
 	}
 
 	return a, nil
@@ -726,36 +817,64 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
+		// Handle '-' shortcut for Settings (immediate, never a QF prefix)
+		if msg.String() == "-" {
+			a.numberBuffer = ""
+			a.unifiedMenuIndex = mainMenuItemCount - 1 // Settings is last menu item
+			return a.executeMenuAction(mainMenuItemCount - 1)
+		}
+
 		// Handle number input for menu and quick favorites
 		key := msg.String()
 		if len(key) == 1 && key >= "0" && key <= "9" {
 			a.numberBuffer += key
 
-			// For numbers >= 10, we need at least 2 digits
-			// Allow up to 3 digits for larger lists (e.g., 100+)
+			// maxFavNum is the highest valid QF number (quick favorites start at 10)
+			maxFavNum := 9 + len(a.quickFavorites)
+
+			// For 2+ digit buffers, check for QF matches
 			if len(a.numberBuffer) >= 2 {
-				// Check if this could be a valid selection
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 
-				// Calculate max valid number
-				maxFavNum := 9 + len(a.quickFavorites) // 10-based indexing
-
-				// If the number is valid for favorites, play it
+				// Valid QF number — play it immediately
 				if num >= 10 && num <= maxFavNum {
 					idx := num - 10
-					a.numberBuffer = "" // Clear buffer
+					a.numberBuffer = ""
 					return a.playQuickFavorite(idx)
 				}
 
-				// If number is too large or we have 3+ digits, clear and ignore
+				// Out of range or 3+ digits — clear and ignore
 				if num > maxFavNum || len(a.numberBuffer) >= 3 {
 					a.numberBuffer = ""
 					return a, nil
 				}
 			}
 
-			// Single digit - could be menu shortcut (1-6) or start of larger number
+			// Single digit: execute immediately if it cannot start a valid QF number.
+			// A digit d can start a QF number only if d*10..d*10+9 overlaps [10, maxFavNum],
+			// i.e. d >= 1 && d*10 <= maxFavNum.
+			// '0' never starts a QF (00-09 < 10), so always execute immediately.
+			if len(a.numberBuffer) == 1 {
+				digit := 0
+				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &digit)
+				canStartQF := digit >= 1 && digit*10 <= maxFavNum
+				if !canStartQF {
+					a.numberBuffer = ""
+					if digit == 0 {
+						// '0' → Gist Management
+						a.unifiedMenuIndex = 9
+						return a.executeMenuAction(9)
+					}
+					if digit >= 1 && digit <= mainMenuItemCount {
+						a.unifiedMenuIndex = digit - 1
+						return a.executeMenuAction(digit - 1)
+					}
+					return a, nil
+				}
+			}
+
+			// Ambiguous single digit (could start a QF number) — buffer and wait
 			return a, nil
 		}
 
@@ -765,19 +884,26 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.numberBuffer != "" {
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
-				a.numberBuffer = "" // Clear buffer
+				a.numberBuffer = ""
 
-				// Numbers 1-6 are for menu items
-				if num >= 1 && num <= mainMenuItemCount {
-					a.unifiedMenuIndex = num - 1
-					return a.executeMenuAction(num - 1)
-				}
-				// Numbers 10+ are for quick favorites
+				// Quick favorites 10+ must be checked before the menu-item range,
+				// which also covers 10 and 11 (mainMenuItemCount == 11).
 				if num >= 10 {
 					idx := num - 10
 					if idx < len(a.quickFavorites) {
 						return a.playQuickFavorite(idx)
 					}
+					return a, nil
+				}
+				// '0' shortcut → Gist Management
+				if num == 0 {
+					a.unifiedMenuIndex = 9
+					return a.executeMenuAction(9)
+				}
+				// Menu items 1–9
+				if num >= 1 && num <= mainMenuItemCount {
+					a.unifiedMenuIndex = num - 1
+					return a.executeMenuAction(num - 1)
 				}
 				return a, nil
 			}
@@ -849,23 +975,31 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenTopRated}
 		}
-	case 4: // Manage Lists
+	case 4: // Browse by Tag
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenBrowseTags}
+		}
+	case 5: // Tag Playlists
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenTagPlaylists}
+		}
+	case 6: // Manage Lists
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenList}
 		}
-	case 5: // Block List
+	case 7: // Block List
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenBlocklist}
 		}
-	case 6: // I Feel Lucky
+	case 8: // I Feel Lucky
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 7: // Gist Management
+	case 9: // Gist Management
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
-	case 8: // Settings
+	case 10: // Settings
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSettings}
 		}
@@ -927,6 +1061,10 @@ func (a *App) View() string {
 		return a.mostPlayedScreen.View()
 	case screenTopRated:
 		return a.topRatedScreen.View()
+	case screenBrowseTags:
+		return a.browseTagsScreen.View()
+	case screenTagPlaylists:
+		return a.tagPlaylistsScreen.View()
 	}
 	return "Unknown screen"
 }
@@ -978,11 +1116,13 @@ func (a *App) viewMainMenu() string {
 		{"2", "Search Stations"},
 		{"3", "Most Played"},
 		{"4", "Top Rated"},
-		{"5", "Manage Lists"},
-		{"6", "Block List"},
-		{"7", "I Feel Lucky"},
-		{"8", "Gist Management"},
-		{"9", "Settings"},
+		{"5", "Browse by Tag"},
+		{"6", "Tag Playlists"},
+		{"7", "Manage Lists"},
+		{"8", "Block List"},
+		{"9", "I Feel Lucky"},
+		{"0", "Gist Management"},
+		{"-", "Settings"},
 	}
 
 	for i, item := range menuItems {
@@ -1080,7 +1220,7 @@ func (a *App) viewMainMenu() string {
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-9: Menu • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-0/-: Menu shortcuts • 10+: Quick Play • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)

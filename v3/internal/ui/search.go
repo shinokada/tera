@@ -38,6 +38,8 @@ const (
 	searchStateSelectList
 	searchStateNewListInput
 	searchStateAdvancedForm
+	searchStateTagInput
+	searchStateManageTags
 )
 
 // SearchModel represents the search screen
@@ -81,6 +83,11 @@ type SearchModel struct {
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
 	advancedBitrate     string             // "1", "2", "3", or ""
 	advancedSortByVotes bool               // true = votes, false = relevance
+	// Tag fields
+	tagsManager *storage.TagsManager
+	tagRenderer *components.TagRenderer
+	tagInput    components.TagInput
+	manageTags  components.ManageTags
 }
 
 // Messages for search screen
@@ -280,6 +287,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleStationInfoInput(msg)
 		case searchStatePlaying:
 			return m.handlePlayerUpdate(msg)
+		case searchStateTagInput:
+			return m.handleTagInputKey(msg)
+		case searchStateManageTags:
+			return m.handleManageTagsKey(msg)
 		case searchStateSavePrompt:
 			return m.handleSavePrompt(msg)
 		case searchStateSelectList:
@@ -297,12 +308,19 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.results = msg.results
 		m.state = searchStateResults
 		m.resultsItems = make([]list.Item, 0, len(m.results))
+		tr := components.NewTagRenderer()
 		for _, station := range m.results {
 			isBlocked := false
 			if m.blocklistManager != nil {
 				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
-			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked})
+			tagPills := ""
+			if m.tagsManager != nil {
+				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
+					tagPills = tr.RenderPills(tags)
+				}
+			}
+			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked, tagPills: tagPills})
 		}
 
 		// Create results list
@@ -484,6 +502,52 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
 		m.saveMessageTime = messageDisplayShort
+		return m, nil
+
+	case components.TagSubmittedMsg:
+		if m.state == searchStateManageTags {
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+				m.refreshResultsTagPills(m.selectedStation.StationUUID)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.TagCancelledMsg:
+		if m.state == searchStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else if len(msg.Tags) == 0 {
+				m.saveMessage = "✓ All tags removed"
+				m.refreshResultsTagPills(m.selectedStation.StationUUID)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
+				m.refreshResultsTagPills(m.selectedStation.StationUUID)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.ManageTagsCancelledMsg:
+		m.state = searchStatePlaying
 		return m, nil
 	}
 
@@ -1173,8 +1237,41 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.state = searchStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = searchStateManageTags
+			return m, nil
+		}
+		return m, nil
 	}
 	return m, nil
+}
+
+// handleTagInputKey delegates key events to the TagInput component.
+func (m SearchModel) handleTagInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tagInput, cmd = m.tagInput.Update(msg)
+	return m, cmd
+}
+
+// handleManageTagsKey delegates key events to the ManageTags component.
+func (m SearchModel) handleManageTagsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.manageTags, cmd = m.manageTags.Update(msg)
+	return m, cmd
 }
 
 // handleRatingModeInput handles input when in rating mode
@@ -1422,6 +1519,16 @@ func (m SearchModel) View() string {
 			} else {
 				content.WriteString(infoStyle().Render("⏸ Stopped"))
 			}
+			// Tag display
+			if m.tagsManager != nil && m.tagRenderer != nil {
+				tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+				content.WriteString("\n")
+				if len(tags) > 0 {
+					fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+				} else {
+					content.WriteString(helpStyle().Render("No tags — press t to add one"))
+				}
+			}
 		}
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
@@ -1441,6 +1548,9 @@ func (m SearchModel) View() string {
 			if m.ratingsManager != nil {
 				helpText += " • r: Rate"
 			}
+			if m.tagsManager != nil {
+				helpText += " • t: Add tag • T: Manage tags"
+			}
 			helpText += " • v: Vote • ?: Help"
 			return RenderPageWithBottomHelp(PageLayout{
 				Title:   "🎵 Now Playing",
@@ -1456,12 +1566,42 @@ func (m SearchModel) View() string {
 
 	case searchStateAdvancedForm:
 		return m.viewAdvancedForm()
+
+	case searchStateTagInput:
+		return m.viewTagInput()
+	case searchStateManageTags:
+		var sb strings.Builder
+		if m.selectedStation != nil {
+			sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString(m.manageTags.View())
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "🏷 Manage Tags",
+			Content: sb.String(),
+			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+		}, m.height)
 	}
 
 	return RenderPage(PageLayout{
 		Content: "Unknown state",
 		Help:    "",
 	})
+}
+
+// viewTagInput renders the tag input overlay.
+func (m SearchModel) viewTagInput() string {
+	var content strings.Builder
+	if m.selectedStation != nil {
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: content.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
+	}, m.height)
 }
 
 // getSearchTypeLabel returns a label for the current search type
@@ -2071,6 +2211,28 @@ func (m SearchModel) blockStation() tea.Cmd {
 			success:     true,
 		}
 	}
+}
+
+// refreshResultsTagPills updates tag pills for a single station in the results list.
+func (m *SearchModel) refreshResultsTagPills(stationUUID string) {
+	if m.tagsManager == nil || m.resultsList.Items() == nil {
+		return
+	}
+	tr := components.NewTagRenderer()
+	tags := m.tagsManager.GetTags(stationUUID)
+	pills := ""
+	if len(tags) > 0 {
+		pills = tr.RenderPills(tags)
+	}
+	items := m.resultsList.Items()
+	for i, item := range items {
+		if si, ok := item.(stationListItem); ok && si.station.StationUUID == stationUUID {
+			si.tagPills = pills
+			items[i] = si
+			break
+		}
+	}
+	m.resultsList.SetItems(items)
 }
 
 // undoLastBlock undoes the last block operation

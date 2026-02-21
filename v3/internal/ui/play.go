@@ -29,6 +29,8 @@ const (
 	playStatePlaying
 	playStateSavePrompt
 	playStateDeleteConfirm
+	playStateTagInput
+	playStateManageTags
 )
 
 // PlayModel represents the play screen
@@ -63,6 +65,11 @@ type PlayModel struct {
 	ratingsManager *storage.RatingsManager
 	starRenderer   *components.StarRenderer
 	ratingMode     bool // true when waiting for 1-5 input after pressing R
+	// Tag fields
+	tagsManager *storage.TagsManager
+	tagRenderer *components.TagRenderer
+	tagInput    components.TagInput
+	manageTags  components.ManageTags
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -78,6 +85,7 @@ func (i playListItem) Description() string { return "" }
 type stationListItem struct {
 	station   api.Station
 	isBlocked bool
+	tagPills  string // pre-rendered tag pills (empty if no tags)
 }
 
 func (i stationListItem) FilterValue() string { return i.station.Name }
@@ -99,7 +107,11 @@ func (i stationListItem) Title() string {
 		}
 		parts = append(parts, codecInfo)
 	}
-	return strings.Join(parts, " • ")
+	line := strings.Join(parts, " • ")
+	if i.tagPills != "" {
+		line += "  " + i.tagPills
+	}
+	return line
 }
 func (i stationListItem) Description() string {
 	// Return empty to show single line
@@ -129,6 +141,7 @@ func NewPlayModel(favoritePath string, blocklistManager *blocklist.Manager) Play
 		helpModel:        components.NewHelpModel(components.CreateFavoritesHelp()),
 		votedStations:    votedStations,
 		blocklistManager: blocklistManager,
+		tagRenderer:      components.NewTagRenderer(),
 	}
 }
 
@@ -302,6 +315,10 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSavePrompt(msg)
 		case playStateDeleteConfirm:
 			return m.updateDeleteConfirm(msg)
+		case playStateTagInput:
+			return m.updateTagInput(msg)
+		case playStateManageTags:
+			return m.updateManageTags(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -331,7 +348,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
 		// Only start tick if not already running (saveMessageTime == 0 means no tick;
-		// -1 means persistent/rating prompt with no tick dispatched yet)
+		// messageDisplayPersistent means persistent/rating prompt with no tick dispatched yet)
 		if m.saveMessageTime <= 0 {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
@@ -469,6 +486,64 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
+	case components.TagSubmittedMsg:
+		if m.state == playStateManageTags {
+			// TagInput inside ManageTags submitted
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
+		// Regular tag input
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			}
+			startTick := m.saveMessageTime == 0
+			m.saveMessageTime = messageDisplayShort
+			m.state = playStatePlaying
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.TagCancelledMsg:
+		if m.state == playStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else if len(msg.Tags) == 0 {
+				m.saveMessage = "✓ All tags removed"
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			}
+			startTick := m.saveMessageTime == 0
+			m.saveMessageTime = messageDisplayShort
+			m.state = playStatePlaying
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.ManageTagsCancelledMsg:
+		m.state = playStatePlaying
+		return m, nil
+
 	case listsLoadedMsg:
 		m.lists = msg.lists
 		m.listItems = make([]list.Item, len(msg.lists))
@@ -493,7 +568,13 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.blocklistManager != nil {
 				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
-			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked}
+			tagPills := ""
+			if m.tagsManager != nil {
+				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
+					tagPills = m.tagRenderer.RenderPills(tags)
+				}
+			}
+			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked, tagPills: tagPills}
 		}
 
 		// Initialize now if we have dimensions, otherwise flag for later
@@ -663,7 +744,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.player.IsPaused() {
 				// Paused - show persistent message
 				m.saveMessage = "⏸ Paused - Press Space to resume"
-				m.saveMessageTime = -1 // Persistent (negative means persistent)
+				m.saveMessageTime = messageDisplayPersistent
 			} else {
 				// Resumed - show temporary message
 				m.saveMessage = "▶ Resumed"
@@ -771,12 +852,49 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
-			m.saveMessageTime = -1 // Persistent until action
+			m.saveMessageTime = messageDisplayPersistent
+			return m, nil
+		}
+		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			w := m.width - 4
+			if w < 20 {
+				w = 20
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
+			m.state = playStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = playStateManageTags
 			return m, nil
 		}
 		return m, nil
 	}
 	return m, nil
+}
+
+// updateTagInput delegates key events to the TagInput component.
+func (m PlayModel) updateTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tagInput, cmd = m.tagInput.Update(msg)
+	return m, cmd
+}
+
+// updateManageTags handles ManageTags dialog input.
+func (m PlayModel) updateManageTags(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.manageTags, cmd = m.manageTags.Update(msg)
+	return m, cmd
 }
 
 // handleRatingModeInput handles input when in rating mode
@@ -970,6 +1088,27 @@ func (m PlayModel) blockStation() tea.Cmd {
 	}
 }
 
+// refreshStationTagPills updates tag pills for a single station in the station list.
+func (m *PlayModel) refreshStationTagPills(stationUUID string) {
+	if m.tagsManager == nil || m.stationListModel.Items() == nil {
+		return
+	}
+	tags := m.tagsManager.GetTags(stationUUID)
+	pills := ""
+	if len(tags) > 0 {
+		pills = m.tagRenderer.RenderPills(tags)
+	}
+	items := m.stationListModel.Items()
+	for i, item := range items {
+		if si, ok := item.(stationListItem); ok && si.station.StationUUID == stationUUID {
+			si.tagPills = pills
+			items[i] = si
+			break
+		}
+	}
+	m.stationListModel.SetItems(items)
+}
+
 // undoLastBlock undoes the last block operation
 func (m PlayModel) undoLastBlock() tea.Cmd {
 	return func() tea.Msg {
@@ -1010,6 +1149,10 @@ func (m PlayModel) View() string {
 		return m.viewSavePrompt()
 	case playStateDeleteConfirm:
 		return m.viewDeleteConfirm()
+	case playStateTagInput:
+		return m.viewTagInput()
+	case playStateManageTags:
+		return m.viewManageTags()
 	}
 
 	return "Unknown state"
@@ -1091,6 +1234,17 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
 	}
 
+	// Tag display
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags — press t to add one"))
+		}
+	}
+
 	// Track history
 	if len(m.trackHistory) > 0 {
 		content.WriteString("\n\n")
@@ -1141,11 +1295,40 @@ func (m PlayModel) viewPlaying() string {
 	if m.ratingsManager != nil {
 		helpText += " • r: Rate"
 	}
+	if m.tagsManager != nil {
+		helpText += " • t: Add tag • T: Manage tags"
+	}
 	helpText += " • v: Vote • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
 		Help:    helpText,
+	}, m.height)
+}
+
+// viewManageTags renders the manage tags dialog overlay.
+// The ManageTags component renders the station name in its own header,
+// so no prepend is needed here.
+func (m PlayModel) viewManageTags() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Manage Tags",
+		Content: m.manageTags.View(),
+		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+	}, m.height)
+}
+
+// viewTagInput renders the tag input overlay for the favorites playing view.
+func (m PlayModel) viewTagInput() string {
+	var content strings.Builder
+	if m.selectedStation != nil {
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: content.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
 	}, m.height)
 }
 

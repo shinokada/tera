@@ -8,6 +8,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎲 **I Feel Lucky** - Random station discovery by keyword
 - 💾 **Favorites** - Organize stations into custom lists with duplicate detection
 - ⭐ **Star Ratings** - Rate stations 1-5 stars and browse your top-rated collection
+- 🏷️ **Custom Tags** - Tag stations with personal labels and build dynamic playlists
 - ⚡ **Quick Play** - Direct playback from main menu (shortcuts 10-99+)
 - 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
 - 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
@@ -102,11 +103,13 @@ tera
 # 2) Search Stations     - Find new stations
 # 3) Most Played         - Your listening statistics
 # 4) Top Rated           - Browse your highest-rated stations
-# 5) Manage Lists        - Create/edit/delete favorite lists
-# 6) Block List          - Manage blocked stations
-# 7) I Feel Lucky        - Random station by keyword
-# 8) Gist Management     - Backup/restore via *GitHub*
-# 9) Settings            - Configure TERA
+# 5) Browse by Tag       - Browse stations by your custom tags
+# 6) Tag Playlists       - Dynamic playlists from tag combinations
+# 7) Manage Lists        - Create/edit/delete favorite lists
+# 8) Block List          - Manage blocked stations
+# 9) I Feel Lucky        - Random station by keyword
+# 0) Gist Management     - Backup/restore via GitHub
+# -) Settings            - Configure TERA
 
 # Quick Play (from main menu):
 # Type 10-99+ to instantly play stations from "My-favorites"
@@ -151,7 +154,7 @@ Block unwanted stations to prevent them from appearing in search results and shu
 - Works in Search, I Feel Lucky, and Play from Favorites
 
 **Block List Management:**
-From main menu, select "6. Block List" to:
+From main menu, select "8. Block List" to:
 - View all blocked stations with details (country, language, codec)
 - Press `u` to unblock a selected station
 - Press `c` to clear entire block list (with confirmation)
@@ -181,7 +184,7 @@ Rate your favorite stations from 1-5 stars to build your personal collection of 
 - Stars appear in search results, favorites, and the playing screen
 
 **Top-Rated View:**
-From main menu, select "5. Top Rated" to:
+From main menu, select "4. Top Rated" to:
 - Browse all your rated stations sorted by rating
 - Filter by minimum star rating (press `f`)
 - Sort by rating high/low or recently rated (press `s`)
@@ -201,6 +204,46 @@ From main menu, select "5. Top Rated" to:
 - macOS: `~/Library/Application Support/tera/data/station_ratings.json`
 - Windows: `%APPDATA%\tera\data\station_ratings.json`
 
+### Custom Tags
+
+Organize stations with your own personal labels. Tags are stored locally and never transmitted.
+
+**How to Tag:**
+- While playing any station, press `t` to add a single tag
+- Press `T` (shift+t) to open the **Manage Tags** dialog and toggle multiple tags at once
+- The tag input has autocomplete — start typing and press Tab to complete from existing tags
+
+**Browse by Tag (menu option 5):**
+- See all your tags and how many stations each one covers
+- Select a tag to browse and play the matching stations
+- Press `d` on a tag to remove it from every station at once
+
+**Tag Playlists (menu option 6):**
+- Create named playlists that dynamically pull in stations matching a tag combination
+- Choose **any** (OR) or **all** (AND) matching
+- Edit or delete playlists at any time; the station list updates automatically
+
+**Tag pills in lists:**
+Tagged stations show `[tag]` pills inline in every list view — Favorites, Search, Most Played, and Top Rated — so you can see your labels at a glance.
+
+**Keyboard Shortcuts:**
+
+| Screen        | Key | Action                       |
+| ------------- | --- | ---------------------------- |
+| Playing       | `t` | Add a tag (quick input)      |
+| Playing       | `T` | Open Manage Tags dialog      |
+| Browse by Tag | `d` | Delete tag from all stations |
+
+**Tag rules:**
+- Lowercase only (normalized automatically)
+- Up to 50 characters; alphanumeric, spaces, hyphens, underscores
+- Up to 20 tags per station
+
+**Storage Location:**
+- Linux: `~/.config/tera/data/station_tags.json`
+- macOS: `~/Library/Application Support/tera/data/station_tags.json`
+- Windows: `%APPDATA%\tera\data\station_tags.json`
+
 ### I Feel Lucky
 
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
@@ -216,7 +259,7 @@ See [Shuffle Mode](#shuffle-mode) for detailed features.
 
 ### Settings
 
-Access app configuration from the main menu (option 9):
+Access app configuration from the main menu (Settings: `-`):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
@@ -273,11 +316,13 @@ Choose an option:
   2. Search Stations
   3. Most Played
   4. Top Rated
-  5. Manage Lists
-  6. Block List
-  7. I Feel Lucky
-  8. Gist Management
-  9. Settings
+  5. Browse by Tag
+  6. Tag Playlists 
+  7. Manage Lists
+  8. Block List
+  9. I Feel Lucky
+  0. Gist Management
+  -. Settings
 
 ─── Quick Play Favorites ───
   10. Jazz FM • UK • MP3 192kbps
@@ -299,7 +344,7 @@ Type 10-12 to play instantly!
 
 The easiest way to change themes is through the Settings menu:
 
-1. Press `9` from the main menu to open Settings
+1. Press `-` from the main menu to open Settings
 2. Select "Theme / Colors"
 3. Choose from predefined themes:
    - **Default** - Cyan and blue tones
@@ -341,7 +386,7 @@ TERA automatically checks for new versions on startup. When an update is availab
 
 ### Checking for Updates
 
-1. Press `9` from the main menu to open Settings
+1. Press `-` from the main menu to open Settings
 2. Select "Check for Updates" (option 2)
 3. View:
    - Your current version
@@ -374,7 +419,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### How It Works
 
-1. Navigate to **I Feel Lucky** from the main menu (option 7)
+1. Navigate to **I Feel Lucky** from the main menu (option 9)
 2. Press `t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
@@ -495,8 +540,10 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
+| `0`      | Gist Management              |
 | `1-9`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites |
+| `-`      | Settings                     |
 
 ### Playback Controls
 
@@ -517,6 +564,8 @@ You can edit this file directly or use the Settings menu.
 | `f` | Save to My-favorites |
 | `s` | Save to another list |
 | `v` | Vote for station     |
+| `t` | Add tag              |
+| `T` | Manage tags          |
 
 ### List Management
 
@@ -579,7 +628,7 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 Backup and sync your favorite lists across devices using GitHub Gists.
 
 **Quick Setup:**
-1. Go to: Main Menu → 8) Gist Management → 6) Token Management
+1. Go to: Main Menu → 0) Gist Management → 6) Token Management
 2. Create a GitHub Personal Access Token (with `gist` scope only)
 3. Paste token in TERA
 4. Create your first gist backup!
@@ -620,7 +669,8 @@ tera/
 │   └── github_token        # GitHub Personal Access Token
 ├── data/
 │   ├── station_metadata.json  # Play statistics
-│   └── station_ratings.json   # Star ratings
+│   ├── station_ratings.json   # Star ratings
+│   └── station_tags.json      # Custom tags and tag playlists
 └── favorites/
     ├── My-favorites.json   # Quick play list (main menu 10+)
     ├── Rock.json           # Your custom lists

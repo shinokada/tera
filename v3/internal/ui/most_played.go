@@ -53,6 +53,7 @@ const (
 	mostPlayedStatePlaying
 	mostPlayedStateSavePrompt
 	mostPlayedStateSelectList
+	mostPlayedStateTagInput
 )
 
 // MostPlayedModel represents the Most Played screen
@@ -79,6 +80,10 @@ type MostPlayedModel struct {
 	ratingsManager *storage.RatingsManager
 	starRenderer   *components.StarRenderer
 	ratingMode     bool // true when waiting for 1-5 input after pressing R
+	// Tag fields
+	tagsManager *storage.TagsManager
+	tagRenderer *components.TagRenderer
+	tagInput    components.TagInput
 	// For saving to list
 	availableLists []string
 	listItems      []list.Item
@@ -89,6 +94,7 @@ type MostPlayedModel struct {
 type mostPlayedStationItem struct {
 	station  api.Station
 	metadata *storage.StationMetadata
+	tagPills string // pre-rendered tag pills (empty if no tags)
 }
 
 func (i mostPlayedStationItem) FilterValue() string {
@@ -109,6 +115,9 @@ func (i mostPlayedStationItem) Title() string {
 	}
 	if len(name) > 35 {
 		name = name[:32] + "..."
+	}
+	if i.tagPills != "" {
+		return name + "  " + i.tagPills
 	}
 	return name
 }
@@ -136,6 +145,7 @@ func NewMostPlayedModel(metadataManager *storage.MetadataManager, favoritePath s
 		favoritePath:     favoritePath,
 		blocklistManager: blocklistManager,
 		helpModel:        components.NewHelpModel(createMostPlayedHelp()),
+		tagRenderer:      components.NewTagRenderer(),
 	}
 
 	// Load voted stations
@@ -217,7 +227,28 @@ func (m MostPlayedModel) Update(msg tea.Msg) (MostPlayedModel, tea.Cmd) {
 			return m.handleSavePromptInput(msg)
 		case mostPlayedStateSelectList:
 			return m.handleSelectListInput(msg)
+		case mostPlayedStateTagInput:
+			return m.handleTagInputKey(msg)
 		}
+
+	case components.TagSubmittedMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+				m.saveMessageSuccess = false
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+				m.saveMessageSuccess = true
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = mostPlayedStatePlaying
+		return m, tickEverySecond()
+
+	case components.TagCancelledMsg:
+		m.state = mostPlayedStatePlaying
+		return m, nil
 
 	case tickMsg:
 		// Decrement save message timer
@@ -267,12 +298,40 @@ func (m *MostPlayedModel) refreshStationList() {
 		if s.Station.Name == "" && s.Station.StationUUID == "" {
 			continue
 		}
+		tagPills := ""
+		if m.tagsManager != nil && m.tagRenderer != nil {
+			if tags := m.tagsManager.GetTags(s.Station.StationUUID); len(tags) > 0 {
+				tagPills = m.tagRenderer.RenderPills(tags)
+			}
+		}
 		m.stationItems = append(m.stationItems, mostPlayedStationItem{
 			station:  s.Station,
 			metadata: s.Metadata,
+			tagPills: tagPills,
 		})
 	}
 	m.stationListModel.SetItems(m.stationItems)
+}
+
+// refreshStationTagPills updates tag pills for a single station in the list.
+func (m *MostPlayedModel) refreshStationTagPills(stationUUID string) {
+	if m.tagsManager == nil || m.tagRenderer == nil || m.stationListModel.Items() == nil {
+		return
+	}
+	tags := m.tagsManager.GetTags(stationUUID)
+	pills := ""
+	if len(tags) > 0 {
+		pills = m.tagRenderer.RenderPills(tags)
+	}
+	items := m.stationListModel.Items()
+	for i, item := range items {
+		if si, ok := item.(mostPlayedStationItem); ok && si.station.StationUUID == stationUUID {
+			si.tagPills = pills
+			items[i] = si
+			break
+		}
+	}
+	m.stationListModel.SetItems(items)
 }
 
 func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
@@ -398,12 +457,27 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove rating"
 			m.saveMessageSuccess = true
-			m.saveMessageTime = -1 // Persistent until action
+			m.saveMessageTime = messageDisplayPersistent
+			return m, nil
+		}
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.state = mostPlayedStateTagInput
 			return m, nil
 		}
 	}
 
 	return m, nil
+}
+
+// handleTagInputKey delegates key events to the TagInput component.
+func (m MostPlayedModel) handleTagInputKey(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tagInput, cmd = m.tagInput.Update(msg)
+	return m, cmd
 }
 
 // handleRatingModeInput handles input when in rating mode
@@ -554,6 +628,8 @@ func (m MostPlayedModel) View() string {
 		return m.viewSavePrompt()
 	case mostPlayedStateSelectList:
 		return m.viewSelectList()
+	case mostPlayedStateTagInput:
+		return m.viewTagInput()
 	}
 
 	return m.viewList()
@@ -640,6 +716,17 @@ func (m MostPlayedModel) viewPlaying() string {
 	// Volume
 	fmt.Fprintf(&content, "\n\nVolume: %d%%", m.player.GetVolume())
 
+	// Tag display
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags — press t to add one"))
+		}
+	}
+
 	// Show save message
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
@@ -650,11 +737,31 @@ func (m MostPlayedModel) viewPlaying() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	helpText := "p: Pause • s: Stop • +/-: Volume • r: Rate"
+	if m.tagsManager != nil {
+		helpText += " • t: Tag"
+	}
+	helpText += " • f: Favorites • Esc: Back"
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played - Now Playing",
 		Content: content.String(),
-		Help:    "p: Pause • s: Stop • +/-: Volume • r: Rate • f: Favorites • Esc: Back",
-	})
+		Help:    helpText,
+	}, m.height)
+}
+
+// viewTagInput renders the tag input overlay for the most played playing view.
+func (m MostPlayedModel) viewTagInput() string {
+	var content strings.Builder
+	if m.selectedStation != nil {
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: content.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
+	}, m.height)
 }
 
 func (m MostPlayedModel) viewSavePrompt() string {

@@ -1024,8 +1024,8 @@ func (m LuckyModel) viewInput() string {
 		content.WriteString(highlightStyle().Render("[✓] On"))
 		content.WriteString("  (press 't' to disable)")
 		if m.shuffleConfig.AutoAdvance {
-			content.WriteString(fmt.Sprintf("\n              Auto-advance in %d min • History: %d stations",
-				m.shuffleConfig.IntervalMinutes, m.shuffleConfig.MaxHistory))
+			fmt.Fprintf(&content, "\n              Auto-advance in %d min • History: %d stations",
+				m.shuffleConfig.IntervalMinutes, m.shuffleConfig.MaxHistory)
 		}
 	} else {
 		content.WriteString("Shuffle mode: ")
@@ -1511,7 +1511,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 		} else if shuffleInfo.TimeRemaining > 0 {
 			minutes := int(shuffleInfo.TimeRemaining.Minutes())
 			seconds := int(shuffleInfo.TimeRemaining.Seconds()) % 60
-			content.WriteString(fmt.Sprintf(" • Next in: %d:%02d", minutes, seconds))
+			fmt.Fprintf(&content, " • Next in: %d:%02d", minutes, seconds)
 		}
 	} else {
 		content.WriteString(" • ")
@@ -1519,7 +1519,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	// Station counter
-	content.WriteString(fmt.Sprintf("\n   Station %d of session", shuffleInfo.SessionCount+1))
+	fmt.Fprintf(&content, "\n   Station %d of session", shuffleInfo.SessionCount+1)
 
 	// Shuffle history (append current station for display)
 	history := shuffleInfo.History

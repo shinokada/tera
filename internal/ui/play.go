@@ -1008,7 +1008,7 @@ func (m PlayModel) viewPlaying() string {
 				trackStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 			}
 
-			content.WriteString(fmt.Sprintf("%s %s\n", indicator, trackStyle.Render(track)))
+			fmt.Fprintf(&content, "%s %s\n", indicator, trackStyle.Render(track))
 		}
 	}
 

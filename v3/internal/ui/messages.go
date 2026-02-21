@@ -10,9 +10,10 @@ import (
 
 // Message display durations (in seconds, 1 tick = 1 second)
 const (
-	messageDisplayShort  = 3  // 3 seconds
-	messageDisplayMedium = 5  // 5 seconds
-	messageDisplayLong   = 10 // 10 seconds
+	messageDisplayShort      = 3  // 3 seconds
+	messageDisplayMedium     = 5  // 5 seconds
+	messageDisplayLong       = 10 // 10 seconds
+	messageDisplayPersistent = -1 // never auto-clear; must be reset explicitly
 )
 
 // tickMsg is sent on a timer for countdown/animation purposes

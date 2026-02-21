@@ -5,6 +5,27 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-02-20
+
+### Added
+- **Custom Tags** - Tag any station with personal labels (e.g., `late night coding`, `gym workout`, `chill vibes`)
+- **Tag input** - Press `t` while playing to add a tag; press `T` to open the full Manage Tags dialog
+- **Manage Tags dialog** - Toggle tags on/off with Space, add new tags inline, and save in one keystroke
+- **Browse by Tag** - New menu option (5) to view all your tags and the stations under each one
+  - Select a tag to see its stations; press `d` to delete a tag from all stations
+- **Tag Playlists** - New menu option (6) to create dynamic playlists driven by tag combinations
+  - Three-step creation wizard: name → select tags → choose match mode (any/all)
+  - Edit and delete playlists; play all matching stations in sequence
+- **Tag pills in station lists** - Tagged stations show `[tag]` pills inline in every list view (Favorites, Search, Most Played, Top Rated, Browse by Tag, Tag Playlists)
+- **Live pill refresh** - Tag pills update immediately when you add or remove tags without reloading the list
+- **Tag autocomplete** - The tag input field suggests matching tags as you type; Tab to accept, ↑↓ to navigate
+- **Keyboard shortcuts** across all playback screens: `t` add tag, `T` manage tags
+- All tags stored locally in `station_tags.json`; nothing is transmitted externally
+
+### Changed
+- Main menu items renumbered to accommodate Browse by Tag (5) and Tag Playlists (6)
+  - Manage Lists → 7, Block List → 8, I Feel Lucky → 9, Gist Management → 0, Settings → `-` (hyphen key)
+
 ## [3.3.0] - 2026-02-18
 
 ### Added

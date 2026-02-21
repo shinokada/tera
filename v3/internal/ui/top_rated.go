@@ -106,6 +106,8 @@ type TopRatedModel struct {
 	ratingsManager     *storage.RatingsManager
 	metadataManager    *storage.MetadataManager
 	starRenderer       *components.StarRenderer
+	tagsManager        *storage.TagsManager   // for tag pill display
+	tagRenderer        *components.TagRenderer // for rendering tag pills
 	favoritePath       string
 	saveMessage        string
 	saveMessageSuccess bool
@@ -124,8 +126,9 @@ type TopRatedModel struct {
 
 // topRatedStationItem wraps a station with rating for the list
 type topRatedStationItem struct {
-	station api.Station
-	rating  *storage.StationRating
+	station  api.Station
+	rating   *storage.StationRating
+	tagPills string // pre-rendered tag pills (empty if no tags)
 }
 
 func (i topRatedStationItem) FilterValue() string {
@@ -146,6 +149,9 @@ func (i topRatedStationItem) Title() string {
 	}
 	if len(name) > 35 {
 		name = name[:32] + "..."
+	}
+	if i.tagPills != "" {
+		return name + "  " + i.tagPills
 	}
 	return name
 }
@@ -177,6 +183,7 @@ func NewTopRatedModel(ratingsManager *storage.RatingsManager, metadataManager *s
 		ratingsManager:   ratingsManager,
 		metadataManager:  metadataManager,
 		starRenderer:     starRenderer,
+		tagRenderer:      components.NewTagRenderer(),
 		favoritePath:     favoritePath,
 		blocklistManager: blocklistManager,
 		helpModel:        components.NewHelpModel(createTopRatedHelp()),
@@ -333,9 +340,16 @@ func (m *TopRatedModel) refreshStationList() {
 	// Convert to list items
 	m.stationItems = make([]list.Item, len(m.stations))
 	for i, s := range m.stations {
+		tagPills := ""
+		if m.tagsManager != nil && m.tagRenderer != nil {
+			if tags := m.tagsManager.GetTags(s.Station.StationUUID); len(tags) > 0 {
+				tagPills = m.tagRenderer.RenderPills(tags)
+			}
+		}
 		m.stationItems[i] = topRatedStationItem{
-			station: s.Station,
-			rating:  s.Rating,
+			station:  s.Station,
+			rating:   s.Rating,
+			tagPills: tagPills,
 		}
 	}
 	m.stationListModel.SetItems(m.stationItems)

@@ -264,6 +264,19 @@ func (m *MetadataManager) GetMetadata(stationUUID string) *StationMetadata {
 	return nil
 }
 
+// GetCachedStation returns cached station info for a station, or nil if not found
+func (m *MetadataManager) GetCachedStation(stationUUID string) *CachedStation {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if cached, exists := m.store.StationCache[stationUUID]; exists {
+		// Return a copy to prevent external modification
+		cachedCopy := *cached
+		return &cachedCopy
+	}
+	return nil
+}
+
 // sortedStationsLocked collects all station entries, sorts them by less, and
 // truncates to at most limit results (0 = no limit). Must be called with RLock held.
 // Station info is populated from the cache if available.

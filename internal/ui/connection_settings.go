@@ -400,12 +400,12 @@ func (m ConnectionSettingsModel) viewMenu() string {
 	// Current settings summary
 	content.WriteString(subtitleStyle().Render("Current Settings:"))
 	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("  Auto-reconnect:         %s\n", boolToEnabledDisabled(m.config.AutoReconnect)))
-	content.WriteString(fmt.Sprintf("  Reconnect delay:        %d seconds\n", m.config.ReconnectDelay))
+	fmt.Fprintf(&content, "  Auto-reconnect:         %s\n", boolToEnabledDisabled(m.config.AutoReconnect))
+	fmt.Fprintf(&content, "  Reconnect delay:        %d seconds\n", m.config.ReconnectDelay)
 	if m.config.StreamBufferMB == 0 {
 		content.WriteString("  Stream buffer:          Disabled\n")
 	} else {
-		content.WriteString(fmt.Sprintf("  Stream buffer:          %d MB\n", m.config.StreamBufferMB))
+		fmt.Fprintf(&content, "  Stream buffer:          %d MB\n", m.config.StreamBufferMB)
 	}
 	content.WriteString("\n")
 
@@ -447,7 +447,7 @@ func (m ConnectionSettingsModel) viewDelay() string {
 
 	content.WriteString(subtitleStyle().Render("Select reconnect delay:"))
 	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("  Current: %d seconds\n", m.config.ReconnectDelay))
+	fmt.Fprintf(&content, "  Current: %d seconds\n", m.config.ReconnectDelay)
 	content.WriteString("\n")
 
 	// Delay list
@@ -481,7 +481,7 @@ func (m ConnectionSettingsModel) viewBuffer() string {
 	if m.config.StreamBufferMB == 0 {
 		content.WriteString("  Current: Disabled\n")
 	} else {
-		content.WriteString(fmt.Sprintf("  Current: %d MB\n", m.config.StreamBufferMB))
+		fmt.Fprintf(&content, "  Current: %d MB\n", m.config.StreamBufferMB)
 	}
 	content.WriteString("\n")
 

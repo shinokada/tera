@@ -692,7 +692,7 @@ func (m ListManagementModel) viewCreate() string {
 		content.WriteString(subtitleStyle().Render("Current lists:"))
 		content.WriteString("\n")
 		for _, list := range m.lists {
-			content.WriteString(fmt.Sprintf("  • %s\n", list))
+			fmt.Fprintf(&content, "  • %s\n", list)
 		}
 		content.WriteString("\n")
 	}
@@ -719,9 +719,9 @@ func (m ListManagementModel) viewDelete() string {
 	content.WriteString("\n")
 	for _, list := range m.lists {
 		if list == "My-favorites" {
-			content.WriteString(fmt.Sprintf("  • %s (protected)\n", list))
+			fmt.Fprintf(&content, "  • %s (protected)\n", list)
 		} else {
-			content.WriteString(fmt.Sprintf("  • %s\n", list))
+			fmt.Fprintf(&content, "  • %s\n", list)
 		}
 	}
 	content.WriteString("\n")
@@ -792,9 +792,9 @@ func (m ListManagementModel) viewEdit() string {
 	content.WriteString("\n")
 	for _, list := range m.lists {
 		if list == "My-favorites" {
-			content.WriteString(fmt.Sprintf("  • %s (protected)\n", list))
+			fmt.Fprintf(&content, "  • %s (protected)\n", list)
 		} else {
-			content.WriteString(fmt.Sprintf("  • %s\n", list))
+			fmt.Fprintf(&content, "  • %s\n", list)
 		}
 	}
 	content.WriteString("\n")
@@ -870,9 +870,9 @@ func (m ListManagementModel) viewShowAll() string {
 	} else {
 		for i, list := range m.lists {
 			if list == "My-favorites" {
-				content.WriteString(fmt.Sprintf("%d. %s (Quick Favorites)\n", i+1, list))
+				fmt.Fprintf(&content, "%d. %s (Quick Favorites)\n", i+1, list)
 			} else {
-				content.WriteString(fmt.Sprintf("%d. %s\n", i+1, list))
+				fmt.Fprintf(&content, "%d. %s\n", i+1, list)
 			}
 		}
 	}

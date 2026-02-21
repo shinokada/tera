@@ -2,6 +2,8 @@ package storage
 
 import (
 	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -381,14 +383,10 @@ func TestRatingsManager(t *testing.T) {
 
 	t.Run("CorruptedFile", func(t *testing.T) {
 		// Create a corrupted ratings file
-		corruptDir, err := os.MkdirTemp("", "tera-ratings-corrupt")
-		if err != nil {
-			t.Fatalf("Failed to create temp dir: %v", err)
-		}
-		defer func() { _ = os.RemoveAll(corruptDir) }()
+		corruptDir := t.TempDir()
 
 		// Write invalid JSON
-		err = os.WriteFile(corruptDir+"/station_ratings.json", []byte("not valid json"), 0644)
+		err := os.WriteFile(filepath.Join(corruptDir, "station_ratings.json"), []byte("not valid json"), 0644)
 		if err != nil {
 			t.Fatalf("Failed to write corrupt file: %v", err)
 		}
@@ -461,12 +459,8 @@ func TestRenderStarsCompact(t *testing.T) {
 	}
 }
 
-func TestConcurrentAccess(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "tera-ratings-concurrent")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+func TestRatingsConcurrentAccess(t *testing.T) {
+	tmpDir := t.TempDir()
 
 	mgr, err := NewRatingsManager(tmpDir)
 	if err != nil {
@@ -475,9 +469,11 @@ func TestConcurrentAccess(t *testing.T) {
 	defer func() { _ = mgr.Close() }()
 
 	// Run concurrent operations
-	done := make(chan bool)
+	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
-		go func(n int) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				stationUUID := "station-concurrent"
 				rating := (j % 5) + 1
@@ -485,18 +481,13 @@ func TestConcurrentAccess(t *testing.T) {
 				_ = mgr.GetRating(stationUUID)
 				_ = mgr.GetTopRated(10)
 			}
-			done <- true
-		}(i)
+		}()
 	}
+	wg.Wait()
 
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
-		<-done
-	}
-
-	// Verify no panic and data is consistent
+	// All 1000 calls target the same UUID, so exactly 1 entry should exist.
 	total := mgr.GetTotalRated()
-	if total < 1 {
-		t.Errorf("Expected at least 1 rated station, got %d", total)
+	if total != 1 {
+		t.Errorf("Expected exactly 1 rated station, got %d", total)
 	}
 }

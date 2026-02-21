@@ -601,7 +601,7 @@ func (m BlocklistModel) viewConfirmClear() string {
 	count := m.manager.Count()
 	var content strings.Builder
 
-	content.WriteString(fmt.Sprintf("Clear all %d blocked stations?\n\n", count))
+	fmt.Fprintf(&content, "Clear all %d blocked stations?\n\n", count)
 	content.WriteString(errorStyle().Render("⚠ This cannot be undone!"))
 
 	return RenderPageWithBottomHelp(PageLayout{
@@ -845,7 +845,7 @@ func (m BlocklistModel) viewConfirmDeleteRule() string {
 	if m.selectedRuleIndex >= 0 && m.selectedRuleIndex < len(m.rules) {
 		rule := m.rules[m.selectedRuleIndex]
 		content.WriteString("Delete this blocking rule?\n\n")
-		content.WriteString(fmt.Sprintf("Rule: %s\n\n", rule.String()))
+		fmt.Fprintf(&content, "Rule: %s\n\n", rule.String())
 		content.WriteString(errorStyle().Render("⚠ This will allow matching stations to appear again!"))
 	} else {
 		content.WriteString("No rule selected")
@@ -863,8 +863,8 @@ func (m BlocklistModel) viewConfirmAddRule() string {
 	var content strings.Builder
 
 	content.WriteString("Add this blocking rule?\n\n")
-	content.WriteString(fmt.Sprintf("Type: %s\n", m.pendingRuleType))
-	content.WriteString(fmt.Sprintf("Value: %s\n\n", m.pendingRuleValue))
+	fmt.Fprintf(&content, "Type: %s\n", m.pendingRuleType)
+	fmt.Fprintf(&content, "Value: %s\n\n", m.pendingRuleValue)
 
 	// Add description based on type
 	switch m.pendingRuleType {
