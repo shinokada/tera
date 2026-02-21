@@ -53,6 +53,7 @@ type TagsManager struct {
 	savePending atomic.Bool
 	lastSave    time.Time
 	cancel      context.CancelFunc
+	wg          sync.WaitGroup
 }
 
 var tagRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9\-_ ]*[a-z0-9]$|^[a-z0-9]$`)
@@ -76,16 +77,16 @@ func NewTagsManager(dataPath string) (*TagsManager, error) {
 		fmt.Fprintf(os.Stderr, "[WARN] station_tags: failed to load %s: %v (starting with empty store)\n", filepath.Join(dataPath, "station_tags.json"), err)
 	}
 
+	tm.wg.Add(1)
 	go tm.saveLoop(ctx)
 	return tm, nil
 }
 
-// Close stops the background save loop and flushes any pending changes to disk.
+// Close cancels the background save loop and waits for it to exit.
+// The saveLoop itself handles the final flush on shutdown.
 func (t *TagsManager) Close() error {
 	t.cancel()
-	if t.savePending.Load() {
-		return t.Save()
-	}
+	t.wg.Wait()
 	return nil
 }
 
@@ -141,8 +142,9 @@ func (t *TagsManager) Save() error {
 	return os.Rename(tmpPath, filePath)
 }
 
-// saveLoop saves pending changes every 5 seconds.
+// saveLoop saves pending changes every 5 seconds and flushes on shutdown.
 func (t *TagsManager) saveLoop(ctx context.Context) {
+	defer t.wg.Done()
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -150,7 +152,9 @@ func (t *TagsManager) saveLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			if t.savePending.Load() {
-				_ = t.Save()
+				if err := t.Save(); err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] station_tags: failed to save on shutdown: %v\n", err)
+				}
 			}
 			return
 		case <-ticker.C:
