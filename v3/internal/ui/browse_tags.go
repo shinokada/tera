@@ -176,10 +176,12 @@ func (m BrowseTagsModel) updateTagList(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 		}
 		return m, func() tea.Msg { return backToMainMsg{} }
 	case "up", "k":
+		m.deleteConfirm = false
 		if m.tagCursor > 0 {
 			m.tagCursor--
 		}
 	case "down", "j":
+		m.deleteConfirm = false
 		if m.tagCursor < len(m.tagStats)-1 {
 			m.tagCursor++
 		}

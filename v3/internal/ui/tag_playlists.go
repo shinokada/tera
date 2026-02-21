@@ -407,58 +407,18 @@ func (m TagPlaylistsModel) commitPlaylist() (TagPlaylistsModel, tea.Cmd) {
 	name := strings.TrimSpace(m.inputBuffer)
 	tags := m.selectedTagsList()
 
-	// When editing a renamed playlist, create first so the old entry is preserved
-	// if CreatePlaylist fails validation. For same-name edits, delete first since
-	// CreatePlaylist rejects duplicates.
 	var err error
-	if m.isEditing && name != m.editName {
-		// Rename: create new entry first, then delete old on success.
-		err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
-		if err != nil {
-			m.saveMessage = fmt.Sprintf("✗ %v", err)
-			m.saveMessageTime = messageDisplayShort
-			m.step = createStepName
-			return m, nil
-		}
-		_ = m.tagsManager.DeletePlaylist(m.editName)
+	if m.isEditing {
+		// UpdatePlaylist handles both same-name and rename atomically.
+		err = m.tagsManager.UpdatePlaylist(m.editName, name, tags, m.matchMode)
 	} else {
-		// New playlist: just create.
-		// Same-name update: use a temp name to stage the new entry before
-		// deleting the old one, preventing data loss if CreatePlaylist fails.
-		if m.isEditing {
-			// Stage under a temporary name, then swap atomically.
-			tempName := name + ".__edit_tmp__"
-			if err = m.tagsManager.CreatePlaylist(tempName, tags, m.matchMode); err != nil {
-				m.saveMessage = fmt.Sprintf("✗ %v", err)
-				m.saveMessageTime = messageDisplayShort
-				m.step = createStepName
-				return m, nil
-			}
-			// Capture original for rollback before deleting.
-			originalPl := m.tagsManager.GetPlaylist(m.editName)
-			_ = m.tagsManager.DeletePlaylist(m.editName) // also removes 'name' when editName == name
-			// Rename temp to final name.
-			if err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode); err != nil {
-				// Restore original on failure, then clean up temp.
-				if originalPl != nil {
-					_ = m.tagsManager.CreatePlaylist(m.editName, originalPl.Tags, originalPl.MatchMode)
-				}
-				_ = m.tagsManager.DeletePlaylist(tempName)
-				m.saveMessage = fmt.Sprintf("✗ %v", err)
-				m.saveMessageTime = messageDisplayShort
-				m.step = createStepName
-				return m, nil
-			}
-			_ = m.tagsManager.DeletePlaylist(tempName)
-		} else {
-			err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
-			if err != nil {
-				m.saveMessage = fmt.Sprintf("✗ %v", err)
-				m.saveMessageTime = messageDisplayShort
-				m.step = createStepName
-				return m, nil
-			}
-		}
+		err = m.tagsManager.CreatePlaylist(name, tags, m.matchMode)
+	}
+	if err != nil {
+		m.saveMessage = fmt.Sprintf("✗ %v", err)
+		m.saveMessageTime = messageDisplayShort
+		m.step = createStepName
+		return m, nil
 	}
 
 	m.loadPlaylists()

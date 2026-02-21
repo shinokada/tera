@@ -488,6 +488,65 @@ func (t *TagsManager) DeletePlaylist(name string) error {
 	return nil
 }
 
+// UpdatePlaylist atomically replaces an existing playlist's name, tags, and match mode.
+// If newName differs from existingName, the old entry is removed and a new one is
+// created under newName, preserving CreatedAt. Returns an error if existingName is
+// not found, newName already exists (when renaming), or the tags/matchMode are invalid.
+func (t *TagsManager) UpdatePlaylist(existingName, newName string, tags []string, matchMode string) error {
+	if newName == "" {
+		return fmt.Errorf("playlist name cannot be empty")
+	}
+	if len(tags) == 0 {
+		return fmt.Errorf("playlist must have at least one tag")
+	}
+	if matchMode != "any" && matchMode != "all" {
+		return fmt.Errorf("match mode must be 'any' or 'all'")
+	}
+
+	normalizedTags := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		n, err := normalizeTag(tag)
+		if err != nil {
+			return err
+		}
+		isDup := false
+		for _, existing := range normalizedTags {
+			if existing == n {
+				isDup = true
+				break
+			}
+		}
+		if !isDup {
+			normalizedTags = append(normalizedTags, n)
+		}
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	old, exists := t.store.TagPlaylists[existingName]
+	if !exists {
+		return fmt.Errorf("playlist '%s' not found", existingName)
+	}
+	if newName != existingName {
+		if _, conflict := t.store.TagPlaylists[newName]; conflict {
+			return fmt.Errorf("playlist '%s' already exists", newName)
+		}
+	}
+
+	updated := &TagPlaylist{
+		Tags:      normalizedTags,
+		MatchMode: matchMode,
+		CreatedAt: old.CreatedAt, // preserve original creation time
+	}
+	if newName != existingName {
+		delete(t.store.TagPlaylists, existingName)
+	}
+	t.store.TagPlaylists[newName] = updated
+	t.savePending.Store(true)
+	return nil
+}
+
 // GetPlaylist returns a copy of a playlist by name.
 func (t *TagsManager) GetPlaylist(name string) *TagPlaylist {
 	t.mu.RLock()
