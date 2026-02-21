@@ -335,6 +335,8 @@ func (m BrowseTagsModel) handleRatingInput(msg tea.KeyMsg) (BrowseTagsModel, tea
 	if k == "0" {
 		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err == nil {
 			m.saveMessage = "✓ Rating removed"
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ %v", err)
 		}
 		m.saveMessageTime = messageDisplayShort
 		return m, nil

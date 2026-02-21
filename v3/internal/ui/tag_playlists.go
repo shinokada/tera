@@ -239,6 +239,8 @@ func (m *TagPlaylistsModel) beginCreate(editing bool, existingName string) {
 	m.allTags = m.tagsManager.GetAllTags()
 	m.tagCursor = 0
 	m.step = createStepName
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 
 	if editing {
 		pl := m.tagsManager.GetPlaylist(existingName)
@@ -597,6 +599,8 @@ func (m TagPlaylistsModel) handleRatingInput(msg tea.KeyMsg) (TagPlaylistsModel,
 	if k == "0" {
 		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err == nil {
 			m.saveMessage = "✓ Rating removed"
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ %v", err)
 		}
 		m.saveMessageTime = messageDisplayShort
 		return m, nil
@@ -703,8 +707,8 @@ func (m TagPlaylistsModel) viewList() string {
 			mode := pl.matchMode
 			tagStr := strings.Join(pl.tags, ", ")
 			const maxTagLen = 35
-			if len(tagStr) > maxTagLen {
-				tagStr = tagStr[:maxTagLen-3] + "..."
+			if runes := []rune(tagStr); len(runes) > maxTagLen {
+				tagStr = string(runes[:maxTagLen-3]) + "..."
 			}
 			line := fmt.Sprintf("%-22s  [%s]  %-38s  %d station", pl.name, mode, tagStr, pl.count)
 			if pl.count != 1 {
