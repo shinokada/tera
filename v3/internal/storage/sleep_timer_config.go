@@ -19,7 +19,7 @@ func sleepTimerFilePath(dataPath string) string {
 }
 
 // LoadSleepTimerConfig reads the persisted sleep timer config from disk.
-// If the file does not exist, a zero-value config is returned without error.
+// If the file does not exist or is corrupted, a default config is returned without error.
 func LoadSleepTimerConfig(dataPath string) (*SleepTimerConfig, error) {
 	path := sleepTimerFilePath(dataPath)
 	data, err := os.ReadFile(path)

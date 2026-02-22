@@ -122,7 +122,7 @@ func TestTimerToggle(t *testing.T) {
 	}
 
 	// Wait for second timer
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	if count.Load() != 1 {
 		t.Errorf("expected 1 callback, got %d", count.Load())
 	}

@@ -121,6 +121,7 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.helpModel.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case components.TagSubmittedMsg:
@@ -167,6 +168,11 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			m.helpModel, cmd = m.helpModel.Update(msg)
+			return m, cmd
+		}
 		switch m.state {
 		case browseTagsStateList:
 			return m.updateTagList(msg)

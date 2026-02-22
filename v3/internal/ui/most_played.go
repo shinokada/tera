@@ -189,6 +189,7 @@ func createMostPlayedHelp() []components.HelpSection {
 				{Key: "r", Description: "Rate station (1-5)"},
 				{Key: "t", Description: "Add tag"},
 				{Key: "f", Description: "Save to favorites"},
+				{Key: "?", Description: "Help"},
 				{Key: "0", Description: "Main Menu"},
 			},
 		},

@@ -22,6 +22,7 @@ type SleepSummaryModel struct {
 }
 
 // NewSleepSummaryModel builds the summary from a completed session.
+// It finalises the session via RecordStop before reading entries and total.
 func NewSleepSummaryModel(
 	session *internaltimer.SleepSession,
 	setDuration time.Duration,
@@ -100,6 +101,9 @@ func formatSessionDuration(d time.Duration) string {
 	hours := total / 60
 	mins := total % 60
 	if hours > 0 {
+		if mins == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
 		return fmt.Sprintf("%dh %dm", hours, mins)
 	}
 	return fmt.Sprintf("%dm", mins)

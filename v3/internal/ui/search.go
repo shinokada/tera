@@ -90,10 +90,9 @@ type SearchModel struct {
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
 	// Sleep timer fields
-	sleepTimerDialog       components.SleepTimerDialog
-	sleepTimerDialogActive bool
-	dataPath               string // for loading last-used duration preference
-	sleepCountdown         string // refreshed by App on each tick
+	sleepTimerDialog components.SleepTimerDialog
+	dataPath         string // for loading last-used duration preference
+	sleepCountdown   string // refreshed by App on each tick
 }
 
 // Messages for search screen
@@ -559,12 +558,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case components.SleepTimerSelectedMsg:
-		m.sleepTimerDialogActive = false
 		m.state = searchStatePlaying
 		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
 
 	case components.SleepTimerCancelledMsg:
-		m.sleepTimerDialogActive = false
 		m.state = searchStatePlaying
 		return m, nil
 	}
@@ -1283,7 +1280,6 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.sleepTimerDialog = components.NewSleepTimerDialog(last, m.width)
-		m.sleepTimerDialogActive = true
 		m.state = searchStateSleepTimer
 		return m, nil
 	case "+":

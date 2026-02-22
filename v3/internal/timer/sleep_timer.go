@@ -39,8 +39,10 @@ func (s *SleepTimer) Start(d time.Duration) {
 	s.expiresAt = time.Now().Add(d)
 
 	go func() {
+		t := time.NewTimer(d)
+		defer t.Stop()
 		select {
-		case <-time.After(d):
+		case <-t.C:
 			s.mu.Lock()
 			s.active = false
 			s.mu.Unlock()

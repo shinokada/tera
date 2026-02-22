@@ -41,7 +41,7 @@ type SleepTimerDialog struct {
 // NewSleepTimerDialog creates a dialog with the given default selection.
 // lastMinutes is pre-selected if it matches a preset, otherwise Custom is highlighted.
 func NewSleepTimerDialog(lastMinutes, width int) SleepTimerDialog {
-	cursor := 0
+	cursor := len(presetMinutes) // default to "Custom..." when no preset matches
 	for i, m := range presetMinutes {
 		if m == lastMinutes {
 			cursor = i

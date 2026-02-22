@@ -101,6 +101,8 @@ type navigateMsg struct {
 
 // SetProgram gives the App a reference to the running Bubbletea program so
 // background goroutines (e.g. the sleep timer) can send messages back to it.
+// It must be called before any sleep timer can be activated; in practice this
+// is guaranteed because timer activation requires user interaction.
 func (a *App) SetProgram(p *tea.Program) {
 	a.program = p
 }
@@ -619,6 +621,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sleepExpiredMsg:
 		// Sleep timer fired — stop playback on all screens and show summary
 		a.stopAllPlayback()
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
 		if a.sleepSession != nil {
 			a.sleepSummary = NewSleepSummaryModel(a.sleepSession, a.sleepDuration, a.width, a.height)
 			a.sleepSession = nil

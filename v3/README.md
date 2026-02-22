@@ -259,7 +259,7 @@ Set a timer to automatically stop playback — useful for falling asleep to radi
 **Session Summary:**
 - Lists every station played during the timer session
 - Shows total listening duration vs. the duration you set
-- Press `0` to return to the main menu or `q`/`Esc` to quit
+- Press `0` to return to the main menu, or any other key to exit TERA
 
 **Keyboard Shortcuts:**
 
