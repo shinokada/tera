@@ -1579,22 +1579,22 @@ func (m SearchModel) View() string {
 					content.WriteString(successStyle().Render(m.saveMessage))
 				}
 			} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
-			 content.WriteString(infoStyle().Render(m.saveMessage))
+				content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
-			 content.WriteString(errorStyle().Render(m.saveMessage))
+				content.WriteString(errorStyle().Render(m.saveMessage))
 			}
-			}
-			// Sleep timer countdown
-			if m.sleepCountdown != "" {
-				content.WriteString("\n")
-				content.WriteString(highlightStyle().Render("💤 " + m.sleepCountdown))
-			}
-			helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • 0: Main Menu • ?: Help"
-			return RenderPageWithBottomHelp(PageLayout{
-				Title:   "🎵 Now Playing",
-				Content: content.String(),
-				Help:    helpText,
-			}, m.height)
+		}
+		// Sleep timer countdown
+		if m.sleepCountdown != "" {
+			content.WriteString("\n")
+			content.WriteString(highlightStyle().Render("💤 " + m.sleepCountdown))
+		}
+		helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • 0: Main Menu • ?: Help"
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "🎵 Now Playing",
+			Content: content.String(),
+			Help:    helpText,
+		}, m.height)
 
 	case searchStateSelectList:
 		return m.viewSelectList()
