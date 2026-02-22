@@ -122,7 +122,7 @@ type checkSignalMsg struct {
 }
 
 // NewSearchModel creates a new search screen model
-func NewSearchModel(apiClient *api.Client, favoritePath string, blocklistManager *blocklist.Manager) SearchModel {
+func NewSearchModel(apiClient *api.Client, favoritePath string, dataPath string, blocklistManager *blocklist.Manager) SearchModel {
 	ti := textinput.New()
 	ti.Placeholder = "Enter search query..."
 	ti.CharLimit = 100
@@ -199,6 +199,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string, blocklistManager
 		newListInput:        nli,
 		spinner:             sp,
 		favoritePath:        favoritePath,
+		dataPath:            dataPath,
 		player:              player.NewMPVPlayer(),
 		quickFavorites:      []api.Station{},
 		searchHistory:       history,

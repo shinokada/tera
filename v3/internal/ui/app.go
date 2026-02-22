@@ -376,7 +376,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.playScreen.Init()
 		case screenSearch:
-			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.dataPath, a.blocklistManager)
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {
 				a.searchScreen.metadataManager = a.metadataManager
@@ -396,8 +396,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchScreen.tagsManager = a.tagsManager
 				a.searchScreen.tagRenderer = components.NewTagRenderer()
 			}
-			// Pass data path for sleep timer config
-			a.searchScreen.dataPath = a.dataPath
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
