@@ -876,9 +876,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			w := m.width - 4
-			if w < 20 {
-				w = 20
+			w := m.width
+			if w < 24 {
+				w = 24
 			}
 			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = playStateTagInput

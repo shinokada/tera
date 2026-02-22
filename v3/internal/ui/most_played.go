@@ -477,7 +477,11 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			w := m.width
+			if w < 24 {
+				w = 24
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = mostPlayedStateTagInput
 			return m, nil
 		}
