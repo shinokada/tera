@@ -1283,7 +1283,11 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				last = cfg.LastDurationMinutes
 			}
 		}
-		m.sleepTimerDialog = components.NewSleepTimerDialog(last, m.width)
+		w := m.width
+		if w < 24 {
+			w = 24
+		}
+		m.sleepTimerDialog = components.NewSleepTimerDialog(last, w)
 		m.state = searchStateSleepTimer
 		return m, nil
 	case "+":
@@ -1589,7 +1593,7 @@ func (m SearchModel) View() string {
 			content.WriteString("\n")
 			content.WriteString(highlightStyle().Render("💤 " + m.sleepCountdown))
 		}
-		helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • 0: Main Menu • ?: Help"
+		helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
