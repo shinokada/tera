@@ -58,6 +58,9 @@ type BrowseTagsModel struct {
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
 
+	// Help overlay
+	helpModel components.HelpModel
+
 	// Shared state
 	saveMessage     string
 	saveMessageTime int
@@ -82,6 +85,7 @@ func NewBrowseTagsModel(
 		starRenderer:     starRenderer,
 		tagRenderer:      components.NewTagRenderer(),
 		player:           player.NewMPVPlayer(),
+		helpModel:        components.NewHelpModel(components.CreateTagsPlayingHelp()),
 		width:            80,
 		height:           24,
 	}
@@ -367,6 +371,10 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
 			m.state = browseTagsStateManageTags
 		}
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
 	}
 	return m, nil
 }
@@ -444,6 +452,9 @@ func (m BrowseTagsModel) playSelected() tea.Cmd {
 
 // View renders the Browse by Tag screen.
 func (m BrowseTagsModel) View() string {
+	if m.helpModel.IsVisible() {
+		return m.helpModel.View()
+	}
 	switch m.state {
 	case browseTagsStateList:
 		return m.viewTagList()
@@ -609,7 +620,7 @@ func (m BrowseTagsModel) viewPlaying() string {
 	}
 	renderSaveMessage(&sb, m.saveMessage)
 
-	helpText := "Space: Pause/Play • r: Rate • t: Add tag • T: Manage tags • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
+	helpText := "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),

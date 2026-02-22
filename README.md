@@ -16,6 +16,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 📊 **Most Played** - View your listening history sorted by play count, last played, or first played
 - 🎨 **Themes** - Choose from predefined themes or customize via unified config
+- 💤 **Sleep Timer** - Set a timer to stop playback automatically
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 - ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
@@ -333,6 +334,28 @@ From main menu, select "8. Block List" to:
 - macOS: `~/Library/Application Support/tera/data/blocklist.json`
 - Windows: `%APPDATA%\tera\data\blocklist.json`
 
+### Sleep Timer
+
+Set a timer to automatically stop playback — useful for falling asleep to radio.
+
+**How to Use:**
+- While playing any station, press `Z` to open the sleep timer dialog
+- Choose a preset duration (15, 30, 45, 60, or 90 minutes) or enter a custom value
+- Press `+` while the timer is running to extend it by 15 minutes
+- When the timer expires, playback stops and a session summary is shown
+
+**Session Summary:**
+- Lists every station played during the timer session
+- Shows total listening duration vs. the duration you set
+- Press `0` to return to the main menu or `q`/`Esc` to quit
+
+**Keyboard Shortcuts:**
+
+| Screen  | Key | Action                         |
+| ------- | --- | ------------------------------ |
+| Playing | `Z` | Open sleep timer dialog        |
+| Playing | `+` | Extend running timer by 15 min |
+
 ### I Feel Lucky
 
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
@@ -596,7 +619,7 @@ Codec: AAC • Bitrate: 128 kbps
   ← WBGO Jazz 88.3
   → Smooth Jazz 24/7  ← Current
 
-f: Fav • s: List • v: Vote • n: Next • [: Prev • b: Block • p: Pause timer • h: Stop shuffle
+Space: Pause • n: Next • [: Prev • f: Fav • b: Block • p: Pause timer • h: Stop shuffle • 0: Main Menu • ?: Help
 ```
 
 ### Configuration
@@ -646,6 +669,8 @@ You can edit this file directly or use the Settings menu.
 | `r`     | Rate station      |
 | `b`     | Block station     |
 | `u`     | Undo block (5s)   |
+| `Z`     | Sleep timer       |
+| `+`     | Extend timer      |
 
 ### Playing/Browsing Stations
 
@@ -656,6 +681,8 @@ You can edit this file directly or use the Settings menu.
 | `v` | Vote for station     |
 | `t` | Add tag              |
 | `T` | Manage tags          |
+
+> **Tip:** Press `?` while playing to see all available shortcuts for the current screen in a help overlay.
 
 ### List Management
 

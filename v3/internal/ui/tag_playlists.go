@@ -51,6 +51,7 @@ type TagPlaylistsModel struct {
 	blocklistManager *blocklist.Manager
 	starRenderer     *components.StarRenderer
 	tagRenderer      *components.TagRenderer
+	helpModel        components.HelpModel
 	player           *player.MPVPlayer
 
 	// Playlist list view
@@ -104,6 +105,7 @@ func NewTagPlaylistsModel(
 		blocklistManager: blocklistManager,
 		starRenderer:     starRenderer,
 		tagRenderer:      components.NewTagRenderer(),
+		helpModel:        components.NewHelpModel(components.CreateTagsPlayingHelp()),
 		player:           player.NewMPVPlayer(),
 		matchMode:        "any",
 		selectedTags:     make(map[string]bool),
@@ -123,9 +125,15 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.helpModel.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			m.helpModel, cmd = m.helpModel.Update(msg)
+			return m, cmd
+		}
 		switch m.state {
 		case tagPlaylistsStateList:
 			return m.updateList(msg)
@@ -609,6 +617,10 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
 			m.state = tagPlaylistsStateManageTags
 		}
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
 	}
 	return m, nil
 }
@@ -701,6 +713,9 @@ func (m TagPlaylistsModel) startPlayback() tea.Cmd {
 // ---------------------------------------------------------------------------
 
 func (m TagPlaylistsModel) View() string {
+	if m.helpModel.IsVisible() {
+		return m.helpModel.View()
+	}
 	switch m.state {
 	case tagPlaylistsStateList:
 		return m.viewList()
@@ -1005,6 +1020,6 @@ func (m TagPlaylistsModel) viewPlaying() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),
-		Help:    "Space: Pause/Play • r: Rate • t: Add tag • T: Manage tags • /*: Volume • m: Mute • 0: Main Menu • Esc: Back",
+		Help:    "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back",
 	}, m.height)
 }

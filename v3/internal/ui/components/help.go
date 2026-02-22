@@ -184,7 +184,7 @@ func CreateMainMenuHelp() []HelpSection {
 	}
 }
 
-// CreateFavoritesHelp creates help sections for playing playing from favorites (no save to list)
+// CreateFavoritesHelp creates help sections for playing from favorites (no save to list)
 func CreateFavoritesHelp() []HelpSection {
 	return []HelpSection{
 		{
@@ -207,9 +207,14 @@ func CreateFavoritesHelp() []HelpSection {
 			Title: "Actions",
 			Items: []HelpItem{
 				{"f", "Save to Favorites"},
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
 				{"v", "Vote"},
 				{"b", "Block station"},
 				{"u", "Undo block"},
+				{"Z", "Sleep timer"},
+				{"+", "Extend sleep timer"},
 			},
 		},
 	}
@@ -239,9 +244,44 @@ func CreatePlayingHelp() []HelpSection {
 			Items: []HelpItem{
 				{"f", "Save to Favorites"},
 				{"s", "Save to List"},
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
 				{"v", "Vote"},
 				{"b", "Block station"},
 				{"u", "Undo block"},
+				{"Z", "Sleep timer"},
+				{"+", "Extend sleep timer"},
+			},
+		},
+	}
+}
+
+// CreateTagsPlayingHelp creates help sections for tag-based playing screens
+// (Browse by Tag, Tag Playlists) which have no voting, block, or sleep timer.
+func CreateTagsPlayingHelp() []HelpSection {
+	return []HelpSection{
+		{
+			Title: "Navigation",
+			Items: []HelpItem{
+				{"Esc", "Stop & Back"},
+				{"0", "Main Menu"},
+			},
+		},
+		{
+			Title: "Playback Controls",
+			Items: []HelpItem{
+				{"Space", "Pause/Resume"},
+				{"/*", "Adjust volume"},
+				{"m", "Toggle mute"},
+			},
+		},
+		{
+			Title: "Actions",
+			Items: []HelpItem{
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
 			},
 		},
 	}

@@ -40,6 +40,7 @@ const (
 	searchStateAdvancedForm
 	searchStateTagInput
 	searchStateManageTags
+	searchStateSleepTimer
 )
 
 // SearchModel represents the search screen
@@ -88,6 +89,11 @@ type SearchModel struct {
 	tagRenderer *components.TagRenderer
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
+	// Sleep timer fields
+	sleepTimerDialog       components.SleepTimerDialog
+	sleepTimerDialogActive bool
+	dataPath               string // for loading last-used duration preference
+	sleepCountdown         string // refreshed by App on each tick
 }
 
 // Messages for search screen
@@ -291,6 +297,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleTagInputKey(msg)
 		case searchStateManageTags:
 			return m.handleManageTagsKey(msg)
+		case searchStateSleepTimer:
+			return m.handleSleepTimerDialogKey(msg)
 		case searchStateSavePrompt:
 			return m.handleSavePrompt(msg)
 		case searchStateSelectList:
@@ -547,6 +555,16 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case components.ManageTagsCancelledMsg:
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.SleepTimerSelectedMsg:
+		m.sleepTimerDialogActive = false
+		m.state = searchStatePlaying
+		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+
+	case components.SleepTimerCancelledMsg:
+		m.sleepTimerDialogActive = false
 		m.state = searchStatePlaying
 		return m, nil
 	}
@@ -1256,8 +1274,30 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, nil
+	case "Z":
+		// Open sleep timer dialog
+		last := 30
+		if m.dataPath != "" {
+			if cfg, err := storage.LoadSleepTimerConfig(m.dataPath); err == nil && cfg.LastDurationMinutes > 0 {
+				last = cfg.LastDurationMinutes
+			}
+		}
+		m.sleepTimerDialog = components.NewSleepTimerDialog(last, m.width)
+		m.sleepTimerDialogActive = true
+		m.state = searchStateSleepTimer
+		return m, nil
+	case "+":
+		// Extend active sleep timer by 15 minutes
+		return m, func() tea.Msg { return sleepTimerExtendMsg{} }
 	}
 	return m, nil
+}
+
+// handleSleepTimerDialogKey delegates key events to the SleepTimerDialog component.
+func (m SearchModel) handleSleepTimerDialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.sleepTimerDialog, cmd = m.sleepTimerDialog.Update(msg)
+	return m, cmd
 }
 
 // handleTagInputKey delegates key events to the TagInput component.
@@ -1544,14 +1584,12 @@ func (m SearchModel) View() string {
 			 content.WriteString(errorStyle().Render(m.saveMessage))
 			}
 			}
-			helpText := "b: Block • u: Undo • f: Favorites • s: Save to list"
-			if m.ratingsManager != nil {
-				helpText += " • r: Rate"
+			// Sleep timer countdown
+			if m.sleepCountdown != "" {
+				content.WriteString("\n")
+				content.WriteString(highlightStyle().Render("💤 " + m.sleepCountdown))
 			}
-			if m.tagsManager != nil {
-				helpText += " • t: Add tag • T: Manage tags"
-			}
-			helpText += " • v: Vote • ?: Help"
+			helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • 0: Main Menu • ?: Help"
 			return RenderPageWithBottomHelp(PageLayout{
 				Title:   "🎵 Now Playing",
 				Content: content.String(),
@@ -1580,6 +1618,12 @@ func (m SearchModel) View() string {
 			Title:   "🏷 Manage Tags",
 			Content: sb.String(),
 			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+		}, m.height)
+	case searchStateSleepTimer:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "💤 Sleep Timer",
+			Content: m.sleepTimerDialog.View(),
+			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
 		}, m.height)
 	}
 

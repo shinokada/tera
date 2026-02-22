@@ -14,6 +14,8 @@ import (
 	"github.com/shinokada/tera/v3/internal/blocklist"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
+	internaltimer "github.com/shinokada/tera/v3/internal/timer"
+	"time"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
@@ -35,6 +37,7 @@ const (
 	screenTopRated
 	screenBrowseTags
 	screenTagPlaylists
+	screenSleepSummary
 )
 
 // Main menu configuration
@@ -79,13 +82,27 @@ type App struct {
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
 	updateChecked   bool   // True if version check completed
+	// Sleep timer (owned here; activated from player screens)
+	sleepTimer    *internaltimer.SleepTimer
+	sleepSession  *internaltimer.SleepSession
+	sleepDuration time.Duration // duration the user set (for the summary)
+	dataPath      string        // path for persisting sleep timer config
+	sleepSummary  SleepSummaryModel
 	// Cleanup guard
 	cleanupOnce sync.Once // Ensures Cleanup is only called once
+	// Bubbletea program handle (set by main) for sending async messages
+	program *tea.Program
 }
 
 // navigateMsg is sent when changing screens
 type navigateMsg struct {
 	screen Screen
+}
+
+// SetProgram gives the App a reference to the running Bubbletea program so
+// background goroutines (e.g. the sleep timer) can send messages back to it.
+func (a *App) SetProgram(p *tea.Program) {
+	a.program = p
 }
 
 func NewApp() *App {
@@ -158,6 +175,7 @@ func NewApp() *App {
 		ratingsManager:   ratingsMgr,
 		tagsManager:      tagsMgr,
 		starRenderer:     starRenderer,
+		dataPath:         dataPath,
 	}
 
 	// Set metadata manager on players for play tracking
@@ -347,6 +365,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.playScreen.tagsManager = a.tagsManager
 				a.playScreen.tagRenderer = components.NewTagRenderer()
 			}
+			// Pass data path for sleep timer config
+			a.playScreen.dataPath = a.dataPath
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -374,6 +394,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchScreen.tagsManager = a.tagsManager
 				a.searchScreen.tagRenderer = components.NewTagRenderer()
 			}
+			// Pass data path for sleep timer config
+			a.searchScreen.dataPath = a.dataPath
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -549,6 +571,61 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case sleepTimerActivateMsg:
+		// A player screen confirmed a duration — start the timer.
+		d := time.Duration(msg.Minutes) * time.Minute
+		a.sleepDuration = d
+		a.sleepSession = internaltimer.NewSleepSession()
+		_ = storage.SaveSleepTimerConfig(a.dataPath, &storage.SleepTimerConfig{
+			LastDurationMinutes: msg.Minutes,
+		})
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+		}
+		a.sleepTimer = internaltimer.NewSleepTimer(func() {
+			if a.program != nil {
+				a.program.Send(sleepExpiredMsg{})
+			}
+		})
+		a.sleepTimer.Start(d)
+		return a, nil
+
+	case sleepTimerCancelMsg:
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
+		a.sleepSession = nil
+		return a, nil
+
+	case sleepTimerExtendMsg:
+		if a.sleepTimer != nil {
+			a.sleepTimer.Extend(15 * time.Minute)
+		}
+		return a, nil
+
+	case tickMsg:
+		// Refresh sleep timer countdown on all player screens
+		countdown := ""
+		if a.sleepTimer != nil {
+			if rem, active := a.sleepTimer.Remaining(); active {
+				countdown = fmt.Sprintf("Stops in %d:%02d", int(rem.Minutes()), int(rem.Seconds())%60)
+			}
+		}
+		a.playScreen.sleepCountdown = countdown
+		a.searchScreen.sleepCountdown = countdown
+		// fall through — don't return; let the screen-routing below forward it
+
+	case sleepExpiredMsg:
+		// Sleep timer fired — stop playback on all screens and show summary
+		a.stopAllPlayback()
+		if a.sleepSession != nil {
+			a.sleepSummary = NewSleepSummaryModel(a.sleepSession, a.sleepDuration, a.width, a.height)
+			a.sleepSession = nil
+		}
+		a.screen = screenSleepSummary
+		return a, nil
+
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
@@ -697,6 +774,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
 		}
+		return a, cmd
+	case screenSleepSummary:
+		var m tea.Model
+		m, cmd = a.sleepSummary.Update(msg)
+		a.sleepSummary = m.(SleepSummaryModel)
+		// navigateMsg from the summary (e.g. 0 → Main Menu) is handled by the
+		// top-level navigateMsg case above on the next Update cycle, so just
+		// return the cmd here and let it propagate normally.
 		return a, cmd
 	}
 
@@ -1065,8 +1150,30 @@ func (a *App) View() string {
 		return a.browseTagsScreen.View()
 	case screenTagPlaylists:
 		return a.tagPlaylistsScreen.View()
+	case screenSleepSummary:
+		return a.sleepSummary.View()
 	}
 	return "Unknown screen"
+}
+
+// stopAllPlayback stops mpv on every screen that may be playing.
+func (a *App) stopAllPlayback() {
+	for _, p := range []*player.MPVPlayer{
+		a.quickFavPlayer,
+		a.playScreen.player,
+		a.searchScreen.player,
+		a.luckyScreen.player,
+		a.mostPlayedScreen.player,
+		a.topRatedScreen.player,
+		a.tagPlaylistsScreen.player,
+		a.browseTagsScreen.player,
+	} {
+		if p != nil {
+			_ = p.Stop()
+		}
+	}
+	a.playingFromMain = false
+	a.playingStation = nil
 }
 
 // saveStationVolume saves the updated volume for a station in the favorites list
