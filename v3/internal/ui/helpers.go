@@ -5,6 +5,15 @@ import (
 	"github.com/shinokada/tera/v3/internal/storage"
 )
 
+// formatSleepCountdown returns the decorated countdown string (e.g. "💤 Stops in 12:34")
+// when countdown is non-empty, or an empty string when no timer is active.
+func formatSleepCountdown(countdown string) string {
+	if countdown == "" {
+		return ""
+	}
+	return "💤 " + countdown
+}
+
 // hydrateStations hydrates station metadata for a list of UUIDs from the cache.
 // Stations with no cached entry get the UUID as a fallback name.
 func hydrateStations(mm *storage.MetadataManager, uuids []string) []api.Station {

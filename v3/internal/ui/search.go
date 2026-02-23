@@ -2300,10 +2300,7 @@ func (m *SearchModel) refreshResultsTagPills(stationUUID string) {
 // sleepTimerCountdown returns a formatted countdown string when a sleep timer
 // is active, or an empty string. The App refreshes sleepCountdown on every tick.
 func (m SearchModel) sleepTimerCountdown() string {
-	if m.sleepCountdown == "" {
-		return ""
-	}
-	return "💤 " + m.sleepCountdown
+	return formatSleepCountdown(m.sleepCountdown)
 }
 
 // undoLastBlock undoes the last block operation

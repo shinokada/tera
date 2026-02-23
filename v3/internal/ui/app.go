@@ -375,6 +375,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Pass data path for sleep timer config
 			a.playScreen.dataPath = a.dataPath
+			// Sync running timer state so Z cancels rather than reopens the dialog.
+			a.playScreen.sleepTimerActive = a.sleepTimer != nil
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -402,6 +404,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchScreen.tagsManager = a.tagsManager
 				a.searchScreen.tagRenderer = components.NewTagRenderer()
 			}
+			// Sync running timer state so Z cancels rather than reopens the dialog.
+			a.searchScreen.sleepTimerActive = a.sleepTimer != nil
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
