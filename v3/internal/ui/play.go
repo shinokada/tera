@@ -908,7 +908,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "+":
 		// Extend active sleep timer by 15 minutes
-		return m, func() tea.Msg { return sleepTimerExtendMsg{} }
+		return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
 	}
 	return m, nil
 }

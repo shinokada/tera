@@ -31,7 +31,10 @@ type sleepTimerActivateMsg struct {
 type sleepTimerCancelMsg struct{}
 
 // sleepTimerExtendMsg is sent by a player screen when the user presses + to extend.
-type sleepTimerExtendMsg struct{}
+// Minutes carries the extension duration so the handler does not need a hard-coded value.
+type sleepTimerExtendMsg struct {
+	Minutes int
+}
 
 // stationBlockedMsg is sent when a station is blocked
 type stationBlockedMsg struct {

@@ -602,7 +602,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sleepTimerExtendMsg:
 		if a.sleepTimer != nil {
-			a.sleepTimer.Extend(15 * time.Minute)
+			a.sleepTimer.Extend(time.Duration(msg.Minutes) * time.Minute)
 		}
 		return a, nil
 
@@ -628,6 +628,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.sleepSession != nil {
 			a.sleepSummary = NewSleepSummaryModel(a.sleepSession, a.sleepDuration, a.width, a.height)
 			a.sleepSession = nil
+		} else {
+			// Session data unavailable (unexpected); fall back to main menu
+			a.screen = screenMainMenu
+			a.loadQuickFavorites()
+			a.playScreen.sleepCountdown = ""
+			a.searchScreen.sleepCountdown = ""
+			return a, nil
 		}
 		a.screen = screenSleepSummary
 		a.playScreen.sleepCountdown = ""
