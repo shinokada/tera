@@ -596,6 +596,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.sleepTimer = nil
 		}
 		a.sleepSession = nil
+		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
 	case sleepTimerExtendMsg:
@@ -628,6 +630,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.sleepSession = nil
 		}
 		a.screen = screenSleepSummary
+		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
 	case backToMainMsg:

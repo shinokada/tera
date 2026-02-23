@@ -1271,7 +1271,11 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedStation != nil && m.tagsManager != nil {
 			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
 			allTags := m.tagsManager.GetAllTags()
-			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			w := m.width
+			if w < 24 {
+				w = 24
+			}
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, w)
 			m.state = searchStateManageTags
 			return m, nil
 		}
