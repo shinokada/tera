@@ -890,20 +890,32 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedStation != nil && m.tagsManager != nil {
 			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
 			allTags := m.tagsManager.GetAllTags()
-			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			wt := m.width
+			if wt < 24 {
+				wt = 24
+			}
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, wt)
 			m.state = playStateManageTags
 			return m, nil
 		}
 		return m, nil
 	case "Z":
-		// Open sleep timer dialog (or cancel if already running — sent as cancel msg)
+		// If a sleep timer is already running, Z cancels it immediately.
+		// Otherwise, open the dialog to set a new duration.
+		if m.sleepCountdown != "" {
+			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
+		}
 		last := 30
 		if m.dataPath != "" {
 			if cfg, err := storage.LoadSleepTimerConfig(m.dataPath); err == nil && cfg.LastDurationMinutes > 0 {
 				last = cfg.LastDurationMinutes
 			}
 		}
-		m.sleepTimerDialog = components.NewSleepTimerDialog(last, m.width)
+		w := m.width
+		if w < 24 {
+			w = 24
+		}
+		m.sleepTimerDialog = components.NewSleepTimerDialog(last, w)
 		m.state = playStateSleepTimer
 		return m, nil
 	case "+":
@@ -1340,7 +1352,7 @@ func (m PlayModel) viewPlaying() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
-	helpText := "Space: Pause • f: Fav • v: Vote • b: Block • Z: Sleep • 0: Main Menu • ?: Help"
+	helpText := "Space: Pause • f: Fav • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),

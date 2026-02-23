@@ -576,9 +576,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d := time.Duration(msg.Minutes) * time.Minute
 		a.sleepDuration = d
 		a.sleepSession = internaltimer.NewSleepSession()
-		_ = storage.SaveSleepTimerConfig(a.dataPath, &storage.SleepTimerConfig{
-			LastDurationMinutes: msg.Minutes,
-		})
 		if a.sleepTimer != nil {
 			a.sleepTimer.Cancel()
 		}
@@ -588,7 +585,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		})
 		a.sleepTimer.Start(d)
-		return a, nil
+		// Persist the chosen duration off the UI goroutine to avoid blocking on slow filesystems.
+		dataPath, mins := a.dataPath, msg.Minutes
+		return a, func() tea.Msg {
+			_ = storage.SaveSleepTimerConfig(dataPath, &storage.SleepTimerConfig{
+				LastDurationMinutes: mins,
+			})
+			return nil
+		}
 
 	case sleepTimerCancelMsg:
 		if a.sleepTimer != nil {
