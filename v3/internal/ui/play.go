@@ -921,8 +921,11 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = playStateSleepTimer
 		return m, nil
 	case "+":
-		// Extend active sleep timer by 15 minutes
-		return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		// Extend active sleep timer by 15 minutes (no-op when timer is not running)
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		}
+		return m, nil
 	}
 	return m, nil
 }

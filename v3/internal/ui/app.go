@@ -259,10 +259,14 @@ func (a *App) Init() tea.Cmd {
 	return checkForUpdates()
 }
 
-// Cleanup stops all players and releases resources for graceful shutdown
-// This function is idempotent and safe to call multiple times
+// Cleanup stops all players and releases resources for graceful shutdown.
+// This function is idempotent and safe to call multiple times.
 func (a *App) Cleanup() {
 	a.cleanupOnce.Do(func() {
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
 		if a.quickFavPlayer != nil {
 			_ = a.quickFavPlayer.Stop()
 		}

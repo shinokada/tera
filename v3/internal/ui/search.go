@@ -1302,8 +1302,11 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = searchStateSleepTimer
 		return m, nil
 	case "+":
-		// Extend active sleep timer by 15 minutes
-		return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		// Extend active sleep timer by 15 minutes (no-op when timer is not running)
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -1600,9 +1603,9 @@ func (m SearchModel) View() string {
 			}
 		}
 		// Sleep timer countdown
-		if m.sleepCountdown != "" {
+		if timerInfo := m.sleepTimerCountdown(); timerInfo != "" {
 			content.WriteString("\n")
-			content.WriteString(highlightStyle().Render("💤 " + m.sleepCountdown))
+			content.WriteString(highlightStyle().Render(timerInfo))
 		}
 		helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
 		return RenderPageWithBottomHelp(PageLayout{
@@ -2292,6 +2295,15 @@ func (m *SearchModel) refreshResultsTagPills(stationUUID string) {
 		}
 	}
 	m.resultsList.SetItems(items)
+}
+
+// sleepTimerCountdown returns a formatted countdown string when a sleep timer
+// is active, or an empty string. The App refreshes sleepCountdown on every tick.
+func (m SearchModel) sleepTimerCountdown() string {
+	if m.sleepCountdown == "" {
+		return ""
+	}
+	return "💤 " + m.sleepCountdown
 }
 
 // undoLastBlock undoes the last block operation
