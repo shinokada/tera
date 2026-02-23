@@ -93,6 +93,7 @@ type SearchModel struct {
 	sleepTimerDialog components.SleepTimerDialog
 	dataPath         string // for loading last-used duration preference
 	sleepCountdown   string // refreshed by App on each tick
+	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
 }
 
 // Messages for search screen
@@ -560,6 +561,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.SleepTimerSelectedMsg:
 		m.state = searchStatePlaying
+		m.sleepTimerActive = true
 		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
 
 	case components.SleepTimerCancelledMsg:
@@ -1281,7 +1283,11 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "Z":
-		// Open sleep timer dialog
+		// If a sleep timer is already running, Z cancels it immediately.
+		// Otherwise, open the dialog to set a new duration.
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
+		}
 		last := 30
 		if m.dataPath != "" {
 			if cfg, err := storage.LoadSleepTimerConfig(m.dataPath); err == nil && cfg.LastDurationMinutes > 0 {

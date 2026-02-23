@@ -75,6 +75,7 @@ type PlayModel struct {
 	sleepTimerDialog components.SleepTimerDialog
 	dataPath         string // for loading last-used duration preference
 	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
+	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -554,6 +555,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.SleepTimerSelectedMsg:
 		// User confirmed a duration in the dialog
 		m.state = playStatePlaying
+		m.sleepTimerActive = true
 		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
 
 	case components.SleepTimerCancelledMsg:
@@ -902,7 +904,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "Z":
 		// If a sleep timer is already running, Z cancels it immediately.
 		// Otherwise, open the dialog to set a new duration.
-		if m.sleepCountdown != "" {
+		if m.sleepTimerActive {
 			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
 		}
 		last := 30
@@ -1360,12 +1362,8 @@ func (m PlayModel) viewPlaying() string {
 	}, m.height)
 }
 
-// sleepTimerCountdown returns a formatted countdown string if the app-level
-// sleep timer is active, or an empty string. Since PlayModel doesn't own the
-// timer directly, it reads a countdown injected via the saveMessage field or
-// via a dedicated field. We use a lightweight approach: the App passes remaining
-// time back via a tickMsg-driven saveMessage, OR we expose it through a public
-// field. Here we use a dedicated field that App refreshes on every tick.
+// sleepTimerCountdown returns a formatted countdown string when a sleep timer
+// is active, or an empty string. The App refreshes sleepCountdown on every tick.
 func (m PlayModel) sleepTimerCountdown() string {
 	if m.sleepCountdown == "" {
 		return ""

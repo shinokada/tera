@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -90,8 +91,9 @@ type App struct {
 	sleepSummary  SleepSummaryModel
 	// Cleanup guard
 	cleanupOnce sync.Once // Ensures Cleanup is only called once
-	// Bubbletea program handle (set by main) for sending async messages
-	program *tea.Program
+	// Bubbletea program handle (set by main) for sending async messages.
+	// Uses atomic.Pointer so the timer goroutine can read it race-free.
+	program atomic.Pointer[tea.Program]
 }
 
 // navigateMsg is sent when changing screens
@@ -104,7 +106,7 @@ type navigateMsg struct {
 // It must be called before any sleep timer can be activated; in practice this
 // is guaranteed because timer activation requires user interaction.
 func (a *App) SetProgram(p *tea.Program) {
-	a.program = p
+	a.program.Store(p)
 }
 
 func NewApp() *App {
@@ -580,8 +582,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.sleepTimer.Cancel()
 		}
 		a.sleepTimer = internaltimer.NewSleepTimer(func() {
-			if a.program != nil {
-				a.program.Send(sleepExpiredMsg{})
+			if p := a.program.Load(); p != nil {
+				p.Send(sleepExpiredMsg{})
 			}
 		})
 		a.sleepTimer.Start(d)
@@ -600,7 +602,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.sleepTimer = nil
 		}
 		a.sleepSession = nil
+		a.playScreen.sleepTimerActive = false
 		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepTimerActive = false
 		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
@@ -636,12 +640,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Session data unavailable (unexpected); fall back to main menu
 			a.screen = screenMainMenu
 			a.loadQuickFavorites()
+			a.playScreen.sleepTimerActive = false
 			a.playScreen.sleepCountdown = ""
+			a.searchScreen.sleepTimerActive = false
 			a.searchScreen.sleepCountdown = ""
 			return a, nil
 		}
 		a.screen = screenSleepSummary
+		a.playScreen.sleepTimerActive = false
 		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepTimerActive = false
 		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
