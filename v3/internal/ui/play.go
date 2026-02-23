@@ -31,6 +31,7 @@ const (
 	playStateDeleteConfirm
 	playStateTagInput
 	playStateManageTags
+	playStateSleepTimer
 )
 
 // PlayModel represents the play screen
@@ -70,6 +71,11 @@ type PlayModel struct {
 	tagRenderer *components.TagRenderer
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
+	// Sleep timer fields
+	sleepTimerDialog components.SleepTimerDialog
+	dataPath         string // for loading last-used duration preference
+	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
+	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -319,6 +325,8 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTagInput(msg)
 		case playStateManageTags:
 			return m.updateManageTags(msg)
+		case playStateSleepTimer:
+			return m.updateSleepTimerDialog(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -541,6 +549,16 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case components.ManageTagsCancelledMsg:
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.SleepTimerSelectedMsg:
+		// User confirmed a duration in the dialog
+		m.state = playStatePlaying
+		m.sleepTimerActive = true
+		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+
+	case components.SleepTimerCancelledMsg:
 		m.state = playStatePlaying
 		return m, nil
 
@@ -860,9 +878,9 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			w := m.width - 4
-			if w < 20 {
-				w = 20
+			w := m.width
+			if w < 24 {
+				w = 24
 			}
 			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = playStateTagInput
@@ -874,13 +892,49 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedStation != nil && m.tagsManager != nil {
 			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
 			allTags := m.tagsManager.GetAllTags()
-			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			wt := m.width
+			if wt < 24 {
+				wt = 24
+			}
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, wt)
 			m.state = playStateManageTags
 			return m, nil
 		}
 		return m, nil
+	case "Z":
+		// If a sleep timer is already running, Z cancels it immediately.
+		// Otherwise, open the dialog to set a new duration.
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
+		}
+		last := 30
+		if m.dataPath != "" {
+			if cfg, err := storage.LoadSleepTimerConfig(m.dataPath); err == nil && cfg.LastDurationMinutes > 0 {
+				last = cfg.LastDurationMinutes
+			}
+		}
+		w := m.width
+		if w < 24 {
+			w = 24
+		}
+		m.sleepTimerDialog = components.NewSleepTimerDialog(last, w)
+		m.state = playStateSleepTimer
+		return m, nil
+	case "+":
+		// Extend active sleep timer by 15 minutes (no-op when timer is not running)
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		}
+		return m, nil
 	}
 	return m, nil
+}
+
+// updateSleepTimerDialog delegates key events to the SleepTimerDialog component.
+func (m PlayModel) updateSleepTimerDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.sleepTimerDialog, cmd = m.sleepTimerDialog.Update(msg)
+	return m, cmd
 }
 
 // updateTagInput delegates key events to the TagInput component.
@@ -1153,6 +1207,12 @@ func (m PlayModel) View() string {
 		return m.viewTagInput()
 	case playStateManageTags:
 		return m.viewManageTags()
+	case playStateSleepTimer:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "💤 Sleep Timer",
+			Content: m.sleepTimerDialog.View(),
+			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
+		}, m.height)
 	}
 
 	return "Unknown state"
@@ -1290,20 +1350,25 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
+	// Sleep timer countdown
+	if timerInfo := m.sleepTimerCountdown(); timerInfo != "" {
+		content.WriteString("\n")
+		content.WriteString(highlightStyle().Render(timerInfo))
+	}
+
 	// Use the consistent page template with bottom-aligned help
-	helpText := "b: Block • u: Undo • f: Favorites"
-	if m.ratingsManager != nil {
-		helpText += " • r: Rate"
-	}
-	if m.tagsManager != nil {
-		helpText += " • t: Add tag • T: Manage tags"
-	}
-	helpText += " • v: Vote • 0: Main Menu • ?: Help"
+	helpText := "Space: Pause • f: Fav • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
+}
+
+// sleepTimerCountdown returns a formatted countdown string when a sleep timer
+// is active, or an empty string. The App refreshes sleepCountdown on every tick.
+func (m PlayModel) sleepTimerCountdown() string {
+	return formatSleepCountdown(m.sleepCountdown)
 }
 
 // viewManageTags renders the manage tags dialog overlay.

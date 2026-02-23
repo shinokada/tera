@@ -1380,11 +1380,7 @@ func (m LuckyModel) viewPlaying() string {
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
 
-	helpText := "b: Block • u: Undo • Space: Pause/Play • r: Rate • f: Fav • s: List • v: Vote"
-	if m.tagsManager != nil {
-		helpText += " • t: Add tag • T: Manage tags"
-	}
-	helpText += " • ?: Help"
+	helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • r: Rate • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
@@ -1910,11 +1906,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	helpBase := "Space: Pause/Play • b: Block • u: Undo • r: Rate • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle"
-	if m.tagsManager != nil {
-		helpBase += " • t: Add tag • T: Manage tags"
-	}
-	help := helpBase + " • ?: Help"
+	help := "Space: Pause • n: Next • [: Prev • f: Fav • b: Block • p: Pause timer • h: Stop shuffle • 0: Main Menu • ?: Help"
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,

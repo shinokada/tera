@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,6 +15,8 @@ import (
 	"github.com/shinokada/tera/v3/internal/blocklist"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
+	internaltimer "github.com/shinokada/tera/v3/internal/timer"
+	"time"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
@@ -35,6 +38,7 @@ const (
 	screenTopRated
 	screenBrowseTags
 	screenTagPlaylists
+	screenSleepSummary
 )
 
 // Main menu configuration
@@ -79,13 +83,30 @@ type App struct {
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
 	updateChecked   bool   // True if version check completed
+	// Sleep timer (owned here; activated from player screens)
+	sleepTimer    *internaltimer.SleepTimer
+	sleepSession  *internaltimer.SleepSession
+	sleepDuration time.Duration // duration the user set (for the summary)
+	dataPath      string        // path for persisting sleep timer config
+	sleepSummary  SleepSummaryModel
 	// Cleanup guard
 	cleanupOnce sync.Once // Ensures Cleanup is only called once
+	// Bubbletea program handle (set by main) for sending async messages.
+	// Uses atomic.Pointer so the timer goroutine can read it race-free.
+	program atomic.Pointer[tea.Program]
 }
 
 // navigateMsg is sent when changing screens
 type navigateMsg struct {
 	screen Screen
+}
+
+// SetProgram gives the App a reference to the running Bubbletea program so
+// background goroutines (e.g. the sleep timer) can send messages back to it.
+// It must be called before any sleep timer can be activated; in practice this
+// is guaranteed because timer activation requires user interaction.
+func (a *App) SetProgram(p *tea.Program) {
+	a.program.Store(p)
 }
 
 func NewApp() *App {
@@ -158,6 +179,7 @@ func NewApp() *App {
 		ratingsManager:   ratingsMgr,
 		tagsManager:      tagsMgr,
 		starRenderer:     starRenderer,
+		dataPath:         dataPath,
 	}
 
 	// Set metadata manager on players for play tracking
@@ -237,10 +259,14 @@ func (a *App) Init() tea.Cmd {
 	return checkForUpdates()
 }
 
-// Cleanup stops all players and releases resources for graceful shutdown
-// This function is idempotent and safe to call multiple times
+// Cleanup stops all players and releases resources for graceful shutdown.
+// This function is idempotent and safe to call multiple times.
 func (a *App) Cleanup() {
 	a.cleanupOnce.Do(func() {
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
 		if a.quickFavPlayer != nil {
 			_ = a.quickFavPlayer.Stop()
 		}
@@ -347,6 +373,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.playScreen.tagsManager = a.tagsManager
 				a.playScreen.tagRenderer = components.NewTagRenderer()
 			}
+			// Pass data path for sleep timer config
+			a.playScreen.dataPath = a.dataPath
+			// Sync running timer state so Z cancels rather than reopens the dialog.
+			a.playScreen.sleepTimerActive = a.sleepTimer != nil
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -354,7 +384,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.playScreen.Init()
 		case screenSearch:
-			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.dataPath, a.blocklistManager)
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {
 				a.searchScreen.metadataManager = a.metadataManager
@@ -374,6 +404,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.searchScreen.tagsManager = a.tagsManager
 				a.searchScreen.tagRenderer = components.NewTagRenderer()
 			}
+			// Sync running timer state so Z cancels rather than reopens the dialog.
+			a.searchScreen.sleepTimerActive = a.sleepTimer != nil
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -549,6 +581,86 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case sleepTimerActivateMsg:
+		// A player screen confirmed a duration — start the timer.
+		d := time.Duration(msg.Minutes) * time.Minute
+		a.sleepDuration = d
+		a.sleepSession = internaltimer.NewSleepSession()
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+		}
+		a.sleepTimer = internaltimer.NewSleepTimer(func() {
+			if p := a.program.Load(); p != nil {
+				p.Send(sleepExpiredMsg{})
+			}
+		})
+		a.sleepTimer.Start(d)
+		// Persist the chosen duration off the UI goroutine to avoid blocking on slow filesystems.
+		dataPath, mins := a.dataPath, msg.Minutes
+		return a, func() tea.Msg {
+			_ = storage.SaveSleepTimerConfig(dataPath, &storage.SleepTimerConfig{
+				LastDurationMinutes: mins,
+			})
+			return nil
+		}
+
+	case sleepTimerCancelMsg:
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
+		a.sleepSession = nil
+		a.playScreen.sleepTimerActive = false
+		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepTimerActive = false
+		a.searchScreen.sleepCountdown = ""
+		return a, nil
+
+	case sleepTimerExtendMsg:
+		if a.sleepTimer != nil {
+			a.sleepTimer.Extend(time.Duration(msg.Minutes) * time.Minute)
+		}
+		return a, nil
+
+	case tickMsg:
+		// Refresh sleep timer countdown on all player screens
+		countdown := ""
+		if a.sleepTimer != nil {
+			if rem, active := a.sleepTimer.Remaining(); active {
+				countdown = fmt.Sprintf("Stops in %d:%02d", int(rem.Minutes()), int(rem.Seconds())%60)
+			}
+		}
+		a.playScreen.sleepCountdown = countdown
+		a.searchScreen.sleepCountdown = countdown
+		// fall through — don't return; let the screen-routing below forward it
+
+	case sleepExpiredMsg:
+		// Sleep timer fired — stop playback on all screens and show summary
+		a.stopAllPlayback()
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
+		if a.sleepSession != nil {
+			a.sleepSummary = NewSleepSummaryModel(a.sleepSession, a.sleepDuration, a.width, a.height)
+			a.sleepSession = nil
+		} else {
+			// Session data unavailable (unexpected); fall back to main menu
+			a.screen = screenMainMenu
+			a.loadQuickFavorites()
+			a.playScreen.sleepTimerActive = false
+			a.playScreen.sleepCountdown = ""
+			a.searchScreen.sleepTimerActive = false
+			a.searchScreen.sleepCountdown = ""
+			return a, nil
+		}
+		a.screen = screenSleepSummary
+		a.playScreen.sleepTimerActive = false
+		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepTimerActive = false
+		a.searchScreen.sleepCountdown = ""
+		return a, nil
+
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
@@ -697,6 +809,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.(backToMainMsg); ok {
 			a.screen = screenMainMenu
 		}
+		return a, cmd
+	case screenSleepSummary:
+		var m tea.Model
+		m, cmd = a.sleepSummary.Update(msg)
+		a.sleepSummary = m.(SleepSummaryModel)
+		// navigateMsg from the summary (e.g. 0 → Main Menu) is handled by the
+		// top-level navigateMsg case above on the next Update cycle, so just
+		// return the cmd here and let it propagate normally.
 		return a, cmd
 	}
 
@@ -1065,8 +1185,30 @@ func (a *App) View() string {
 		return a.browseTagsScreen.View()
 	case screenTagPlaylists:
 		return a.tagPlaylistsScreen.View()
+	case screenSleepSummary:
+		return a.sleepSummary.View()
 	}
 	return "Unknown screen"
+}
+
+// stopAllPlayback stops mpv on every screen that may be playing.
+func (a *App) stopAllPlayback() {
+	for _, p := range []*player.MPVPlayer{
+		a.quickFavPlayer,
+		a.playScreen.player,
+		a.searchScreen.player,
+		a.luckyScreen.player,
+		a.mostPlayedScreen.player,
+		a.topRatedScreen.player,
+		a.tagPlaylistsScreen.player,
+		a.browseTagsScreen.player,
+	} {
+		if p != nil {
+			_ = p.Stop()
+		}
+	}
+	a.playingFromMain = false
+	a.playingStation = nil
 }
 
 // saveStationVolume saves the updated volume for a station in the favorites list

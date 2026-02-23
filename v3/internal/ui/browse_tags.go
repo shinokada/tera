@@ -58,6 +58,9 @@ type BrowseTagsModel struct {
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
 
+	// Help overlay
+	helpModel components.HelpModel
+
 	// Shared state
 	saveMessage     string
 	saveMessageTime int
@@ -82,6 +85,7 @@ func NewBrowseTagsModel(
 		starRenderer:     starRenderer,
 		tagRenderer:      components.NewTagRenderer(),
 		player:           player.NewMPVPlayer(),
+		helpModel:        components.NewHelpModel(components.CreateTagsPlayingHelp()),
 		width:            80,
 		height:           24,
 	}
@@ -117,6 +121,7 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.helpModel.SetSize(msg.Width, msg.Height)
 		return m, nil
 
 	case components.TagSubmittedMsg:
@@ -163,6 +168,11 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.helpModel.IsVisible() {
+			var cmd tea.Cmd
+			m.helpModel, cmd = m.helpModel.Update(msg)
+			return m, cmd
+		}
 		switch m.state {
 		case browseTagsStateList:
 			return m.updateTagList(msg)
@@ -353,9 +363,9 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 	case "t":
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			w := m.width - 4
-			if w < 20 {
-				w = 20
+			w := m.width
+			if w < 24 {
+				w = 24
 			}
 			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = browseTagsStateTagInput
@@ -367,6 +377,10 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
 			m.state = browseTagsStateManageTags
 		}
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
 	}
 	return m, nil
 }
@@ -444,6 +458,9 @@ func (m BrowseTagsModel) playSelected() tea.Cmd {
 
 // View renders the Browse by Tag screen.
 func (m BrowseTagsModel) View() string {
+	if m.helpModel.IsVisible() {
+		return m.helpModel.View()
+	}
 	switch m.state {
 	case browseTagsStateList:
 		return m.viewTagList()
@@ -609,7 +626,7 @@ func (m BrowseTagsModel) viewPlaying() string {
 	}
 	renderSaveMessage(&sb, m.saveMessage)
 
-	helpText := "Space: Pause/Play • r: Rate • t: Add tag • T: Manage tags • /*: Volume • m: Mute • 0: Main Menu • Esc: Back"
+	helpText := "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),

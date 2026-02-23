@@ -97,6 +97,7 @@ func main() {
 
 	app := ui.NewApp()
 	p := tea.NewProgram(app, tea.WithAltScreen())
+	app.SetProgram(p)
 
 	// Set up graceful shutdown handler for SIGINT (Ctrl+C) and SIGTERM
 	// This ensures proper cleanup even when signals bypass Bubble Tea's key handling

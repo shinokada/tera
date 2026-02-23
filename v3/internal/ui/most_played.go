@@ -170,7 +170,7 @@ func NewMostPlayedModel(metadataManager *storage.MetadataManager, favoritePath s
 func createMostPlayedHelp() []components.HelpSection {
 	return []components.HelpSection{
 		{
-			Title: "Navigation",
+			Title: "Station List",
 			Items: []components.HelpItem{
 				{Key: "↑↓/jk", Description: "Navigate"},
 				{Key: "Enter", Description: "Play"},
@@ -178,6 +178,19 @@ func createMostPlayedHelp() []components.HelpSection {
 				{Key: "f", Description: "Add to favorites"},
 				{Key: "?", Description: "Help"},
 				{Key: "Esc/m", Description: "Back"},
+			},
+		},
+		{
+			Title: "Now Playing",
+			Items: []components.HelpItem{
+				{Key: "p", Description: "Pause/Resume"},
+				{Key: "s", Description: "Stop"},
+				{Key: "+/-", Description: "Adjust volume"},
+				{Key: "r", Description: "Rate station (1-5)"},
+				{Key: "t", Description: "Add tag"},
+				{Key: "f", Description: "Save to favorites"},
+				{Key: "?", Description: "Help"},
+				{Key: "0", Description: "Main Menu"},
 			},
 		},
 	}
@@ -464,10 +477,27 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			w := m.width
+			if w < 24 {
+				w = 24
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
 			m.state = mostPlayedStateTagInput
 			return m, nil
 		}
+
+	case "0":
+		// Return to main menu
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.state = mostPlayedStateList
+		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+
+	case "?":
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Show()
+		return m, nil
 	}
 
 	return m, nil
@@ -667,7 +697,7 @@ func (m MostPlayedModel) viewList() string {
 	return RenderPage(PageLayout{
 		Title:   "📊 Most Played Stations",
 		Content: content.String(),
-		Help:    "↑↓: Navigate • Enter: Play • s: Sort • f: Favorites • Esc: Back",
+		Help:    "↑↓/jk: Navigate • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
 	})
 }
 
@@ -737,11 +767,7 @@ func (m MostPlayedModel) viewPlaying() string {
 		}
 	}
 
-	helpText := "p: Pause • s: Stop • +/-: Volume • r: Rate"
-	if m.tagsManager != nil {
-		helpText += " • t: Tag"
-	}
-	helpText += " • f: Favorites • Esc: Back"
+	helpText := "p: Pause • s: Stop • r: Rate • t: Tag • f: Fav • 0: Main Menu • ?: Help • Esc: Back"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played - Now Playing",
 		Content: content.String(),
