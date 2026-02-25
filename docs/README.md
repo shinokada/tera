@@ -361,7 +361,7 @@ Set a timer to automatically stop playback — useful for falling asleep to radi
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
 
 **Shuffle Mode**: Enable shuffle mode to automatically cycle through multiple stations matching your keyword:
-- Press `t` to toggle shuffle on/off
+- Press `ctrl+t` to toggle shuffle on/off
 - Stations play in random order without repeats
 - Optional auto-advance timer (configurable)
 - Navigate backward through recently played stations
@@ -534,7 +534,7 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 ### How It Works
 
 1. Navigate to **I Feel Lucky** from the main menu (option 9)
-2. Press `t` to toggle shuffle mode on
+2. Press `ctrl+t` to toggle shuffle mode on
 3. Enter your keyword (e.g., "jazz", "rock", "meditation")
 4. Press Enter to start shuffle mode
 
