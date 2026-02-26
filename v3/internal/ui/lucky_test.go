@@ -574,21 +574,21 @@ func TestLuckyShuffleToggle(t *testing.T) {
 	}
 
 	// Toggle shuffle on
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	msg := tea.KeyMsg{Type: tea.KeyCtrlT}
 	updatedModel, _ := model.Update(msg)
 	luckyModel := updatedModel.(LuckyModel)
 
 	if !luckyModel.shuffleEnabled {
-		t.Error("Expected shuffle to be enabled after pressing 't'")
+		t.Error("Expected shuffle to be enabled after pressing 'ctrl+t'")
 	}
 
 	// Toggle shuffle off
-	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	msg = tea.KeyMsg{Type: tea.KeyCtrlT}
 	updatedModel, _ = luckyModel.Update(msg)
 	luckyModel = updatedModel.(LuckyModel)
 
 	if luckyModel.shuffleEnabled {
-		t.Error("Expected shuffle to be disabled after pressing 't' again")
+		t.Error("Expected shuffle to be disabled after pressing 'ctrl+t' again")
 	}
 }
 
