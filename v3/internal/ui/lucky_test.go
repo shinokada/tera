@@ -573,6 +573,15 @@ func TestLuckyShuffleToggle(t *testing.T) {
 		t.Error("Expected shuffle to be disabled initially")
 	}
 
+	// Plain 't' while typing should NOT toggle shuffle
+	model.textInput.SetValue("rock")
+	plainT := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	noToggleModel, _ := model.Update(plainT)
+	if noToggleModel.(LuckyModel).shuffleEnabled {
+		t.Error("Expected shuffle to remain disabled after pressing 't' while typing")
+	}
+	model.textInput.SetValue("") // Reset for subsequent toggle tests
+
 	// Toggle shuffle on
 	msg := tea.KeyMsg{Type: tea.KeyCtrlT}
 	updatedModel, _ := model.Update(msg)
