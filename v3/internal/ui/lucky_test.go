@@ -593,6 +593,9 @@ func TestLuckyShuffleToggle(t *testing.T) {
 	if noToggleModel.(LuckyModel).shuffleEnabled {
 		t.Error("Expected shuffle to remain disabled after pressing 't' while typing")
 	}
+	if noToggleModel.(LuckyModel).textInput.Value() != "rockt" {
+		t.Errorf("Expected text input to contain 'rockt', got %q", noToggleModel.(LuckyModel).textInput.Value())
+	}
 	model.textInput.SetValue("") // Reset for subsequent toggle tests
 
 	// Toggle shuffle on
