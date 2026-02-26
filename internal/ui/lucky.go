@@ -447,8 +447,8 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Handle 't' key to toggle shuffle mode (when not typing in input)
-	if key == "t" && m.textInput.Value() == "" {
+	// Handle 'ctrl+t' key to toggle shuffle mode
+	if key == "ctrl+t" {
 		m.shuffleEnabled = !m.shuffleEnabled
 		return m, nil
 	}
@@ -478,8 +478,8 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Handle number input for multi-digit selection (only when not typing in input)
-	if key >= "0" && key <= "9" {
+	// Handle number input for multi-digit selection (only when text input is not focused)
+	if !m.textInput.Focused() && key >= "0" && key <= "9" {
 		m.numberBuffer += key
 
 		// Check if we should auto-select
@@ -1022,7 +1022,7 @@ func (m LuckyModel) viewInput() string {
 	if m.shuffleEnabled {
 		content.WriteString("Shuffle mode: ")
 		content.WriteString(highlightStyle().Render("[✓] On"))
-		content.WriteString("  (press 't' to disable)")
+		content.WriteString("  (press ctrl+t to disable)")
 		if m.shuffleConfig.AutoAdvance {
 			fmt.Fprintf(&content, "\n              Auto-advance in %d min • History: %d stations",
 				m.shuffleConfig.IntervalMinutes, m.shuffleConfig.MaxHistory)
@@ -1030,7 +1030,7 @@ func (m LuckyModel) viewInput() string {
 	} else {
 		content.WriteString("Shuffle mode: ")
 		content.WriteString(infoStyle().Render("[ ] Off"))
-		content.WriteString(" (press 't' to enable)")
+		content.WriteString(" (press ctrl+t to enable)")
 	}
 
 	// Show history menu if available
@@ -1057,7 +1057,7 @@ func (m LuckyModel) viewInput() string {
 		}
 	}
 
-	helpText := "↑↓/jk: Navigate • Enter: Search • t: Toggle shuffle"
+	helpText := "↑↓/jk: Navigate • Enter: Search • ctrl+t: Toggle shuffle"
 	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
 		maxItems := len(m.searchHistory.LuckyQueries)
 		if maxItems > m.searchHistory.MaxSize {
