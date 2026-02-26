@@ -574,6 +574,19 @@ func TestLuckyShuffleToggle(t *testing.T) {
 	}
 
 	// Plain 't' while typing should NOT toggle shuffle
+	// Regression: first typed 't' from empty input must not toggle shuffle.
+	model.textInput.SetValue("")
+	firstT := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
+	firstTypedModel, _ := model.Update(firstT)
+	firstLucky := firstTypedModel.(LuckyModel)
+	if firstLucky.shuffleEnabled {
+		t.Error("Expected shuffle to remain disabled after first typed 't'")
+	}
+	if firstLucky.textInput.Value() != "t" {
+		t.Errorf("Expected text input to contain 't', got %q", firstLucky.textInput.Value())
+	}
+
+	// Plain 't' while typing existing text should also not toggle shuffle.
 	model.textInput.SetValue("rock")
 	plainT := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}
 	noToggleModel, _ := model.Update(plainT)
