@@ -570,8 +570,8 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Handle number input for multi-digit selection (only when text input is not focused)
-	if !m.textInput.Focused() && key >= "0" && key <= "9" {
+	// Handle number input for multi-digit selection when user is not actively typing a keyword
+	if !inputFocused && key >= "0" && key <= "9" {
 		m.numberBuffer += key
 
 		// Check if we should auto-select
