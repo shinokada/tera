@@ -5,6 +5,32 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-02-26
+
+* **Documentation**
+  * Updated shuffle shortcut from `t` to `Ctrl+T` across guides and help text.
+* **User Interface**
+  * In-app hints and messages now reference `Ctrl+T` for toggling shuffle.
+* **Bug Fixes**
+  * Number-key entry now only accumulates when not typing into the text input, improving input behavior.
+* **Tests**
+  * Updated and added tests to validate `Ctrl+T` behavior and non-toggle-while-typing cases.
+* **Chores**
+  * Build task now runs tests before compiling.
+
+## [3.5.0] - 2026-02-23
+
+* **New Features**
+  * Sleep Timer: presets or custom minutes, start/extend (+)/cancel, live in-play countdown, automatic stop and full session summary on expiry; remembers last-used duration; shortcuts: Z (open), + (extend), 0 (main menu), ? (help).
+  * Help Overlay: press ? for context-sensitive shortcuts across screens.
+  * Most Played: view and navigate frequently played stations.
+
+* **Documentation**
+  * README updated with Sleep Timer usage, session summary, shortcuts, and config examples.
+
+* **Tests**
+  * Added unit tests for sleep timer and session tracking.
+
 ## [3.4.0] - 2026-02-20
 
 ### Added
