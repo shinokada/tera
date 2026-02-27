@@ -360,6 +360,10 @@ Set a timer to automatically stop playback — useful for falling asleep to radi
 
 Enter a keyword (genre, mood, style) and TERA finds a random matching station. Perfect for music discovery!
 
+**Input Focus**: The page has two focusable areas — `Genre/keyword` (default) and `Choose an option` (history navigation). Use `Tab` to toggle between them:
+- `▶ Genre/keyword:` is highlighted when active — type freely, including keywords starting with digits (e.g. `80s`, `2pac`)
+- `▶ Choose an option:` is highlighted when active — use `↑↓`/`jk` to navigate history, or `1-N` shortcuts to pick a recent search
+
 **Shuffle Mode**: Enable shuffle mode to automatically cycle through multiple stations matching your keyword:
 - Press `Ctrl+T` to toggle shuffle on/off
 - Stations play in random order without repeats
@@ -564,19 +568,20 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### Shuffle Keyboard Shortcuts
 
-| Key   | Action                                |
-| ----- | ------------------------------------- |
-| `Ctrl+T` | Toggle shuffle mode (in input screen) |
-| `n`   | Next shuffle station (manual skip)    |
-| `[`   | Previous station (from history)       |
-| `b`   | Block current station                 |
-| `u`   | Undo block (5 sec window)             |
-| `p`   | Pause/resume auto-advance timer       |
-| `h`   | Stop shuffle, keep playing current    |
-| `f`   | Save to My-favorites                  |
-| `s`   | Save to another list                  |
-| `v`   | Vote for station                      |
-| `Esc` | Stop shuffle and return to input      |
+| Key      | Action                                    |
+| -------- | ----------------------------------------- |
+| `Ctrl+T` | Toggle shuffle mode (in input screen)     |
+| `Tab`    | Switch focus: Genre/keyword ↔ Choose an option |
+| `n`      | Next shuffle station (manual skip)        |
+| `[`      | Previous station (from history)           |
+| `b`      | Block current station                     |
+| `u`      | Undo block (5 sec window)                 |
+| `p`      | Pause/resume auto-advance timer           |
+| `h`      | Stop shuffle, keep playing current        |
+| `f`      | Save to My-favorites                      |
+| `s`      | Save to another list                      |
+| `v`      | Vote for station                          |
+| `Esc`    | Stop shuffle and return to input          |
 
 ### Shuffle Settings
 
@@ -622,9 +627,9 @@ Codec: AAC • Bitrate: 128 kbps
 Space: Pause • n: Next • [: Prev • f: Fav • b: Block • p: Pause timer • h: Stop shuffle • 0: Main Menu • ?: Help
 ```
 
-### Configuration
+### Configuration File
 
-Shuffle settings are stored in the unified `config.yaml`:
+Shuffle settings are stored in a dedicated `shuffle.yaml` file (separate from `config.yaml`):
 
 ```yaml
 shuffle:
@@ -633,6 +638,11 @@ shuffle:
   remember_history: true       # Track history
   max_history: 5               # Remember last 5 stations
 ```
+
+File location:
+- Linux: `~/.config/tera/shuffle.yaml`
+- macOS: `~/Library/Application Support/tera/shuffle.yaml`
+- Windows: `%APPDATA%\tera\shuffle.yaml`
 
 You can edit this file directly or use the Settings menu.
 
