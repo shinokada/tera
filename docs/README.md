@@ -627,9 +627,9 @@ Codec: AAC • Bitrate: 128 kbps
 Space: Pause • n: Next • [: Prev • f: Fav • b: Block • p: Pause timer • h: Stop shuffle • 0: Main Menu • ?: Help
 ```
 
-### Configuration
+### Configuration File
 
-Shuffle settings are stored in the unified `config.yaml`:
+Shuffle settings are stored in a dedicated `shuffle.yaml` file (separate from `config.yaml`):
 
 ```yaml
 shuffle:
@@ -638,6 +638,11 @@ shuffle:
   remember_history: true       # Track history
   max_history: 5               # Remember last 5 stations
 ```
+
+File location:
+- Linux: `~/.config/tera/shuffle.yaml`
+- macOS: `~/Library/Application Support/tera/shuffle.yaml`
+- Windows: `%APPDATA%\tera\shuffle.yaml`
 
 You can edit this file directly or use the Settings menu.
 

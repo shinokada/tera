@@ -216,6 +216,13 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.helpModel.SetSize(msg.Width, msg.Height)
 
+		// Rebuild the history menu with real terminal dimensions so the
+		// list viewport is properly initialised before the first keypress.
+		// Without this, CursorDown() is a no-op until the first resize.
+		if m.state == luckyStateInput {
+			m.rebuildMenuWithHistory()
+		}
+
 		return m, nil
 
 	case luckySearchResultsMsg:
@@ -562,24 +569,38 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// inputMode: all keystrokes go to the Genre/keyword text input
+	// inputMode: all keystrokes go to the Genre/keyword text input,
+	// except navigation keys which switch to nav mode automatically.
 	if m.inputMode {
-		if key == "enter" {
-			keyword := strings.TrimSpace(m.textInput.Value())
-			if keyword == "" {
-				m.err = fmt.Errorf("please enter a keyword")
+		// Arrow keys / jk switch to nav mode and navigate the history list
+		if key == "down" || key == "up" || key == "j" || key == "k" {
+			if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
+				m.inputMode = false
+				m.textInput.Blur()
+				m.numberBuffer = ""
+				// Let the nav path handle the key below
+			} else {
+				// No history — ignore nav keys in input mode
 				return m, nil
 			}
-			m.err = nil
-			m.state = luckyStateSearching
-			if m.shuffleEnabled {
-				return m, m.searchForShuffle(keyword)
+		} else {
+			if key == "enter" {
+				keyword := strings.TrimSpace(m.textInput.Value())
+				if keyword == "" {
+					m.err = fmt.Errorf("please enter a keyword")
+					return m, nil
+				}
+				m.err = nil
+				m.state = luckyStateSearching
+				if m.shuffleEnabled {
+					return m, m.searchForShuffle(keyword)
+				}
+				return m, m.searchAndPickRandom(keyword)
 			}
-			return m, m.searchAndPickRandom(keyword)
+			var cmd tea.Cmd
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
 		}
-		var cmd tea.Cmd
-		m.textInput, cmd = m.textInput.Update(msg)
-		return m, cmd
 	}
 
 	// History navigation mode: digit shortcuts and menu navigation
@@ -636,18 +657,9 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.searchAndPickRandom(query)
 		}
 
-		// Fall back to searching text input value
-		keyword := strings.TrimSpace(m.textInput.Value())
-		if keyword == "" {
-			m.err = fmt.Errorf("please enter a keyword")
-			return m, nil
-		}
-		m.err = nil
-		m.state = luckyStateSearching
-		if m.shuffleEnabled {
-			return m, m.searchForShuffle(keyword)
-		}
-		return m, m.searchAndPickRandom(keyword)
+		// In nav mode with no selection, prompt the user to switch modes
+		m.err = fmt.Errorf("press Tab to switch to Genre/keyword input")
+		return m, nil
 	}
 
 	// Clear buffer on navigation keys
@@ -812,7 +824,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.tagInput = components.NewTagInput(allTags, m.width)
 			m.state = luckyStateTagInput
 			return m, nil
 		}
@@ -1215,18 +1227,6 @@ func (m LuckyModel) viewInput() string {
 	content.WriteString(titleStyle.Render("🎲 I Feel Lucky"))
 	content.WriteString("\n\n")
 
-	// "Choose an option:" — highlighted when in history navigation mode
-	if !m.inputMode {
-		content.WriteString(highlightStyle().Render("▶ Choose an option:"))
-	} else {
-		content.WriteString(dimStyle().Render("  Choose an option:"))
-	}
-	if m.numberBuffer != "" {
-		content.WriteString(" ")
-		content.WriteString(highlightStyle().Render(m.numberBuffer + "_"))
-	}
-	content.WriteString("\n\n")
-
 	// Instructions
 	content.WriteString("Type a genre of music: rock, classical, jazz, pop, country, hip, heavy, blues, soul.\n")
 	content.WriteString("Or type a keyword like: meditation, relax, mozart, Beatles, etc.\n\n")
@@ -1257,9 +1257,19 @@ func (m LuckyModel) viewInput() string {
 		content.WriteString(" (press ctrl+t to enable)")
 	}
 
-	// Show history menu if available
+	// "Choose an option:" — sits directly above the history menu
 	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
 		content.WriteString("\n\n")
+		if !m.inputMode {
+			content.WriteString(highlightStyle().Render("▶ Choose an option:"))
+		} else {
+			content.WriteString(dimStyle().Render("  Choose an option:"))
+		}
+		if m.numberBuffer != "" {
+			content.WriteString(" ")
+			content.WriteString(highlightStyle().Render(m.numberBuffer + "_"))
+		}
+		content.WriteString("\n")
 		content.WriteString(m.menuList.View())
 	}
 
@@ -1546,8 +1556,13 @@ func (m *LuckyModel) rebuildMenuWithHistory() {
 		height = 15
 	}
 
-	// Use empty title - we render the title manually
-	m.menuList = components.CreateMenu(menuItems, "", 50, height)
+	// Use empty title - we render the title manually.
+	// Use m.width if known, fall back to 50 for initial build before WindowSizeMsg.
+	width := m.width
+	if width == 0 {
+		width = 50
+	}
+	m.menuList = components.CreateMenu(menuItems, "", width, height)
 }
 
 // updateShufflePlaying handles input during shuffle playback
@@ -1709,7 +1724,7 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
-			m.tagInput = components.NewTagInput(allTags, m.width-4)
+			m.tagInput = components.NewTagInput(allTags, m.width)
 			m.state = luckyStateTagInput
 			return m, nil
 		}

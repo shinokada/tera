@@ -550,6 +550,11 @@ shuffle:
   max_history: 5               # Remember last 5 stations
 ```
 
+File location:
+- Linux: `~/.config/tera/shuffle.yaml`
+- macOS: `~/Library/Application Support/tera/shuffle.yaml`
+- Windows: `%APPDATA%\tera\shuffle.yaml`
+
 You can edit this file directly or use the Settings menu.
 
 ## Keyboard Shortcuts
