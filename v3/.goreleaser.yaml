@@ -152,14 +152,16 @@ release:
     scoop install tera
     ```
 
+    #### Go
+    ```sh
+    go install github.com/shinokada/tera/v3/cmd/tera@latest
+    ```
+
     #### Manual Installation
     ```sh
     # macOS/Linux - Download and extract, then move to PATH
     tar -xzf tera_{{.Version}}_<os>_<arch>.tar.gz
     sudo mv tera /usr/local/bin/
-    
-    # Or install via Go
-    go install github.com/shinokada/tera/v2/cmd/tera@{{.Version}}
     ```
   footer: |
     ---
