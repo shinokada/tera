@@ -1428,7 +1428,7 @@ func (m PlayModel) viewStationSelection() string {
 	return RenderPage(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • /: Filter • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 	})
 }
 

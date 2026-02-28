@@ -90,10 +90,11 @@ type SearchModel struct {
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
 	// Sleep timer fields
-	sleepTimerDialog components.SleepTimerDialog
-	dataPath         string // for loading last-used duration preference
-	sleepCountdown   string // refreshed by App on each tick
-	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
+	sleepTimerDialog    components.SleepTimerDialog
+	dataPath            string // for loading last-used duration preference
+	sleepCountdown      string // refreshed by App on each tick
+	sleepTimerActive    bool   // true once a timer is running; cleared on cancel/expiry
+	showBlockedInSearch bool   // when false, blocked stations are filtered out of results
 }
 
 // Messages for search screen
@@ -322,6 +323,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			isBlocked := false
 			if m.blocklistManager != nil {
 				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
+			}
+			// Skip blocked stations unless the user has opted to show them
+			if isBlocked && !m.showBlockedInSearch {
+				continue
 			}
 			tagPills := ""
 			if m.tagsManager != nil {

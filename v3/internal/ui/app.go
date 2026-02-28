@@ -385,6 +385,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.playScreen.Init()
 		case screenSearch:
 			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.dataPath, a.blocklistManager)
+			// Apply search visibility setting
+			if cfg, err := storage.LoadBlocklistConfigFromUnified(); err == nil {
+				a.searchScreen.showBlockedInSearch = cfg.ShowBlockedInSearch
+			}
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {
 				a.searchScreen.metadataManager = a.metadataManager

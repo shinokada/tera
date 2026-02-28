@@ -123,7 +123,7 @@ tera
 
 ### Play from Favorites
 
-Browse and play stations from your organized lists. Navigate with `↑↓` or `jk`, press `Enter` to play.
+Browse and play stations from your organized lists. Navigate with `↑↓` or `jk`, press `Enter` to play. Press `/` to filter stations by name.
 
 ### Search Stations
 
@@ -157,9 +157,16 @@ Block unwanted stations to prevent them from appearing in search results and shu
 
 **Block List Management:**
 From main menu, select "8. Block List" to:
-- View all blocked stations with details (country, language, codec)
-- Press `u` to unblock a selected station
-- Press `c` to clear entire block list (with confirmation)
+- **1. View Blocked Stations** — List all blocked stations; press `u` to unblock, `c` to clear all
+- **2. Manage Block Rules** — Block entire countries, languages, or tags at once
+- **3. Import/Export Blocklist** — Backup and restore your blocklist
+- **4. Search Visibility** — Control whether blocked stations appear in search results
+
+**Search Visibility (default: hidden):**
+By default, blocked stations are completely hidden from search results. To change this:
+1. Go to **Block List → 4. Search Visibility**
+2. Press `y` to show blocked stations in search (marked with 🚫)
+3. Press `n` to hide them again (default)
 
 **Keyboard Shortcuts:**
 
@@ -604,6 +611,13 @@ You can edit this file directly or use the Settings menu.
 | `T` | Manage tags          |
 
 > **Tip:** Press `?` while playing to see all available shortcuts for the current screen in a help overlay.
+
+### Favorites Station List
+
+| Key | Action                  |
+| --- | ----------------------- |
+| `/` | Filter stations by name |
+| `d` | Delete station          |
 
 ### List Management
 
