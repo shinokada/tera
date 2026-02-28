@@ -1882,10 +1882,14 @@ func (m LuckyModel) viewShufflePlaying() string {
 		content.WriteString(subtitleStyle().Render("─── Shuffle History ───"))
 		content.WriteString("\n")
 
-		// Show up to 3 most recent stations
+		// Show up to MaxHistory most recent stations
+		maxDisplay := m.shuffleConfig.MaxHistory
+		if maxDisplay <= 0 {
+			maxDisplay = 3
+		}
 		startIdx := 0
-		if len(history) > 3 {
-			startIdx = len(history) - 3
+		if len(history) > maxDisplay {
+			startIdx = len(history) - maxDisplay
 		}
 
 		for i := startIdx; i < len(history); i++ {
