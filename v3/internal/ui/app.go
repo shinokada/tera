@@ -388,6 +388,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Apply search visibility setting
 			if cfg, err := storage.LoadBlocklistConfigFromUnified(); err == nil {
 				a.searchScreen.showBlockedInSearch = cfg.ShowBlockedInSearch
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist visibility setting: %v\n", err)
 			}
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {

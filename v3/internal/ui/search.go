@@ -341,7 +341,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		delegate := createStyledDelegate()
 
 		m.resultsList = list.New(m.resultsItems, delegate, m.width, availableListHeight(m.height))
-		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
+		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.resultsItems))
 		m.resultsList.SetShowHelp(false)     // We use custom footer instead
 		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
 		m.resultsList.SetFilteringEnabled(true)

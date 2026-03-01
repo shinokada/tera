@@ -178,9 +178,9 @@ By default, blocked stations are completely hidden from search results. To chang
 | Block List | `c` | Clear all blocks          |
 
 **Storage Location:**
-- Linux: `~/.config/tera/blocklist.json`
-- macOS: `~/Library/Application Support/tera/blocklist.json`
-- Windows: `%APPDATA%\tera\blocklist.json`
+- Linux: `~/.config/tera/data/blocklist.json`
+- macOS: `~/Library/Application Support/tera/data/blocklist.json`
+- Windows: `%APPDATA%\tera\data\blocklist.json`
 
 ### Star Ratings
 

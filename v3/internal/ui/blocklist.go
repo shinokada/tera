@@ -589,12 +589,15 @@ func (m BlocklistModel) handleSearchVisibilityInput(msg tea.KeyMsg) (tea.Model, 
 
 // setSearchVisibility saves the setting and refreshes the menu label
 func (m BlocklistModel) setSearchVisibility(show bool) (tea.Model, tea.Cmd) {
-	m.showBlockedInSearch = show
 	if err := storage.SaveBlocklistConfigToUnified(config.BlocklistConfig{
 		ShowBlockedInSearch: show,
 	}); err != nil {
 		m.message = fmt.Sprintf("✗ Failed to save: %v", err)
+		m.messageTime = 180
+		m.state = blocklistMainMenu
+		return m, nil
 	} else {
+		m.showBlockedInSearch = show
 		if show {
 			m.message = "✓ Blocked stations will appear in search (marked 🚫)"
 		} else {
