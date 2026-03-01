@@ -88,6 +88,14 @@ func (b blocklistItem) FilterValue() string {
 	return b.station.Name
 }
 
+// searchVisibilityLabel returns the menu subtitle for the Search Visibility item.
+func searchVisibilityLabel(show bool) string {
+	if show {
+		return "On (shown in search)"
+	}
+	return "Off (hidden from search)"
+}
+
 // NewBlocklistModel creates a new blocklist model
 func NewBlocklistModel(manager *blocklist.Manager) BlocklistModel {
 	// Load search visibility setting
@@ -97,15 +105,11 @@ func NewBlocklistModel(manager *blocklist.Manager) BlocklistModel {
 	}
 
 	// Create main menu
-	visibilityLabel := "Off (hidden from search)"
-	if showBlocked {
-		visibilityLabel = "On (shown in search)"
-	}
 	mainMenuItems := []components.MenuItem{
 		components.NewMenuItem("View Blocked Stations", "Manage individually blocked stations", "1"),
 		components.NewMenuItem("Manage Block Rules", "Block by country/language/tag", "2"),
 		components.NewMenuItem("Import/Export Blocklist", "Backup and restore blocklist", "3"),
-		components.NewMenuItem("Search Visibility", visibilityLabel, "4"),
+		components.NewMenuItem("Search Visibility", searchVisibilityLabel(showBlocked), "4"),
 	}
 	mainMenu := components.CreateMenu(mainMenuItems, "📋 Block List Management", 80, 10)
 
@@ -608,11 +612,7 @@ func (m BlocklistModel) setSearchVisibility(show bool) (tea.Model, tea.Cmd) {
 	// Refresh the menu item description to reflect new value
 	items := m.mainMenu.Items()
 	if len(items) >= 4 {
-		visibilityLabel := "Off (hidden from search)"
-		if show {
-			visibilityLabel = "On (shown in search)"
-		}
-		items[3] = components.NewMenuItem("Search Visibility", visibilityLabel, "4")
+		items[3] = components.NewMenuItem("Search Visibility", searchVisibilityLabel(show), "4")
 		m.mainMenu.SetItems(items)
 	}
 	m.state = blocklistMainMenu

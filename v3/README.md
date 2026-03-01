@@ -148,7 +148,7 @@ Create, rename, and delete your favorite lists. Stations can be:
 
 ### Block List
 
-Block unwanted stations to prevent them from appearing in search results and shuffle mode.
+Block unwanted stations to prevent them from appearing in shuffle mode and, by default, in search results.
 
 **How to Block:**
 - While playing any station, press `b` to block it instantly
