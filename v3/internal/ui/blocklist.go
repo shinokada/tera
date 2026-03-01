@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
+	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
@@ -27,28 +29,30 @@ const (
 	blocklistImportExport
 	blocklistConfirmDeleteRule
 	blocklistConfirmAddRule
+	blocklistSearchVisibility
 )
 
 // BlocklistModel represents the blocklist screen
 type BlocklistModel struct {
-	state             blocklistState
-	manager           *blocklist.Manager
-	mainMenu          list.Model
-	rulesMenu         list.Model
-	listModel         list.Model
-	rulesListModel    list.Model
-	stations          []blocklist.BlockedStation
-	rules             []blocklist.BlockRule
-	selectedRuleIndex int
-	pendingRuleType   blocklist.BlockRuleType
-	pendingRuleValue  string
-	previousState     blocklistState
-	textInput         textinput.Model
-	message           string
-	messageTime       int
-	err               error
-	width             int
-	height            int
+	state                blocklistState
+	manager              *blocklist.Manager
+	mainMenu             list.Model
+	rulesMenu            list.Model
+	listModel            list.Model
+	rulesListModel       list.Model
+	stations             []blocklist.BlockedStation
+	rules                []blocklist.BlockRule
+	selectedRuleIndex    int
+	pendingRuleType      blocklist.BlockRuleType
+	pendingRuleValue     string
+	previousState        blocklistState
+	textInput            textinput.Model
+	message              string
+	messageTime          int
+	err                  error
+	width                int
+	height               int
+	showBlockedInSearch  bool // current setting value
 }
 
 // blocklistItem wraps a BlockedStation for list.Item interface
@@ -84,13 +88,28 @@ func (b blocklistItem) FilterValue() string {
 	return b.station.Name
 }
 
+// searchVisibilityLabel returns the menu subtitle for the Search Visibility item.
+func searchVisibilityLabel(show bool) string {
+	if show {
+		return "On (shown in search)"
+	}
+	return "Off (hidden from search)"
+}
+
 // NewBlocklistModel creates a new blocklist model
 func NewBlocklistModel(manager *blocklist.Manager) BlocklistModel {
+	// Load search visibility setting
+	showBlocked := false
+	if cfg, err := storage.LoadBlocklistConfigFromUnified(); err == nil {
+		showBlocked = cfg.ShowBlockedInSearch
+	}
+
 	// Create main menu
 	mainMenuItems := []components.MenuItem{
 		components.NewMenuItem("View Blocked Stations", "Manage individually blocked stations", "1"),
 		components.NewMenuItem("Manage Block Rules", "Block by country/language/tag", "2"),
 		components.NewMenuItem("Import/Export Blocklist", "Backup and restore blocklist", "3"),
+		components.NewMenuItem("Search Visibility", searchVisibilityLabel(showBlocked), "4"),
 	}
 	mainMenu := components.CreateMenu(mainMenuItems, "📋 Block List Management", 80, 10)
 
@@ -121,12 +140,13 @@ func NewBlocklistModel(manager *blocklist.Manager) BlocklistModel {
 	ti.Width = 50
 
 	return BlocklistModel{
-		state:     blocklistMainMenu,
-		manager:   manager,
-		mainMenu:  mainMenu,
-		rulesMenu: rulesMenu,
-		listModel: l,
-		textInput: ti,
+		state:               blocklistMainMenu,
+		manager:             manager,
+		mainMenu:            mainMenu,
+		rulesMenu:           rulesMenu,
+		listModel:           l,
+		textInput:           ti,
+		showBlockedInSearch: showBlocked,
 	}
 }
 
@@ -293,6 +313,9 @@ func (m BlocklistModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, nil
+
+	case blocklistSearchVisibility:
+		return m.handleSearchVisibilityInput(msg)
 	}
 
 	return m, nil
@@ -318,6 +341,8 @@ func (m BlocklistModel) handleMainMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 		return m.executeMainMenuAction(1)
 	case "3":
 		return m.executeMainMenuAction(2)
+	case "4":
+		return m.executeMainMenuAction(3)
 	}
 
 	var cmd tea.Cmd
@@ -336,6 +361,9 @@ func (m BlocklistModel) executeMainMenuAction(index int) (tea.Model, tea.Cmd) {
 		return m, nil
 	case 2: // Import/Export
 		m.state = blocklistImportExport
+		return m, nil
+	case 3: // Search Visibility
+		m.state = blocklistSearchVisibility
 		return m, nil
 	}
 	return m, nil
@@ -521,6 +549,8 @@ func (m BlocklistModel) View() string {
 
 	case blocklistImportExport:
 		return m.viewPlaceholder("Import/Export Blocklist")
+	case blocklistSearchVisibility:
+		return m.viewSearchVisibility()
 	}
 
 	return ""
@@ -543,7 +573,80 @@ func (m BlocklistModel) viewMainMenu() string {
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Quick select • Esc: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
+	}, m.height)
+}
+
+// handleSearchVisibilityInput handles input on the search visibility screen
+func (m BlocklistModel) handleSearchVisibilityInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.state = blocklistMainMenu
+		return m, nil
+	case "y", "1":
+		return m.setSearchVisibility(true)
+	case "n", "2":
+		return m.setSearchVisibility(false)
+	}
+	return m, nil
+}
+
+// setSearchVisibility saves the setting and refreshes the menu label
+func (m BlocklistModel) setSearchVisibility(show bool) (tea.Model, tea.Cmd) {
+	if err := storage.SaveBlocklistConfigToUnified(config.BlocklistConfig{
+		ShowBlockedInSearch: show,
+	}); err != nil {
+		m.message = fmt.Sprintf("✗ Failed to save: %v", err)
+		m.messageTime = 180
+		m.state = blocklistMainMenu
+		return m, nil
+	} else {
+		m.showBlockedInSearch = show
+		if show {
+			m.message = "✓ Blocked stations will appear in search (marked 🚫)"
+		} else {
+			m.message = "✓ Blocked stations will be hidden from search"
+		}
+	}
+	m.messageTime = 180
+	// Refresh the menu item description to reflect new value
+	items := m.mainMenu.Items()
+	if len(items) >= 4 {
+		items[3] = components.NewMenuItem("Search Visibility", searchVisibilityLabel(show), "4")
+		m.mainMenu.SetItems(items)
+	}
+	m.state = blocklistMainMenu
+	return m, nil
+}
+
+// viewSearchVisibility renders the search visibility toggle screen
+func (m BlocklistModel) viewSearchVisibility() string {
+	var content strings.Builder
+
+	content.WriteString("Control whether blocked stations appear in search results.\n\n")
+
+	current := "Hidden from search results (default)"
+	if m.showBlockedInSearch {
+		current = "Shown in search results (marked 🚫)"
+	}
+	content.WriteString(stationFieldStyle().Render("Current setting: "))
+	content.WriteString(highlightStyle().Render(current))
+	content.WriteString("\n\n")
+	content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
+	content.WriteString("\n\n")
+
+	if m.showBlockedInSearch {
+		content.WriteString("  1) y — Keep showing blocked stations (🚫 prefix)\n")
+		content.WriteString("  2) n — Hide blocked stations from search\n")
+	} else {
+		content.WriteString("  1) y — Show blocked stations in search (🚫 prefix)\n")
+		content.WriteString("  2) n — Keep hiding blocked stations from search\n")
+	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🔍 Search Visibility",
+		Content: content.String(),
+		Help:    "y/1: Yes • n/2: No • Esc: Back",
 	}, m.height)
 }
 

@@ -109,6 +109,25 @@ func LoadShuffleConfigFromUnified() (ShuffleConfig, error) {
 	}, nil
 }
 
+// LoadBlocklistConfigFromUnified loads blocklist settings from unified config
+func LoadBlocklistConfigFromUnified() (config.BlocklistConfig, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return config.BlocklistConfig{}, err
+	}
+	return cfg.Blocklist, nil
+}
+
+// SaveBlocklistConfigToUnified saves blocklist settings to unified config
+func SaveBlocklistConfigToUnified(bl config.BlocklistConfig) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	cfg.Blocklist = bl
+	return config.Save(cfg)
+}
+
 // SaveShuffleConfigToUnified saves shuffle settings to unified config
 func SaveShuffleConfigToUnified(shuffle ShuffleConfig) error {
 	cfg, err := config.Load()

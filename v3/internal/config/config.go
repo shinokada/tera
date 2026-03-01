@@ -13,11 +13,12 @@ const (
 
 // Config represents the unified application configuration
 type Config struct {
-	Version string        `yaml:"version"`
-	Player  PlayerConfig  `yaml:"player"`
-	UI      UIConfig      `yaml:"ui"`
-	Network NetworkConfig `yaml:"network"`
-	Shuffle ShuffleConfig `yaml:"shuffle"`
+	Version   string          `yaml:"version"`
+	Player    PlayerConfig    `yaml:"player"`
+	UI        UIConfig        `yaml:"ui"`
+	Network   NetworkConfig   `yaml:"network"`
+	Shuffle   ShuffleConfig   `yaml:"shuffle"`
+	Blocklist BlocklistConfig `yaml:"blocklist"`
 }
 
 // PlayerConfig represents player settings
@@ -67,6 +68,11 @@ type NetworkConfig struct {
 	AutoReconnect  bool `yaml:"auto_reconnect"`
 	ReconnectDelay int  `yaml:"reconnect_delay"` // Seconds between reconnect attempts
 	BufferSizeMB   int  `yaml:"buffer_size_mb"`  // Stream buffer size
+}
+
+// BlocklistConfig represents blocklist behaviour settings
+type BlocklistConfig struct {
+	ShowBlockedInSearch bool `yaml:"show_blocked_in_search"` // Show blocked stations in search results
 }
 
 // ShuffleConfig represents shuffle mode settings
@@ -122,6 +128,9 @@ func DefaultConfig() Config {
 			AutoReconnect:  true,
 			ReconnectDelay: 5,
 			BufferSizeMB:   50,
+		},
+		Blocklist: BlocklistConfig{
+			ShowBlockedInSearch: false,
 		},
 		Shuffle: ShuffleConfig{
 			AutoAdvance:     false,

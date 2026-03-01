@@ -90,10 +90,11 @@ type SearchModel struct {
 	tagInput    components.TagInput
 	manageTags  components.ManageTags
 	// Sleep timer fields
-	sleepTimerDialog components.SleepTimerDialog
-	dataPath         string // for loading last-used duration preference
-	sleepCountdown   string // refreshed by App on each tick
-	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
+	sleepTimerDialog    components.SleepTimerDialog
+	dataPath            string // for loading last-used duration preference
+	sleepCountdown      string // refreshed by App on each tick
+	sleepTimerActive    bool   // true once a timer is running; cleared on cancel/expiry
+	showBlockedInSearch bool   // when false, blocked stations are filtered out of results
 }
 
 // Messages for search screen
@@ -323,6 +324,10 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.blocklistManager != nil {
 				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
+			// Skip blocked stations unless the user has opted to show them
+			if isBlocked && !m.showBlockedInSearch {
+				continue
+			}
 			tagPills := ""
 			if m.tagsManager != nil {
 				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
@@ -336,7 +341,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		delegate := createStyledDelegate()
 
 		m.resultsList = list.New(m.resultsItems, delegate, m.width, availableListHeight(m.height))
-		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
+		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.resultsItems))
 		m.resultsList.SetShowHelp(false)     // We use custom footer instead
 		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
 		m.resultsList.SetFilteringEnabled(true)
