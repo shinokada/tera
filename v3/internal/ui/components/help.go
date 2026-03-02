@@ -287,6 +287,56 @@ func CreateTagsPlayingHelp() []HelpSection {
 	}
 }
 
+// CreateLuckyHelp creates help sections for the I Feel Lucky screen
+func CreateLuckyHelp() []HelpSection {
+	return []HelpSection{
+		{
+			Title: "Input",
+			Items: []HelpItem{
+				{"Tab", "Switch focus (keyword ↔ history)"},
+				{"Enter", "Search / select history"},
+				{"ctrl+t", "Toggle shuffle mode"},
+				{"↑↓/jk", "Navigate history (nav mode)"},
+				{"1-N", "Quick pick history (nav mode)"},
+				{"Esc", "Back to main menu"},
+			},
+		},
+		{
+			Title: "Playback",
+			Items: []HelpItem{
+				{"Space", "Pause / Resume"},
+				{"*", "Volume up (+5%)"},
+				{"/", "Volume down (-5%)"},
+				{"m", "Toggle mute"},
+				{"Esc", "Stop & back to input"},
+				{"0", "Main menu"},
+			},
+		},
+		{
+			Title: "Actions",
+			Items: []HelpItem{
+				{"f", "Save to My-favorites"},
+				{"s", "Save to another list"},
+				{"v", "Vote for station"},
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
+				{"b", "Block station"},
+				{"u", "Undo block (5s)"},
+			},
+		},
+		{
+			Title: "Shuffle",
+			Items: []HelpItem{
+				{"n", "Next station"},
+				{"[", "Previous station"},
+				{"p", "Pause / resume timer"},
+				{"h", "Stop shuffle, keep playing"},
+			},
+		},
+	}
+}
+
 func CreateAppearanceHelp() []HelpSection {
 	return []HelpSection{
 		{
