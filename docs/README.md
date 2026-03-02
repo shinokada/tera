@@ -660,6 +660,7 @@ You can edit this file directly or use the Settings menu.
 | Key         | Action        |
 | ----------- | ------------- |
 | `↑↓` / `jk` | Navigate      |
+| `g` / `G`   | Top / End     |
 | `Enter`     | Select / Play |
 | `Esc`       | Back / Stop   |
 | `0`         | Main Menu     |

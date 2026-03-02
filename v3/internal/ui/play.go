@@ -1245,13 +1245,13 @@ func (m PlayModel) viewListSelection() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Use the consistent page template
-	return RenderPage(PageLayout{
+	// Use the consistent page template with bottom-aligned help
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: "Select a Favorite List",
 		Content:  content.String(),
-		Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back • Ctrl+C: Quit",
-	})
+		Help:     "↑↓/jk: Navigate • g/G: Top/End • Enter: Select • Esc: Back • Ctrl+C: Quit",
+	}, m.height)
 }
 
 // viewPlaying renders the playback view
@@ -1424,12 +1424,12 @@ func (m PlayModel) viewStationSelection() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Use the consistent page template
-	return RenderPage(PageLayout{
+	// Use the consistent page template with bottom-aligned help
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • /: Filter • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
-	})
+		Help:    "↑↓/jk: Navigate • g/G: Top/End • /: Filter • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
 }
 
 // noStationsView renders the view when a list is empty
