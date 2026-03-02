@@ -534,41 +534,42 @@ func (m GistModel) View() string {
 		return ""
 	}
 
+	h := m.height
 	switch m.state {
 	case gistStateMenu:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Gist Management",
 			Subtitle: "Select an Option",
 			Content:  m.menuList.View() + "\n" + m.renderMessage(),
 			Help:     "↑↓/jk: Navigate • Enter: Select • 1-7: Quick select • Esc: Back • Ctrl+C: Quit",
-		})
+		}, h)
 	case gistStateCreateVisibility:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Create Gist",
 			Subtitle: "Choose Visibility",
 			Content:  m.visibilityMenu.View() + "\n" + m.renderMessage(),
 			Help:     "↑↓/jk: Navigate • Enter: Select • 1-2: Quick select • Esc: Back",
-		})
+		}, h)
 	case gistStateCreateName:
 		visibility := "Secret"
 		if m.createPublic {
 			visibility = "Public"
 		}
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Create Gist",
 			Subtitle: fmt.Sprintf("Enter Gist Name (%s)", visibility),
 			Content:  fmt.Sprintf("Enter a name/description for your gist:\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Create • Esc: Back",
-		})
+		}, h)
 	case gistStateCreate:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Create Gist",
 			Subtitle: "Uploading favorites to GitHub",
 			Content:  "Creating gist...\n\nPlease wait while your favorites are uploaded.\n\n" + m.renderMessage(),
 			Help:     "Please wait...",
-		})
+		}, h)
 	case gistStateImportURL:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Import from URL",
 			Subtitle: "Paste a public gist URL or ID",
 			Content: fmt.Sprintf("Enter a gist URL or ID to import favorites:\n\n"+
@@ -577,7 +578,7 @@ func (m GistModel) View() string {
 				"  • Raw gist ID (e.g., abc123def456...)\n\n"+
 				"%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help: "Enter: Import • Esc: Back",
-		})
+		}, h)
 	case gistStateList, gistStateUpdate, gistStateDelete, gistStateRecover:
 		action := "My Gists"
 		switch m.state {
@@ -594,26 +595,26 @@ func (m GistModel) View() string {
 			content = "No gists available.\n\nCreate a gist first from the main menu."
 		}
 
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    action,
 			Subtitle: "Select a Gist",
 			Content:  content + "\n" + m.renderMessage(),
 			Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back",
-		})
+		}, h)
 	case gistStateTokenMenu:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Token Management",
 			Subtitle: "Manage your GitHub Token",
 			Content:  m.tokenMenuList.View() + "\n" + m.renderMessage(),
 			Help:     "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
-		})
+		}, h)
 	case gistStateTokenSetup:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Setup Token",
 			Subtitle: "Paste your GitHub Token",
 			Content:  fmt.Sprintf("Token will be hidden for security.\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Save • Esc: Cancel",
-		})
+		}, h)
 	case gistStateTokenView:
 		masked := gist.GetMaskedToken(m.token)
 		sourceInfo := ""
@@ -634,34 +635,34 @@ func (m GistModel) View() string {
 				}
 			}
 		}
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Current Token",
 			Subtitle: "View Token Status",
 			Content:  fmt.Sprintf("Token: %s%s", masked, sourceInfo) + "\n\n" + m.renderMessage(),
 			Help:     "Enter/Esc: Back",
-		})
+		}, h)
 	case gistStateUpdateInput:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Update Gist",
 			Subtitle: "Enter new description",
 			Content:  fmt.Sprintf("Current: %s\n\nNew Description:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Update • Esc: Cancel",
-		})
+		}, h)
 	case gistStateDeleteConfirm:
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Delete Gist",
 			Subtitle: "Confirm Deletion",
 			Content:  fmt.Sprintf("Are you sure you want to delete this gist?\n%s\n\nType 'yes' to confirm:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Confirm • Esc: Cancel",
-		})
+		}, h)
 	case gistStateTokenDelete:
 		masked := gist.GetMaskedToken(m.token)
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Delete Token",
 			Subtitle: "⚠️  WARNING",
 			Content:  fmt.Sprintf("This will delete your stored GitHub token!\n\nToken: %s\n\nYou won't be able to use Gist features until you set up a new token.\n\nType 'yes' to confirm deletion:\n%s", masked, m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Confirm • Esc: Cancel",
-		})
+		}, h)
 	}
 
 	return ""

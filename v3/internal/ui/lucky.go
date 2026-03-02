@@ -36,6 +36,13 @@ const (
 	luckyStateManageTags
 )
 
+// Footer help text constants for the I Feel Lucky screen
+const (
+	luckyHelpInputFooter   = "Tab: Switch focus • Enter: Search • ctrl+t: Shuffle • Esc: Back • ?: Help"
+	luckyHelpPlayingFooter = "Space: Pause • f: Fav • s: List • 0: Main Menu • ?: Help"
+	luckyHelpShuffleFooter = "Space: Pause • n: Next • [: Prev • f: Fav • h: Stop shuffle • 0: Main Menu • ?: Help"
+)
+
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
 	state           luckyState
@@ -162,7 +169,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string, blocklistManager 
 		searchHistory:    history,
 		width:            80,
 		height:           24,
-		helpModel:        components.NewHelpModel(components.CreatePlayingHelp()),
+		helpModel:        components.NewHelpModel(components.CreateLuckyHelp()),
 		votedStations:    votedStations,
 		shuffleEnabled:   false,
 		shuffleConfig:    shuffleConfig,
@@ -537,6 +544,13 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // Tab toggles between inputMode (Genre/keyword) and history navigation mode.
 func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+
+	// Handle '?' for help overlay
+	if key == "?" {
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
+	}
 
 	// Handle escape - return to main menu
 	if key == "esc" {
@@ -1291,15 +1305,7 @@ func (m LuckyModel) viewInput() string {
 		}
 	}
 
-	helpText := "Tab: Switch focus • Enter: Search • ctrl+t: Toggle shuffle"
-	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
-		maxItems := len(m.searchHistory.LuckyQueries)
-		if maxItems > m.searchHistory.MaxSize {
-			maxItems = m.searchHistory.MaxSize
-		}
-		helpText += fmt.Sprintf(" • 1-%d: Quick pick (nav mode)", maxItems)
-	}
-	helpText += " • ↑↓: History (nav mode) • Esc: Back"
+	helpText := luckyHelpInputFooter
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
@@ -1405,7 +1411,7 @@ func (m LuckyModel) viewPlaying() string {
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
 
-	helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • r: Rate • 0: Main Menu • ?: Help"
+	helpText := luckyHelpPlayingFooter
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
@@ -1942,7 +1948,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "Space: Pause • n: Next • [: Prev • f: Fav • b: Block • p: Pause timer • h: Stop shuffle • 0: Main Menu • ?: Help"
+	help := luckyHelpShuffleFooter
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,

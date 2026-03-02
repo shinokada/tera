@@ -357,6 +357,7 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
 
 	case "?":
+		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Show()
 		return m, nil
 
@@ -694,11 +695,11 @@ func (m MostPlayedModel) viewList() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played Stations",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
-	})
+		Help:    "↑↓/jk: Navigate • g/G: Top/End • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
+	}, m.height)
 }
 
 func (m MostPlayedModel) viewPlaying() string {
@@ -800,11 +801,11 @@ func (m MostPlayedModel) viewSavePrompt() string {
 	content.WriteString("[L] Choose from list\n")
 	content.WriteString("[N] Cancel")
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "💾 Save Station",
 		Content: content.String(),
 		Help:    "Y: My-favorites • L: Choose list • N: Cancel",
-	})
+	}, m.height)
 }
 
 func (m MostPlayedModel) viewSelectList() string {
@@ -813,9 +814,9 @@ func (m MostPlayedModel) viewSelectList() string {
 	content.WriteString("Select a list:\n\n")
 	content.WriteString(m.listModel.View())
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "📁 Select List",
 		Content: content.String(),
 		Help:    "↑↓: Navigate • Enter: Select • Esc: Cancel",
-	})
+	}, m.height)
 }
