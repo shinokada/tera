@@ -801,11 +801,11 @@ func (m MostPlayedModel) viewSavePrompt() string {
 	content.WriteString("[L] Choose from list\n")
 	content.WriteString("[N] Cancel")
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "💾 Save Station",
 		Content: content.String(),
 		Help:    "Y: My-favorites • L: Choose list • N: Cancel",
-	})
+	}, m.height)
 }
 
 func (m MostPlayedModel) viewSelectList() string {
@@ -814,9 +814,9 @@ func (m MostPlayedModel) viewSelectList() string {
 	content.WriteString("Select a list:\n\n")
 	content.WriteString(m.listModel.View())
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "📁 Select List",
 		Content: content.String(),
 		Help:    "↑↓: Navigate • Enter: Select • Esc: Cancel",
-	})
+	}, m.height)
 }
