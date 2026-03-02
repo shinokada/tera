@@ -315,7 +315,7 @@ func CreateLuckyHelp() []HelpSection {
 		{
 			Title: "Actions",
 			Items: []HelpItem{
-				{"f", "Save to My-favorites"},
+				{"f", "Save to Quick Favorites"},
 				{"s", "Save to another list"},
 				{"v", "Vote for station"},
 				{"r", "Rate station (1-5)"},

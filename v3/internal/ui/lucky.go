@@ -36,6 +36,13 @@ const (
 	luckyStateManageTags
 )
 
+// Footer help text constants for the I Feel Lucky screen
+const (
+	luckyHelpInputFooter   = "Tab: Switch focus • Enter: Search • ctrl+t: Shuffle • Esc: Back • ?: Help"
+	luckyHelpPlayingFooter = "Space: Pause • f: Fav • s: List • 0: Main Menu • ?: Help"
+	luckyHelpShuffleFooter = "Space: Pause • n: Next • [: Prev • f: Fav • h: Stop shuffle • 0: Main Menu • ?: Help"
+)
+
 // LuckyModel represents the I Feel Lucky screen
 type LuckyModel struct {
 	state           luckyState
@@ -1298,7 +1305,7 @@ func (m LuckyModel) viewInput() string {
 		}
 	}
 
-	helpText := "Tab: Switch focus • Enter: Search • ctrl+t: Shuffle • Esc: Back • ?: Help"
+	helpText := luckyHelpInputFooter
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
@@ -1404,7 +1411,7 @@ func (m LuckyModel) viewPlaying() string {
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
 
-	helpText := "Space: Pause • f: Fav • s: List • 0: Main Menu • ?: Help"
+	helpText := luckyHelpPlayingFooter
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
@@ -1941,7 +1948,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "Space: Pause • n: Next • [: Prev • f: Fav • h: Stop shuffle • 0: Main Menu • ?: Help"
+	help := luckyHelpShuffleFooter
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,
