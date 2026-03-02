@@ -357,6 +357,7 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
 
 	case "?":
+		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Show()
 		return m, nil
 
@@ -694,11 +695,11 @@ func (m MostPlayedModel) viewList() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played Stations",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
-	})
+		Help:    "↑↓/jk: Navigate • g/G: Top/End • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
+	}, m.height)
 }
 
 func (m MostPlayedModel) viewPlaying() string {
