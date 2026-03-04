@@ -190,12 +190,12 @@ func GetGistPublic(gistID string) (*Gist, error) {
 	}
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
 		return nil, fmt.Errorf("API error: %s (status: %d, body: %s)", resp.Status, resp.StatusCode, string(body))
 	}
 
 	var gist Gist
-	if err := json.NewDecoder(resp.Body).Decode(&gist); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&gist); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -254,7 +254,7 @@ func ParseGistURL(input string) (string, error) {
 	return "", fmt.Errorf("invalid gist URL or ID")
 }
 
-// do plays the request and decodes the response
+// do executes the request and decodes the response.
 func (c *Client) do(req *http.Request, v interface{}) error {
 	req.Header.Set("Authorization", "token "+c.token)
 	req.Header.Set("User-Agent", "tera-radio-player")
@@ -268,12 +268,15 @@ func (c *Client) do(req *http.Request, v interface{}) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		// Limit error body to 1 KB — enough for diagnostics without risking
+		// memory exhaustion or inadvertently logging token material from proxies.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
 		return fmt.Errorf("API error: %s (status: %d, body: %s)", resp.Status, resp.StatusCode, string(body))
 	}
 
 	if v != nil {
-		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		// Limit response to 10 MB to prevent memory exhaustion.
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(v); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}

@@ -1,15 +1,19 @@
 package player
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shinokada/tera/v3/internal/api"
@@ -29,6 +33,8 @@ type MPVPlayer struct {
 	stopCh          chan struct{}
 	socketPath      string                   // IPC socket path for runtime control
 	conn            net.Conn                 // Connection to IPC socket
+	connReader      *bufio.Reader            // Buffered reader for newline-delimited IPC responses
+	nextRequestID   atomic.Uint64            // Monotonically increasing IPC request ID
 	trackHistory    []string                 // Last 5 track names
 	currentTrack    string                   // Current playing track
 	trackMu         sync.Mutex               // Protect track history
@@ -122,8 +128,15 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		args = append(args, "--no-cache")
 	}
 
+	// Validate URL scheme before passing to mpv to prevent local file access
+	// via file:// or other unexpected schemes from a malicious API response.
+	safeURL, err := validateStreamURL(station.URLResolved)
+	if err != nil {
+		return err
+	}
+
 	// Add URL as final argument
-	args = append(args, station.URLResolved)
+	args = append(args, safeURL)
 
 	// Create mpv command
 	p.cmd = exec.Command("mpv", args...)
@@ -195,6 +208,7 @@ func (p *MPVPlayer) connectToSocket() {
 				return
 			}
 			p.conn = conn
+			p.connReader = bufio.NewReader(conn)
 			currentVol := p.volume
 			muted := p.muted
 			// Sync volume state to mpv after connection establishes
@@ -208,43 +222,77 @@ func (p *MPVPlayer) connectToSocket() {
 	}
 }
 
-// sendCommand sends a JSON command to mpv via IPC
+// sendCommand sends a JSON command to mpv via IPC.
+// It tags every outbound message with a unique request_id and reads back
+// lines until it finds the matching reply, discarding unrelated events
+// (e.g. property-change notifications, or replies to prior set_property
+// calls whose responses were never consumed).
+// Caller must hold p.mu.
 func (p *MPVPlayer) sendCommand(command []interface{}) error {
-	if p.conn == nil {
+	if p.conn == nil || p.connReader == nil {
 		return fmt.Errorf("not connected to mpv")
 	}
 
+	reqID := p.nextRequestID.Add(1)
 	msg := map[string]interface{}{
-		"command": command,
+		"command":    command,
+		"request_id": reqID,
 	}
 
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-
-	// Add newline as message terminator
 	data = append(data, '\n')
 
-	// Prevent UI stalls on blocked IPC writes
+	// Prevent UI stalls on blocked IPC writes.
 	_ = p.conn.SetWriteDeadline(time.Now().Add(250 * time.Millisecond))
 	defer func() { _ = p.conn.SetWriteDeadline(time.Time{}) }()
 
-	_, err = p.conn.Write(data)
-	return err
+	if _, err := p.conn.Write(data); err != nil {
+		return err
+	}
+
+	// Drain the reply for this command so it is never left in the buffer
+	// to confuse a subsequent getProperty call.
+	_ = p.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+	defer func() { _ = p.conn.SetReadDeadline(time.Time{}) }()
+
+	for {
+		line, err := p.connReader.ReadString('\n')
+		if err != nil {
+			return err
+		}
+		var reply ipcReply
+		if jsonErr := json.Unmarshal([]byte(line), &reply); jsonErr != nil {
+			continue
+		}
+		if reply.RequestID == reqID {
+			if reply.Error != "" && reply.Error != "success" {
+				return fmt.Errorf("mpv error: %s", reply.Error)
+			}
+			return nil
+		}
+		// Discard unrelated events/replies and keep reading.
+	}
 }
 
-// getProperty retrieves a property value from mpv via IPC
+// getProperty retrieves a property value from mpv via IPC.
+// It tags every request with a unique request_id and skips lines until
+// the matching reply arrives, so stale set_property responses left in the
+// buffer by sendCommand can never corrupt the returned value.
 func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.conn == nil {
+	if p.conn == nil || p.connReader == nil {
 		return nil, fmt.Errorf("not connected to mpv")
 	}
 
+	reqID := p.nextRequestID.Add(1)
 	msg := map[string]interface{}{
-		"command": []interface{}{"get_property", name},
+		"command":    []interface{}{"get_property", name},
+		"request_id": reqID,
 	}
 
 	data, err := json.Marshal(msg)
@@ -253,7 +301,7 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	}
 	data = append(data, '\n')
 
-	// Set deadline for write and read
+	// Set deadline for write and read.
 	_ = p.conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
 	defer func() { _ = p.conn.SetDeadline(time.Time{}) }()
 
@@ -261,26 +309,59 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 		return nil, err
 	}
 
-	// Read response
-	buf := make([]byte, 1024)
-	n, err := p.conn.Read(buf)
-	if err != nil {
-		return nil, err
+	// Read lines until we find the reply that matches our request_id,
+	// discarding unrelated events (property notifications, prior command acks).
+	for {
+		line, err := p.connReader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		var reply ipcReply
+		if jsonErr := json.Unmarshal([]byte(line), &reply); jsonErr != nil {
+			continue
+		}
+		if reply.RequestID != reqID {
+			continue // discard: belongs to a different command or is an event
+		}
+		if reply.Error != "success" {
+			return nil, fmt.Errorf("mpv error: %s", reply.Error)
+		}
+		return reply.Data, nil
+	}
+}
+
+// ipcReply is the subset of fields present in every mpv IPC response line.
+type ipcReply struct {
+	RequestID uint64      `json:"request_id"`
+	Data      interface{} `json:"data"`
+	Error     string      `json:"error"`
+}
+
+// validateStreamURL checks that the URL uses a safe streaming scheme and
+// returns the trimmed, validated URL. This prevents a malicious or compromised
+// API response from supplying a file:// or fd:// URL that would cause mpv to
+// open local resources. A URL with leading/trailing whitespace is trimmed so
+// the sanitized value is forwarded to mpv rather than the raw input.
+func validateStreamURL(rawURL string) (string, error) {
+	cleaned := strings.TrimSpace(rawURL)
+	if cleaned == "" {
+		return "", fmt.Errorf("station URL is empty")
 	}
 
-	var resp struct {
-		Data  interface{} `json:"data"`
-		Error string      `json:"error"`
-	}
-	if err := json.Unmarshal(buf[:n], &resp); err != nil {
-		return nil, err
+	u, err := url.Parse(cleaned)
+	if err != nil || u.Scheme == "" {
+		return "", fmt.Errorf("station URL is invalid: %q", rawURL)
 	}
 
-	if resp.Error != "success" {
-		return nil, fmt.Errorf("mpv error: %s", resp.Error)
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "rtsp", "rtmp", "rtsps", "rtmps":
+		if u.Host == "" {
+			return "", fmt.Errorf("station URL must include a host: %q", rawURL)
+		}
+		return cleaned, nil
+	default:
+		return "", fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp/rtsps/rtmps): %q", rawURL)
 	}
-
-	return resp.Data, nil
 }
 
 // GetAudioBitrate returns the current audio bitrate (useful for checking signal)
@@ -409,6 +490,7 @@ func (p *MPVPlayer) cleanupResourcesLocked() {
 	if p.conn != nil {
 		_ = p.conn.Close()
 		p.conn = nil
+		p.connReader = nil
 	}
 
 	// Remove socket file (Unix only, Windows named pipes auto-cleanup)

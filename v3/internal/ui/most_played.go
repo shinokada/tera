@@ -95,6 +95,7 @@ type mostPlayedStationItem struct {
 	station  api.Station
 	metadata *storage.StationMetadata
 	tagPills string // pre-rendered tag pills (empty if no tags)
+	stars    string // pre-rendered compact stars (empty if unrated)
 }
 
 func (i mostPlayedStationItem) FilterValue() string {
@@ -113,11 +114,19 @@ func (i mostPlayedStationItem) Title() string {
 			name = "Unknown Station"
 		}
 	}
-	if len(name) > 35 {
-		name = name[:32] + "..."
+	// Truncate name to leave room for stars (9 chars) + 2 padding
+	maxName := 33
+	if i.stars != "" {
+		maxName = 30
+	}
+	if len([]rune(name)) > maxName {
+		name = string([]rune(name)[:maxName-3]) + "..."
 	}
 	if i.tagPills != "" {
-		return name + "  " + i.tagPills
+		name = name + "  " + i.tagPills
+	}
+	if i.stars != "" {
+		return name + "  " + i.stars
 	}
 	return name
 }
@@ -321,6 +330,7 @@ func (m *MostPlayedModel) refreshStationList() {
 			station:  s.Station,
 			metadata: s.Metadata,
 			tagPills: tagPills,
+			stars:    m.renderStationStars(s.Station.StationUUID),
 		})
 	}
 	m.stationListModel.SetItems(m.stationItems)
@@ -340,6 +350,8 @@ func (m *MostPlayedModel) refreshStationTagPills(stationUUID string) {
 	for i, item := range items {
 		if si, ok := item.(mostPlayedStationItem); ok && si.station.StationUUID == stationUUID {
 			si.tagPills = pills
+			// Re-render stars so the rating stays current too
+			si.stars = m.renderStationStars(stationUUID)
 			items[i] = si
 			break
 		}
@@ -532,6 +544,7 @@ func (m MostPlayedModel) handleRatingModeInput(msg tea.KeyMsg) (MostPlayedModel,
 			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
 			m.saveMessageSuccess = true
 			m.saveMessageTime = 2
+			m.refreshStationStars(m.selectedStation.StationUUID)
 			return m, tickEverySecond()
 		}
 		return m, nil
@@ -543,6 +556,7 @@ func (m MostPlayedModel) handleRatingModeInput(msg tea.KeyMsg) (MostPlayedModel,
 		m.saveMessage = "✓ Rating removed"
 		m.saveMessageSuccess = true
 		m.saveMessageTime = 2
+		m.refreshStationStars(m.selectedStation.StationUUID)
 		return m, tickEverySecond()
 	}
 
@@ -550,6 +564,33 @@ func (m MostPlayedModel) handleRatingModeInput(msg tea.KeyMsg) (MostPlayedModel,
 	m.saveMessage = ""
 	m.saveMessageTime = 0
 	return m, nil
+}
+
+// renderStationStars is the single source of truth for computing a station's
+// star string. Returns an empty string if unrated or renderers are nil.
+func (m *MostPlayedModel) renderStationStars(stationUUID string) string {
+	if m.ratingsManager == nil || m.starRenderer == nil {
+		return ""
+	}
+	if r := m.ratingsManager.GetRating(stationUUID); r != nil {
+		return m.starRenderer.RenderCompact(r.Rating)
+	}
+	return ""
+}
+
+// refreshStationStars updates the stars field for a single station in the list
+// after a rating change, so the list reflects the new rating immediately.
+func (m *MostPlayedModel) refreshStationStars(stationUUID string) {
+	newStars := m.renderStationStars(stationUUID)
+	items := m.stationListModel.Items()
+	for i, item := range items {
+		if si, ok := item.(mostPlayedStationItem); ok && si.station.StationUUID == stationUUID {
+			si.stars = newStars
+			items[i] = si
+			break
+		}
+	}
+	m.stationListModel.SetItems(items)
 }
 func (m MostPlayedModel) handleSavePromptInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	switch msg.String() {

@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
@@ -772,6 +773,167 @@ func TestLuckyShufflePlayingStateVoteShortcut(t *testing.T) {
 	if cmd == nil {
 		t.Error("Expected vote command to be returned")
 	}
+}
+
+// TestLuckyInputModeKeyRouting verifies that j/k are treated as printable
+// characters when Genre/keyword is focused (inputMode=true), while arrow keys
+// switch to history-navigation mode when history exists.
+func TestLuckyInputModeKeyRouting(t *testing.T) {
+	client := api.NewClient()
+
+	// Helper: build a model with or without search history.
+	newModel := func(withHistory bool) LuckyModel {
+		m := NewLuckyModel(client, "/tmp/test", blocklist.NewManager("/tmp/blocklist"))
+		m.state = luckyStateInput
+		m.inputMode = true
+		m.textInput.Focus()
+		if withHistory {
+			m.searchHistory = &storage.SearchHistoryStore{
+				LuckyQueries: []string{"blues", "soul"},
+				MaxSize: 10,
+			}
+			m.rebuildMenuWithHistory()
+		} else {
+			m.searchHistory = storage.NewSearchHistoryStore()
+			m.rebuildMenuWithHistory()
+		}
+		return m
+	}
+
+	t.Run("j stays in textInput (no history)", func(t *testing.T) {
+		m := newModel(false)
+		m.textInput.SetValue("")
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		lucky := updated.(LuckyModel)
+		if !lucky.inputMode {
+			t.Error("inputMode must stay true when j is typed")
+		}
+		if lucky.textInput.Value() != "j" {
+			t.Errorf("expected textInput value 'j', got %q", lucky.textInput.Value())
+		}
+	})
+
+	t.Run("j stays in textInput (with history)", func(t *testing.T) {
+		m := newModel(true)
+		m.textInput.SetValue("")
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		lucky := updated.(LuckyModel)
+		if !lucky.inputMode {
+			t.Error("typing 'j' must not switch away from inputMode")
+		}
+		if lucky.textInput.Value() != "j" {
+			t.Errorf("expected textInput value 'j', got %q", lucky.textInput.Value())
+		}
+	})
+
+	t.Run("k stays in textInput (with history)", func(t *testing.T) {
+		m := newModel(true)
+		m.textInput.SetValue("")
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+		lucky := updated.(LuckyModel)
+		if !lucky.inputMode {
+			t.Error("typing 'k' must not switch away from inputMode")
+		}
+		if lucky.textInput.Value() != "k" {
+			t.Errorf("expected textInput value 'k', got %q", lucky.textInput.Value())
+		}
+	})
+
+	t.Run("typing jazz stays in inputMode throughout", func(t *testing.T) {
+		m := newModel(true)
+		word := "jazz"
+		for _, ch := range word {
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+			m = updated.(LuckyModel)
+			if !m.inputMode {
+				t.Errorf("inputMode switched to false after typing %q", string(ch))
+				break
+			}
+		}
+		if m.textInput.Value() != "jazz" {
+			t.Errorf("expected textInput value 'jazz', got %q", m.textInput.Value())
+		}
+	})
+
+	t.Run("typing rock stays in inputMode throughout", func(t *testing.T) {
+		m := newModel(true)
+		for _, ch := range "rock" {
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+			m = updated.(LuckyModel)
+			if !m.inputMode {
+				t.Errorf("inputMode switched to false after typing %q", string(ch))
+				break
+			}
+		}
+		if m.textInput.Value() != "rock" {
+			t.Errorf("expected textInput value 'rock', got %q", m.textInput.Value())
+		}
+	})
+
+	// Digits are passed through to textInput in inputMode (not caught by the
+	// number-shortcut branch, which only runs in nav mode). This subtest locks
+	// down general textInput pass-through rather than the j/k routing fix.
+	t.Run("typing numeric keyword stays in inputMode throughout", func(t *testing.T) {
+		m := newModel(true)
+		for _, ch := range "90s" {
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+			m = updated.(LuckyModel)
+			if !m.inputMode {
+				t.Errorf("inputMode switched to false after typing %q", string(ch))
+				break
+			}
+		}
+		if m.textInput.Value() != "90s" {
+			t.Errorf("expected textInput value '90s', got %q", m.textInput.Value())
+		}
+	})
+
+	t.Run("down arrow switches to nav mode when history exists", func(t *testing.T) {
+		m := newModel(true)
+		m.numberBuffer = "12"
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		lucky := updated.(LuckyModel)
+		if lucky.inputMode {
+			t.Error("down arrow must switch inputMode to false when history exists")
+		}
+		if lucky.numberBuffer != "" {
+			t.Errorf("expected numberBuffer to be cleared, got %q", lucky.numberBuffer)
+		}
+	})
+
+	t.Run("up arrow switches to nav mode when history exists", func(t *testing.T) {
+		m := newModel(true)
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+		lucky := updated.(LuckyModel)
+		if lucky.inputMode {
+			t.Error("up arrow must switch inputMode to false when history exists")
+		}
+	})
+
+	t.Run("down arrow does nothing when no history", func(t *testing.T) {
+		m := newModel(false)
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		lucky := updated.(LuckyModel)
+		if !lucky.inputMode {
+			t.Error("down arrow must not change inputMode when there is no history")
+		}
+	})
+
+	t.Run("j works as vim nav after Tab switches to nav mode", func(t *testing.T) {
+		m := newModel(true)
+		// Switch to nav mode via Tab
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m = updated.(LuckyModel)
+		if m.inputMode {
+			t.Fatal("Tab must switch inputMode to false")
+		}
+		// In nav mode, j should navigate the menu (not crash or mode-switch)
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		m = updated.(LuckyModel)
+		if m.inputMode {
+			t.Error("nav mode must remain false after pressing j")
+		}
+	})
 }
 
 func TestLuckyShuffleViewShufflePlaying(t *testing.T) {
