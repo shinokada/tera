@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -129,12 +130,13 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 
 	// Validate URL scheme before passing to mpv to prevent local file access
 	// via file:// or other unexpected schemes from a malicious API response.
-	if err := validateStreamURL(station.URLResolved); err != nil {
+	safeURL, err := validateStreamURL(station.URLResolved)
+	if err != nil {
 		return err
 	}
 
 	// Add URL as final argument
-	args = append(args, station.URLResolved)
+	args = append(args, safeURL)
 
 	// Create mpv command
 	p.cmd = exec.Command("mpv", args...)
@@ -335,21 +337,31 @@ type ipcReply struct {
 	Error     string      `json:"error"`
 }
 
-// validateStreamURL checks that the URL uses a safe streaming scheme.
-// This prevents a malicious or compromised API response from supplying a
-// file:// or fd:// URL that would cause mpv to open local resources.
-func validateStreamURL(rawURL string) error {
-	lower := strings.ToLower(strings.TrimSpace(rawURL))
-	if lower == "" {
-		return fmt.Errorf("station URL is empty")
+// validateStreamURL checks that the URL uses a safe streaming scheme and
+// returns the trimmed, validated URL. This prevents a malicious or compromised
+// API response from supplying a file:// or fd:// URL that would cause mpv to
+// open local resources. A URL with leading/trailing whitespace is trimmed so
+// the sanitized value is forwarded to mpv rather than the raw input.
+func validateStreamURL(rawURL string) (string, error) {
+	cleaned := strings.TrimSpace(rawURL)
+	if cleaned == "" {
+		return "", fmt.Errorf("station URL is empty")
 	}
-	allowed := []string{"http://", "https://", "rtsp://", "rtmp://", "rtsps://", "rtmps://"}
-	for _, prefix := range allowed {
-		if strings.HasPrefix(lower, prefix) {
-			return nil
+
+	u, err := url.Parse(cleaned)
+	if err != nil || u.Scheme == "" {
+		return "", fmt.Errorf("station URL is invalid: %q", rawURL)
+	}
+
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "rtsp", "rtmp", "rtsps", "rtmps":
+		if u.Host == "" {
+			return "", fmt.Errorf("station URL must include a host: %q", rawURL)
 		}
+		return cleaned, nil
+	default:
+		return "", fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp): %q", rawURL)
 	}
-	return fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp): %q", rawURL)
 }
 
 // GetAudioBitrate returns the current audio bitrate (useful for checking signal)
