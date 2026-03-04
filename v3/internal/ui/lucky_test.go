@@ -793,17 +793,23 @@ func TestLuckyInputModeKeyRouting(t *testing.T) {
 				MaxSize: 10,
 			}
 			m.rebuildMenuWithHistory()
+		} else {
+			m.searchHistory = storage.NewSearchHistoryStore()
+			m.rebuildMenuWithHistory()
 		}
 		return m
 	}
 
 	t.Run("j stays in textInput (no history)", func(t *testing.T) {
 		m := newModel(false)
-		m.textInput.SetValue("jaz")
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
+		m.textInput.SetValue("")
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 		lucky := updated.(LuckyModel)
 		if !lucky.inputMode {
 			t.Error("inputMode must stay true when j is typed")
+		}
+		if lucky.textInput.Value() != "j" {
+			t.Errorf("expected textInput value 'j', got %q", lucky.textInput.Value())
 		}
 	})
 
