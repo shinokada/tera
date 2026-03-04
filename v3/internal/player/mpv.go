@@ -259,14 +259,16 @@ func (p *MPVPlayer) sendCommand(command []interface{}) error {
 	for {
 		line, err := p.connReader.ReadString('\n')
 		if err != nil {
-			// Timeout or connection error — non-fatal for fire-and-forget commands.
-			return nil
+			return err
 		}
 		var reply ipcReply
 		if jsonErr := json.Unmarshal([]byte(line), &reply); jsonErr != nil {
 			continue
 		}
 		if reply.RequestID == reqID {
+			if reply.Error != "" && reply.Error != "success" {
+				return fmt.Errorf("mpv error: %s", reply.Error)
+			}
 			return nil
 		}
 		// Discard unrelated events/replies and keep reading.

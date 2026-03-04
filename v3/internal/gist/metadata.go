@@ -142,6 +142,9 @@ func atomicWriteMetadata(path string, data []byte) error {
 
 // SaveMetadata adds or updates a gist metadata.
 func SaveMetadata(metadata *GistMetadata) error {
+	if metadata == nil {
+		return fmt.Errorf("metadata cannot be nil")
+	}
 	metadataMu.Lock()
 	defer metadataMu.Unlock()
 
