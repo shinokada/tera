@@ -870,12 +870,34 @@ func TestLuckyInputModeKeyRouting(t *testing.T) {
 		}
 	})
 
+	// Digits are passed through to textInput in inputMode (not caught by the
+	// number-shortcut branch, which only runs in nav mode). This subtest locks
+	// down general textInput pass-through rather than the j/k routing fix.
+	t.Run("typing numeric keyword stays in inputMode throughout", func(t *testing.T) {
+		m := newModel(true)
+		for _, ch := range "90s" {
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+			m = updated.(LuckyModel)
+			if !m.inputMode {
+				t.Errorf("inputMode switched to false after typing %q", string(ch))
+				break
+			}
+		}
+		if m.textInput.Value() != "90s" {
+			t.Errorf("expected textInput value '90s', got %q", m.textInput.Value())
+		}
+	})
+
 	t.Run("down arrow switches to nav mode when history exists", func(t *testing.T) {
 		m := newModel(true)
+		m.numberBuffer = "12"
 		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		lucky := updated.(LuckyModel)
 		if lucky.inputMode {
 			t.Error("down arrow must switch inputMode to false when history exists")
+		}
+		if lucky.numberBuffer != "" {
+			t.Errorf("expected numberBuffer to be cleared, got %q", lucky.numberBuffer)
 		}
 	})
 
