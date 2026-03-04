@@ -341,7 +341,7 @@ func validateStreamURL(rawURL string) error {
 	if lower == "" {
 		return fmt.Errorf("station URL is empty")
 	}
-	allowed := []string{"http://", "https://", "rtsp://", "rtmp://", "rtsps://"}
+	allowed := []string{"http://", "https://", "rtsp://", "rtmp://", "rtsps://", "rtmps://"}
 	for _, prefix := range allowed {
 		if strings.HasPrefix(lower, prefix) {
 			return nil
