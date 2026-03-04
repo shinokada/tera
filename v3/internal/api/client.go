@@ -52,6 +52,11 @@ func (c *Client) doSearch(ctx context.Context, form url.Values) ([]Station, erro
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode >= http.StatusBadRequest {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
+		return nil, fmt.Errorf("search request failed: %s (body: %s)", resp.Status, string(body))
+	}
+
 	// Limit response to 10 MB to prevent memory exhaustion from a misbehaving server.
 	var stations []Station
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&stations); err != nil {

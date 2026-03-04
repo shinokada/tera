@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -84,7 +85,7 @@ func (s *Storage) SaveSearchHistory(ctx context.Context, store *SearchHistorySto
 		return fmt.Errorf("failed to marshal search history: %w", err)
 	}
 
-	return atomicWriteFile(historyPath, data, 0644)
+	return atomicWriteFile(historyPath, data, 0600)
 }
 
 // atomicWriteFile writes data to path using a temp file + rename so that
@@ -118,8 +119,24 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	if writeErr = os.Chmod(tmpName, perm); writeErr != nil {
 		return fmt.Errorf("failed to set permissions on temp file: %w", writeErr)
 	}
-	if writeErr = os.Rename(tmpName, path); writeErr != nil {
-		return fmt.Errorf("failed to rename temp file: %w", writeErr)
+	// os.Rename is atomic on POSIX (rename(2)) but on Windows it can fail if
+	// the destination already exists (golang/go#8914). A delete-before-rename
+	// would introduce a race window, and a proper atomic replacement on Windows
+	// requires MoveFileExW(MOVEFILE_REPLACE_EXISTING) via syscall. For now we
+	// accept a non-atomic fallback on Windows: if Rename fails we write directly.
+	writeErr = os.Rename(tmpName, path)
+	if writeErr != nil {
+		if runtime.GOOS == "windows" {
+			// Best-effort fallback: write directly. Not atomic, but avoids a
+			// permanently failed save on Windows when the destination exists.
+			writeErr = os.WriteFile(path, data, perm)
+			_ = os.Remove(tmpName) // clean up orphaned temp file
+		} else {
+			return fmt.Errorf("failed to rename temp file: %w", writeErr)
+		}
+	}
+	if writeErr != nil {
+		return fmt.Errorf("failed to write file: %w", writeErr)
 	}
 	return nil
 }

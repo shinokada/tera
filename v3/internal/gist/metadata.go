@@ -73,12 +73,49 @@ func saveAllGists(gists []*GistMetadata) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Use 0600: the directory is already 0700; the file itself should also
-	// be owner-only since it contains Gist IDs that enable access to private gists.
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	// Atomic write: temp file + fsync + rename, matching the pattern used for
+	// other persistent stores. Uses 0600 since the file contains Gist IDs that
+	// grant access to private gists.
+	if err := atomicWriteMetadata(path, data); err != nil {
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 
+	return nil
+}
+
+// atomicWriteMetadata writes data to path via temp-file + fsync + rename
+// so a crash mid-write cannot corrupt the destination file.
+func atomicWriteMetadata(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".gist-metadata-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+
+	var writeErr error
+	defer func() {
+		_ = tmp.Close()
+		if writeErr != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, writeErr = tmp.Write(data); writeErr != nil {
+		return fmt.Errorf("failed to write temp file: %w", writeErr)
+	}
+	if writeErr = tmp.Sync(); writeErr != nil {
+		return fmt.Errorf("failed to sync temp file: %w", writeErr)
+	}
+	if writeErr = tmp.Close(); writeErr != nil {
+		return fmt.Errorf("failed to close temp file: %w", writeErr)
+	}
+	if writeErr = os.Chmod(tmpName, 0600); writeErr != nil {
+		return fmt.Errorf("failed to chmod temp file: %w", writeErr)
+	}
+	if writeErr = os.Rename(tmpName, path); writeErr != nil {
+		return fmt.Errorf("failed to rename temp file: %w", writeErr)
+	}
 	return nil
 }
 
