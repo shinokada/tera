@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +31,7 @@ type MPVPlayer struct {
 	stopCh          chan struct{}
 	socketPath      string                   // IPC socket path for runtime control
 	conn            net.Conn                 // Connection to IPC socket
+	connReader      *bufio.Reader            // Buffered reader for newline-delimited IPC responses
 	trackHistory    []string                 // Last 5 track names
 	currentTrack    string                   // Current playing track
 	trackMu         sync.Mutex               // Protect track history
@@ -122,6 +125,12 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		args = append(args, "--no-cache")
 	}
 
+	// Validate URL scheme before passing to mpv to prevent local file access
+	// via file:// or other unexpected schemes from a malicious API response.
+	if err := validateStreamURL(station.URLResolved); err != nil {
+		return err
+	}
+
 	// Add URL as final argument
 	args = append(args, station.URLResolved)
 
@@ -195,6 +204,7 @@ func (p *MPVPlayer) connectToSocket() {
 				return
 			}
 			p.conn = conn
+			p.connReader = bufio.NewReader(conn)
 			currentVol := p.volume
 			muted := p.muted
 			// Sync volume state to mpv after connection establishes
@@ -234,12 +244,15 @@ func (p *MPVPlayer) sendCommand(command []interface{}) error {
 	return err
 }
 
-// getProperty retrieves a property value from mpv via IPC
+// getProperty retrieves a property value from mpv via IPC.
+// mpv uses newline-delimited JSON; we read until '\n' via a bufio.Reader
+// so we never truncate long responses (e.g. media-title with long metadata)
+// or leave partial bytes in the socket that would corrupt the next read.
 func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.conn == nil {
+	if p.conn == nil || p.connReader == nil {
 		return nil, fmt.Errorf("not connected to mpv")
 	}
 
@@ -261,9 +274,10 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 		return nil, err
 	}
 
-	// Read response
-	buf := make([]byte, 1024)
-	n, err := p.conn.Read(buf)
+	// Read one complete newline-terminated JSON response.
+	// Using bufio.Reader prevents truncation of long metadata strings and
+	// ensures no partial bytes are left in the socket for the next read.
+	line, err := p.connReader.ReadString('\n')
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +286,7 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 		Data  interface{} `json:"data"`
 		Error string      `json:"error"`
 	}
-	if err := json.Unmarshal(buf[:n], &resp); err != nil {
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
 		return nil, err
 	}
 
@@ -281,6 +295,23 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	}
 
 	return resp.Data, nil
+}
+
+// validateStreamURL checks that the URL uses a safe streaming scheme.
+// This prevents a malicious or compromised API response from supplying a
+// file:// or fd:// URL that would cause mpv to open local resources.
+func validateStreamURL(rawURL string) error {
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	if lower == "" {
+		return fmt.Errorf("station URL is empty")
+	}
+	allowed := []string{"http://", "https://", "rtsp://", "rtmp://", "rtsps://"}
+	for _, prefix := range allowed {
+		if strings.HasPrefix(lower, prefix) {
+			return nil
+		}
+	}
+	return fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp): %q", rawURL)
 }
 
 // GetAudioBitrate returns the current audio bitrate (useful for checking signal)
@@ -409,6 +440,7 @@ func (p *MPVPlayer) cleanupResourcesLocked() {
 	if p.conn != nil {
 		_ = p.conn.Close()
 		p.conn = nil
+		p.connReader = nil
 	}
 
 	// Remove socket file (Unix only, Windows named pipes auto-cleanup)

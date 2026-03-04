@@ -72,7 +72,8 @@ func (s *Storage) LoadSearchHistory(ctx context.Context) (*SearchHistoryStore, e
 	return &store, nil
 }
 
-// SaveSearchHistory saves the search history to disk
+// SaveSearchHistory saves the search history to disk using an atomic
+// temp-file-and-rename so a crash mid-write never corrupts the file.
 func (s *Storage) SaveSearchHistory(ctx context.Context, store *SearchHistoryStore) error {
 	historyPath := filepath.Join(s.favoritePath, "search-history.json")
 
@@ -83,10 +84,43 @@ func (s *Storage) SaveSearchHistory(ctx context.Context, store *SearchHistorySto
 		return fmt.Errorf("failed to marshal search history: %w", err)
 	}
 
-	if err := os.WriteFile(historyPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write search history: %w", err)
-	}
+	return atomicWriteFile(historyPath, data, 0644)
+}
 
+// atomicWriteFile writes data to path using a temp file + rename so that
+// a crash mid-write cannot leave path in a partially-written state.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, ".search-history-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpName := tmpFile.Name()
+
+	// Clean up temp file on any error path.
+	var writeErr error
+	defer func() {
+		_ = tmpFile.Close()
+		if writeErr != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, writeErr = tmpFile.Write(data); writeErr != nil {
+		return fmt.Errorf("failed to write temp file: %w", writeErr)
+	}
+	if writeErr = tmpFile.Sync(); writeErr != nil {
+		return fmt.Errorf("failed to sync temp file: %w", writeErr)
+	}
+	if writeErr = tmpFile.Close(); writeErr != nil {
+		return fmt.Errorf("failed to close temp file: %w", writeErr)
+	}
+	if writeErr = os.Chmod(tmpName, perm); writeErr != nil {
+		return fmt.Errorf("failed to set permissions on temp file: %w", writeErr)
+	}
+	if writeErr = os.Rename(tmpName, path); writeErr != nil {
+		return fmt.Errorf("failed to rename temp file: %w", writeErr)
+	}
 	return nil
 }
 

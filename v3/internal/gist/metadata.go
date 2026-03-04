@@ -73,7 +73,9 @@ func saveAllGists(gists []*GistMetadata) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	// Use 0600: the directory is already 0700; the file itself should also
+	// be owner-only since it contains Gist IDs that enable access to private gists.
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 
