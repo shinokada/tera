@@ -586,8 +586,11 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// inputMode: all keystrokes go to the Genre/keyword text input,
 	// except navigation keys which switch to nav mode automatically.
 	if m.inputMode {
-		// Arrow keys / jk switch to nav mode and navigate the history list
-		if key == "down" || key == "up" || key == "j" || key == "k" {
+		// Arrow keys (but NOT j/k) switch to nav mode.
+		// j and k are printable letters — they must stay in the text input
+		// so the user can type words like "jazz" or "rock" without accidentally
+		// switching focus to the history list.
+		if key == "down" || key == "up" {
 			if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
 				m.inputMode = false
 				m.textInput.Blur()
