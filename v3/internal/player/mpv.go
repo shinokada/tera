@@ -360,7 +360,7 @@ func validateStreamURL(rawURL string) (string, error) {
 		}
 		return cleaned, nil
 	default:
-		return "", fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp): %q", rawURL)
+		return "", fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp/rtsps/rtmps): %q", rawURL)
 	}
 }
 
