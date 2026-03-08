@@ -805,7 +805,7 @@ func (m SettingsModel) viewSearchHistory() string {
 func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	cfg := m.playHistoryCfg
 	switch msg.String() {
-	case "esc", "6":
+	case "esc", "5":
 		m.state = settingsStateHistory
 		return m, nil
 	case "0":
@@ -852,26 +852,13 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.messageTime = 3
 		return m, tickEverySecond()
-	case "4": // Toggle Allow Duplicate
-		cfg.AllowDuplicate = !cfg.AllowDuplicate
-		if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
-			m.playHistoryCfg = cfg
-			dupStr := "No"
-			if cfg.AllowDuplicate {
-				dupStr = "Yes"
-			}
-			m.message = fmt.Sprintf("✓ Allow Duplicate: %s", dupStr)
-			m.messageIsSuccess = true
-		} else {
-			m.message = fmt.Sprintf("✗ Failed: %v", err)
-			m.messageIsSuccess = false
-		}
-		m.messageTime = 3
-		return m, tickEverySecond()
-	case "5": // Clear Play History
+	case "4": // Reset All Play Stats
+		// ClearAll() wipes the entire metadata store (play counts, last played,
+		// duration) — it is intentionally labelled "Reset All Play Stats" in the
+		// UI so users understand it also resets Most Played, not just Recently Played.
 		if m.metadataManager != nil {
 			if err := m.metadataManager.ClearAll(); err == nil {
-				m.message = "✓ Play history cleared"
+				m.message = "✓ All play stats reset"
 				m.messageIsSuccess = true
 			} else {
 				m.message = fmt.Sprintf("✗ Failed: %v", err)
@@ -883,6 +870,9 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.messageTime = 3
 		return m, tickEverySecond()
+	case "5": // Back
+		m.state = settingsStateHistory
+		return m, nil
 	}
 	return m, nil
 }
@@ -894,10 +884,6 @@ func (m SettingsModel) viewPlayHistory() string {
 	showStr := "No"
 	if m.playHistoryCfg.Enabled {
 		showStr = "Yes"
-	}
-	dupStr := "No"
-	if m.playHistoryCfg.AllowDuplicate {
-		dupStr = "Yes"
 	}
 	sizeUp := m.playHistoryCfg.Size + 1
 	if sizeUp > 20 {
@@ -918,11 +904,11 @@ func (m SettingsModel) viewPlayHistory() string {
 	content.WriteString("\n")
 	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  3. Decrease Size (-1)     → %d", sizeDown)))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  4. Toggle Allow Duplicate (currently: %s)", dupStr)))
+	content.WriteString(normalItemStyle().Render("  4. Reset All Play Stats"))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render("  5. Clear Play History"))
+	content.WriteString(helpStyle().Render("      (clears play counts, Most Played, and Recently Played)"))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render("  6. Back"))
+	content.WriteString(normalItemStyle().Render("  5. Back"))
 	content.WriteString("\n")
 
 	if m.metadataManager != nil {
@@ -943,7 +929,7 @@ func (m SettingsModel) viewPlayHistory() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings > History > Play History",
 		Content: content.String(),
-		Help:    "1-6: Select • Esc/6: Back • 0: Main Menu • Ctrl+C: Quit",
+		Help:    "1-5: Select • Esc/5: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
 }
 

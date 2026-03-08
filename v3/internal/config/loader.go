@@ -120,9 +120,17 @@ func saveRaw(configPath string, cfg *Config) error {
 	header := generateConfigHeader()
 	content := []byte(header + string(data))
 
-	// Write to file
-	if err := os.WriteFile(configPath, content, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+	// Write atomically via a temp file in the same directory, then rename.
+	// This prevents a crash or short write from leaving a malformed config.yaml
+	// that would break the next launch.
+	tmpPath := configPath + ".tmp"
+	if err := os.WriteFile(tmpPath, content, 0644); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to write config temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to rename config file: %w", err)
 	}
 	return nil
 }
