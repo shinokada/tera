@@ -143,6 +143,27 @@ func SaveShuffleConfigToUnified(shuffle ShuffleConfig) error {
 	return config.Save(cfg)
 }
 
+// LoadPlayHistoryConfigFromUnified loads play history settings from unified config.
+func LoadPlayHistoryConfigFromUnified() (config.PlayHistoryConfig, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return config.DefaultPlayHistoryConfig(), err
+	}
+	return cfg.PlayHistory, nil
+}
+
+// SavePlayHistoryConfigToUnified saves play history settings to unified config.
+// NOTE: Performs non-atomic read-modify-write; safe within Bubble Tea's
+// single-threaded Update loop.
+func SavePlayHistoryConfigToUnified(ph config.PlayHistoryConfig) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	cfg.PlayHistory = ph
+	return config.Save(cfg)
+}
+
 // CheckAndMigrateV2Config checks for v2 config and migrates if found
 // Returns true if migration was performed, false otherwise
 // If force is true, migration runs even if v3 config already exists
