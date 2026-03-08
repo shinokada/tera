@@ -343,7 +343,7 @@ Settings stored in the config directory (see [File Locations](#file-locations)).
 
 The main menu shows two instant-access sections below the regular menu:
 
-```
+```text
 Main Menu & Quick Play
 
 Choose an option:

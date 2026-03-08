@@ -59,8 +59,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Parse YAML
-	var cfg Config
+	// Parse YAML — seed from defaults so fields absent in legacy configs
+	// (e.g. play_history introduced in v3.7) get proper default values
+	// instead of Go zero-values which Validate() cannot fully recover.
+	cfg := DefaultConfig()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}

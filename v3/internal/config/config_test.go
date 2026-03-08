@@ -522,6 +522,56 @@ func TestThemeConfigValidation(t *testing.T) {
 	}
 }
 
+// TestLoadLegacyConfig_MissingPlayHistory verifies that loading a pre-3.7 config
+// file that has no play_history section yields DefaultPlayHistoryConfig values
+// rather than Go zero-values ({enabled:false, size:0}).
+func TestLoadLegacyConfig_MissingPlayHistory(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-legacy-config-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
+
+	originalFunc := userConfigDirFunc
+	defer func() { userConfigDirFunc = originalFunc }()
+	userConfigDirFunc = func() (string, error) { return tmpDir, nil }
+
+	// Write a legacy config that intentionally omits the play_history section.
+	legacyYAML := `version: "3.0"
+player:
+  default_volume: 80
+  buffer_size_mb: 50
+`
+	configDir, _ := GetConfigDir()
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	configPath, _ := GetConfigPath()
+	if err := os.WriteFile(configPath, []byte(legacyYAML), 0644); err != nil {
+		t.Fatalf("failed to write legacy config: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	defaults := DefaultPlayHistoryConfig()
+	if cfg.PlayHistory.Enabled != defaults.Enabled {
+		t.Errorf("PlayHistory.Enabled: got %v, want %v", cfg.PlayHistory.Enabled, defaults.Enabled)
+	}
+	if cfg.PlayHistory.Size != defaults.Size {
+		t.Errorf("PlayHistory.Size: got %d, want %d", cfg.PlayHistory.Size, defaults.Size)
+	}
+	if cfg.PlayHistory.AllowDuplicate != defaults.AllowDuplicate {
+		t.Errorf("PlayHistory.AllowDuplicate: got %v, want %v", cfg.PlayHistory.AllowDuplicate, defaults.AllowDuplicate)
+	}
+}
+
 func TestPlayHistoryConfigDefaults(t *testing.T) {
 	cfg := DefaultConfig()
 

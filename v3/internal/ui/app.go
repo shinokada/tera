@@ -1441,9 +1441,9 @@ func (a *App) viewMainMenu() string {
 		content.WriteString(quickFavoritesStyle().Render("─── Recently Played ───"))
 		content.WriteString("\n")
 
-		qfOffset := mainMenuItemCount + len(a.quickFavorites)
+		rpShortcutStart := 10 + len(a.quickFavorites)
 		for i, entry := range a.recentlyPlayed {
-			shortcut := fmt.Sprintf("%d", qfOffset+i)
+			shortcut := fmt.Sprintf("%d", rpShortcutStart+i)
 
 			var stationInfo strings.Builder
 			stationInfo.WriteString(entry.Station.TrimName())
@@ -1456,7 +1456,7 @@ func (a *App) viewMainMenu() string {
 				stationInfo.WriteString(storage.FormatLastPlayed(entry.Metadata.LastPlayed))
 			}
 
-			unifiedIdx := qfOffset + i
+			unifiedIdx := mainMenuItemCount + len(a.quickFavorites) + i
 			prefix := "  "
 			if unifiedIdx == a.unifiedMenuIndex {
 				prefix = "> "

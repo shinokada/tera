@@ -827,9 +827,8 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.messageTime = 3
 		return m, tickEverySecond()
 	case "2": // Increase size
-		if cfg.Size < 20 {
-			cfg.Size++
-		}
+		cfg.Size++
+		_ = cfg.Validate() // Clamps to [1, 20]
 		if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
 			m.playHistoryCfg = cfg
 			m.message = fmt.Sprintf("✓ Size increased to %d", cfg.Size)
@@ -841,9 +840,8 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.messageTime = 3
 		return m, tickEverySecond()
 	case "3": // Decrease size
-		if cfg.Size > 1 {
-			cfg.Size--
-		}
+		cfg.Size--
+		_ = cfg.Validate() // Clamps to [1, 20]
 		if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
 			m.playHistoryCfg = cfg
 			m.message = fmt.Sprintf("✓ Size decreased to %d", cfg.Size)
