@@ -58,7 +58,7 @@ type AppearanceSettingsModel struct {
 
 func NewAppearanceSettingsModel() AppearanceSettingsModel {
 	// Load current config
-	config, err := storage.LoadAppearanceConfig()
+	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
 		config = storage.DefaultAppearanceConfig()
 	}
@@ -497,7 +497,7 @@ func (m *AppearanceSettingsModel) saveConfig() (AppearanceSettingsModel, tea.Cmd
 	}
 
 	// Save config
-	if err := storage.SaveAppearanceConfig(m.config); err != nil {
+	if err := storage.SaveAppearanceConfigToUnified(m.config); err != nil {
 		m.showMessage(fmt.Sprintf("Failed to save: %v", err), false)
 		return *m, nil
 	}
