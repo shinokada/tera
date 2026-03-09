@@ -187,6 +187,11 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 			}
 			return fmt.Errorf("failed to read %s: %w", relPath, err)
 		}
+		// Guard against empty reads: UpdateGistFiles interprets "" as a deletion
+		// tombstone. All valid tera data files contain at least "{}" or "[]".
+		if len(data) == 0 {
+			continue
+		}
 		files[gistFilename(relPath)] = string(data)
 	}
 
@@ -227,6 +232,9 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 // It drives the check from the Gist's own file list so it works correctly on
 // a fresh machine where no local favorites exist yet to enumerate.
 func (m *GistSyncManager) ConflictingGistFiles(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
+	if g == nil {
+		return nil, fmt.Errorf("gist is required")
+	}
 	// Ensure we have the full file list (ListGists omits file details).
 	if len(g.Files) == 0 {
 		var err error
