@@ -14,7 +14,7 @@ type HeaderRenderer struct {
 
 // NewHeaderRenderer creates a new header renderer with current config
 func NewHeaderRenderer() *HeaderRenderer {
-	config, err := storage.LoadAppearanceConfig()
+	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
 		config = storage.DefaultAppearanceConfig()
 	}
@@ -147,7 +147,7 @@ func (h *HeaderRenderer) styleASCII(art string) string {
 
 // Reload reloads the configuration (call after config changes)
 func (h *HeaderRenderer) Reload() error {
-	config, err := storage.LoadAppearanceConfig()
+	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
 		return err
 	}

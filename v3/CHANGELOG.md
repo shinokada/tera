@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 - `appearance_settings.go`: switched `LoadAppearanceConfig` → `LoadAppearanceConfigFromUnified` and `SaveAppearanceConfig` → `SaveAppearanceConfigToUnified`.
+- `header.go`: switched both `NewHeaderRenderer()` and `Reload()` to use `LoadAppearanceConfigFromUnified`, fixing a bug where saving appearance settings would immediately reload stale data from the old `appearance_config.yaml`.
 - `storage/appearance_config.go` is now dead code and will be removed in a future cleanup.
 
 ## [3.7.0] - 2026-03-08
