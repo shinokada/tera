@@ -177,27 +177,20 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		return fmt.Errorf("failed to collect category files: %w", err)
 	}
 
-	// present holds files to upsert; skipped tracks names explicitly excluded
-	// due to being empty or missing, so we never tombstone them accidentally.
-	present := make(map[string]string)
-	skipped := make(map[string]struct{})
+	// Collect files to upsert. Missing files are silently skipped;
+	// empty files are pushed as empty strings (distinct from deletion).
+	present := make(map[string]*string)
 	for _, relPath := range relPaths {
 		absPath := filepath.Join(m.configDir, relPath)
 		data, err := os.ReadFile(absPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				skipped[gistFilename(relPath)] = struct{}{}
 				continue // skip missing files silently
 			}
 			return fmt.Errorf("failed to read %s: %w", relPath, err)
 		}
-		// Guard against empty reads: UpdateGistFiles interprets "" as a deletion
-		// tombstone. All valid tera data files contain at least "{}" or "[]".
-		if len(data) == 0 {
-			skipped[gistFilename(relPath)] = struct{}{}
-			continue
-		}
-		present[gistFilename(relPath)] = string(data)
+		content := string(data)
+		present[gistFilename(relPath)] = &content
 	}
 
 	existing, err := m.FindBackupGist()
@@ -209,13 +202,16 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		if len(present) == 0 {
 			return fmt.Errorf("no files found to push for the selected categories")
 		}
-		_, err = m.client.CreateGist(backupGistDescription, present, false)
+		// CreateGist takes map[string]string; extract values for the initial create.
+		initFiles := make(map[string]string, len(present))
+		for name, ptr := range present {
+			initFiles[name] = *ptr
+		}
+		_, err = m.client.CreateGist(backupGistDescription, initFiles, false)
 		return err
 	}
 
-	// Add tombstones (empty string → null → delete) only for in-scope files
-	// that no longer exist locally. Files skipped due to being empty or missing
-	// are left untouched in the remote Gist.
+	// Add nil tombstones for in-scope files that no longer exist locally.
 	full, err := m.client.GetGist(existing.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch backup gist: %w", err)
@@ -225,13 +221,9 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
 			continue
 		}
-		if _, inPresent := present[name]; inPresent {
-			continue
+		if _, inPresent := present[name]; !inPresent {
+			present[name] = nil // nil → delete from remote
 		}
-		if _, wasSkipped := skipped[name]; wasSkipped {
-			continue // empty/missing locally — preserve remote copy
-		}
-		present[name] = "" // tombstone: file was intentionally removed
 	}
 
 	return m.client.UpdateGistFiles(existing.ID, present)

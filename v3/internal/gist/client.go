@@ -139,16 +139,16 @@ func (c *Client) UpdateGist(gistID, description string) error {
 }
 
 // UpdateGistFiles updates or replaces the files of an existing gist.
-// Each key in files is the filename; the value is the new content.
-// Passing an empty string as content signals deletion: the file is removed
-// from the gist by sending null per the GitHub API specification.
-func (c *Client) UpdateGistFiles(gistID string, files map[string]string) error {
+// Each key in files is the filename; the value controls the operation:
+//   - nil pointer → delete the file (sends null per the GitHub API)
+//   - non-nil pointer → set or replace content, including empty string
+func (c *Client) UpdateGistFiles(gistID string, files map[string]*string) error {
 	gistFiles := make(map[string]*GistFileUpdate)
 	for filename, content := range files {
-		if content == "" {
+		if content == nil {
 			gistFiles[filename] = nil // marshals to null → deletes the file
 		} else {
-			gistFiles[filename] = &GistFileUpdate{Content: &content}
+			gistFiles[filename] = &GistFileUpdate{Content: content}
 		}
 	}
 
