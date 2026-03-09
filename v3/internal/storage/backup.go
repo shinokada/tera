@@ -41,12 +41,16 @@ func DefaultBackupPath() (string, error) {
 // filename is appended automatically.
 func ResolveBackupPath(path string) (string, error) {
 	// Expand ~ to home directory
-	if strings.HasPrefix(path, "~/") {
+	if path == "~" || strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to expand ~: %w", err)
 		}
-		path = filepath.Join(home, path[2:])
+		if path == "~" {
+			path = home
+		} else {
+			path = filepath.Join(home, path[2:])
+		}
 	}
 
 	// If it already looks like a directory (trailing slash or existing dir), append filename

@@ -142,7 +142,7 @@ func (m ChecklistModel) Update(msg tea.Msg) (ChecklistModel, tea.Cmd) {
 // Callers should pass this to RenderPageWithBottomHelp rather than embedding it
 // inline, so the hint appears at the bottom of the screen like every other page.
 func (m ChecklistModel) HelpText() string {
-	return "↑↓/jk: move   Space: toggle   a: toggle all   Enter: confirm   Esc: cancel"
+	return "↑↓/jk: move   Space: toggle   a: toggle all   Enter: confirm   Esc/q: cancel"
 }
 
 // View renders the checklist title and items without the help bar.
