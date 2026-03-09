@@ -140,7 +140,16 @@ func (m ChecklistModel) Update(msg tea.Msg) (ChecklistModel, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the checklist.
+// HelpText returns the keybinding hint string for use as a page-level Help field.
+// Callers should pass this to RenderPageWithBottomHelp rather than embedding it
+// inline, so the hint appears at the bottom of the screen like every other page.
+func (m ChecklistModel) HelpText() string {
+	return "↑↓/jk: move   Space: toggle   a: toggle all   Enter: confirm   Esc: cancel"
+}
+
+// View renders the checklist title and items without the help bar.
+// Pass HelpText() as the Help field of PageLayout so the hint is positioned
+// at the bottom of the screen by RenderPageWithBottomHelp.
 func (m ChecklistModel) View() string {
 	t := theme.Current()
 
@@ -159,9 +168,6 @@ func (m ChecklistModel) View() string {
 		Bold(true)
 
 	detailStyle := lipgloss.NewStyle().
-		Foreground(t.MutedColor())
-
-	helpStyle := lipgloss.NewStyle().
 		Foreground(t.MutedColor())
 
 	p := t.Padding
@@ -207,12 +213,6 @@ func (m ChecklistModel) View() string {
 		fmt.Fprintf(&b, "%s%s %s %s%s\n",
 			indent, cursor, checkbox, label, detail)
 	}
-
-	// Help bar
-	b.WriteString("\n")
-	b.WriteString(indent)
-	b.WriteString(helpStyle.Render("↑↓/jk: move   Space: toggle   a: toggle all   Enter: confirm   Esc: cancel"))
-	b.WriteString("\n")
 
 	return b.String()
 }

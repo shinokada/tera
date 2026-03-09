@@ -1132,6 +1132,7 @@ func (m GistModel) View() string {
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "Sync & Backup",
 			Content: m.checklist.View() + m.renderMessage(),
+			Help:    m.checklist.HelpText(),
 		}, h)
 
 	case gistStateExportPath:
