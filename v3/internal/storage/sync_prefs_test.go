@@ -45,14 +45,25 @@ func TestLoadSyncPrefs_ReturnsDefaultsWhenMissing(t *testing.T) {
 }
 
 func TestSaveAndLoadSyncPrefs(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
-
-	teraDir := filepath.Join(tmpHome, ".config", "tera")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Skipf("cannot determine config dir: %v", err)
+	}
+	teraDir := filepath.Join(configDir, "tera")
 	if err := os.MkdirAll(teraDir, 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+	path := filepath.Join(teraDir, syncPrefsFileName)
+
+	// Back up any existing file and restore it when the test ends.
+	original, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr == nil {
+			_ = os.WriteFile(path, original, 0600)
+		} else {
+			_ = os.Remove(path)
+		}
+	})
 
 	want := SyncPrefs{
 		Favorites:     true,
@@ -77,14 +88,25 @@ func TestSaveAndLoadSyncPrefs(t *testing.T) {
 }
 
 func TestSaveAndLoadSyncPrefs_Integration(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
-
-	teraDir := filepath.Join(tmpHome, ".config", "tera")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Skipf("cannot determine config dir: %v", err)
+	}
+	teraDir := filepath.Join(configDir, "tera")
 	if err := os.MkdirAll(teraDir, 0700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+	path := filepath.Join(teraDir, syncPrefsFileName)
+
+	// Back up any existing file and restore it when the test ends.
+	original, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr == nil {
+			_ = os.WriteFile(path, original, 0600)
+		} else {
+			_ = os.Remove(path)
+		}
+	})
 
 	want := SyncPrefs{
 		Favorites:     false,
@@ -109,14 +131,31 @@ func TestSaveAndLoadSyncPrefs_Integration(t *testing.T) {
 }
 
 func TestLoadSyncPrefs_CorruptFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
-
-	teraDir := filepath.Join(tmpHome, ".config", "tera")
-	_ = os.MkdirAll(teraDir, 0700)
+	// Resolve the real config dir so we write the corrupt file where
+	// LoadSyncPrefs will look for it (os.UserConfigDir() is platform-specific).
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Skipf("cannot determine config dir: %v", err)
+	}
+	teraDir := filepath.Join(configDir, "tera")
+	if err := os.MkdirAll(teraDir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
 	path := filepath.Join(teraDir, syncPrefsFileName)
-	_ = os.WriteFile(path, []byte("not json {{{{"), 0600)
+
+	// Back up any existing file and restore it when the test ends.
+	original, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr == nil {
+			_ = os.WriteFile(path, original, 0600)
+		} else {
+			_ = os.Remove(path)
+		}
+	})
+
+	if err := os.WriteFile(path, []byte("not json {{{{"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 
 	prefs, err := LoadSyncPrefs()
 	if err == nil {
