@@ -27,6 +27,9 @@ type GistSyncManager struct {
 
 // NewGistSyncManager creates a GistSyncManager using the provided Gist client.
 func NewGistSyncManager(client *gist.Client) (*GistSyncManager, error) {
+	if client == nil {
+		return nil, fmt.Errorf("gist client is required")
+	}
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config directory: %w", err)
@@ -139,6 +142,8 @@ func (m *GistSyncManager) AvailableCategories() (SyncPrefs, error) {
 		switch {
 		case relPath == "config.yaml":
 			prefs.Settings = true
+		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
+			prefs.SearchHistory = true
 		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
 			prefs.Favorites = true
 		case relPath == filepath.Join("data", "station_ratings.json") ||
@@ -149,8 +154,6 @@ func (m *GistSyncManager) AvailableCategories() (SyncPrefs, error) {
 		case relPath == filepath.Join("data", "station_metadata.json") ||
 			relPath == filepath.Join("data", "station_tags.json"):
 			prefs.MetadataTags = true
-		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
-			prefs.SearchHistory = true
 		}
 	}
 	return prefs, nil
@@ -288,22 +291,27 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
 
+	// Fetch all content first; only write to disk once everything is ready
+	// so a mid-restore failure doesn't leave a partially updated config.
+	staged := make(map[string][]byte, len(wanted))
 	for name, gistFile := range full.Files {
 		relPath, ok := wanted[name]
 		if !ok {
 			continue
 		}
-
 		content, err := fetchRawContent(httpClient, gistFile.RawURL, gistFile.Content)
 		if err != nil {
 			return fmt.Errorf("failed to fetch %s: %w", name, err)
 		}
+		staged[relPath] = []byte(content)
+	}
 
+	for relPath, content := range staged {
 		destPath := filepath.Join(m.configDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", relPath, err)
 		}
-		if err := os.WriteFile(destPath, []byte(content), 0600); err != nil {
+		if err := os.WriteFile(destPath, content, 0600); err != nil {
 			return fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 	}
@@ -329,10 +337,14 @@ func fetchRawContent(client *http.Client, rawURL, inlineContent string) (string,
 		return "", fmt.Errorf("HTTP error %d fetching raw content", resp.StatusCode)
 	}
 
-	// Limit to 10 MB to match the existing client guard
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	// Limit to 10 MiB; read one extra byte so we can detect a truncated response.
+	const maxBytes = 10 << 20
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(body) > maxBytes {
+		return "", fmt.Errorf("raw content exceeds %d bytes", maxBytes)
 	}
 	return string(body), nil
 }
