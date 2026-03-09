@@ -827,9 +827,13 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.messageTime = 3
 		return m, tickEverySecond()
 	case "2": // Increase size
+		oldSize := cfg.Size
 		cfg.Size++
 		_ = cfg.Validate() // Clamps to [1, 20]
-		if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+		if cfg.Size == oldSize {
+			m.message = fmt.Sprintf("ℹ Size already at maximum (%d)", cfg.Size)
+			m.messageIsSuccess = true
+		} else if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
 			m.playHistoryCfg = cfg
 			m.message = fmt.Sprintf("✓ Size increased to %d", cfg.Size)
 			m.messageIsSuccess = true
@@ -840,9 +844,13 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.messageTime = 3
 		return m, tickEverySecond()
 	case "3": // Decrease size
+		oldSize := cfg.Size
 		cfg.Size--
 		_ = cfg.Validate() // Clamps to [1, 20]
-		if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+		if cfg.Size == oldSize {
+			m.message = fmt.Sprintf("ℹ Size already at minimum (%d)", cfg.Size)
+			m.messageIsSuccess = true
+		} else if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
 			m.playHistoryCfg = cfg
 			m.message = fmt.Sprintf("✓ Size decreased to %d", cfg.Size)
 			m.messageIsSuccess = true
@@ -870,9 +878,6 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.messageTime = 3
 		return m, tickEverySecond()
-	case "5": // Back
-		m.state = settingsStateHistory
-		return m, nil
 	}
 	return m, nil
 }
