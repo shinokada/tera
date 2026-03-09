@@ -40,8 +40,8 @@ func DefaultBackupPath() (string, error) {
 // If path is a directory (ends with separator or exists as a dir), the default
 // filename is appended automatically.
 func ResolveBackupPath(path string) (string, error) {
-	// Expand ~ to home directory
-	if path == "~" || strings.HasPrefix(path, "~/") {
+	// Expand ~ to home directory (handle both Unix ~/... and Windows ~\...)
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, "~\\") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to expand ~: %w", err)
@@ -55,7 +55,9 @@ func ResolveBackupPath(path string) (string, error) {
 
 	// If it already looks like a directory (trailing slash or existing dir), append filename
 	info, statErr := os.Stat(path)
-	isDir := (statErr == nil && info.IsDir()) || strings.HasSuffix(path, string(os.PathSeparator))
+	isDir := (statErr == nil && info.IsDir()) ||
+		strings.HasSuffix(path, "/") ||
+		strings.HasSuffix(path, "\\")
 	if isDir {
 		filename := fmt.Sprintf("tera-backup-%s.zip", time.Now().Format("2006-01-02"))
 		path = filepath.Join(path, filename)
@@ -65,7 +67,8 @@ func ResolveBackupPath(path string) (string, error) {
 }
 
 // categoryFiles returns the list of relative paths (relative to configDir) for a given category.
-func (b *BackupManager) categoryFiles(prefs SyncPrefs) []string {
+// Returns an error if the favorites directory exists but cannot be read (e.g. permission denied).
+func (b *BackupManager) categoryFiles(prefs SyncPrefs) ([]string, error) {
 	var files []string
 
 	if prefs.Settings {
@@ -76,7 +79,11 @@ func (b *BackupManager) categoryFiles(prefs SyncPrefs) []string {
 		// to SearchHistory and all others to Favorites.
 		favDir := filepath.Join(b.configDir, "data", "favorites")
 		entries, err := os.ReadDir(favDir)
-		if err == nil {
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read favorites directory: %w", err)
+			}
+		} else {
 			for _, e := range entries {
 				if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 					continue
@@ -110,7 +117,7 @@ func (b *BackupManager) categoryFiles(prefs SyncPrefs) []string {
 		)
 	}
 
-	return files
+	return files, nil
 }
 
 // Export creates a zip archive at destPath containing the files selected by prefs.
@@ -144,7 +151,11 @@ func (b *BackupManager) Export(destPath string, prefs SyncPrefs) (err error) {
 
 	w := zip.NewWriter(tmpFile)
 	writeErr := func() error {
-		for _, relPath := range b.categoryFiles(prefs) {
+		categoryFiles, err := b.categoryFiles(prefs)
+		if err != nil {
+			return err
+		}
+		for _, relPath := range categoryFiles {
 			absPath := filepath.Join(b.configDir, relPath)
 			if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
 				continue // skip missing files silently

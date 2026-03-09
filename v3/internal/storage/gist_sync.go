@@ -169,7 +169,10 @@ func syncPrefForRelPath(relPath string, prefs SyncPrefs) bool {
 // no longer exist locally are deleted (sent as null per the GitHub API).
 func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 	bm := &BackupManager{configDir: m.configDir}
-	relPaths := bm.categoryFiles(prefs)
+	relPaths, err := bm.categoryFiles(prefs)
+	if err != nil {
+		return fmt.Errorf("failed to collect category files: %w", err)
+	}
 
 	files := make(map[string]string)
 	for _, relPath := range relPaths {
