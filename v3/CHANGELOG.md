@@ -5,6 +5,16 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.1] - 2026-03-09
+
+### Changed
+- Appearance settings now read and write exclusively to `config.yaml` (`ui.appearance` section) instead of the separate `appearance_config.yaml` file.
+- `appearance_config.yaml` is no longer used by the application and can be safely deleted.
+
+### Internal
+- `appearance_settings.go`: switched `LoadAppearanceConfig` → `LoadAppearanceConfigFromUnified` and `SaveAppearanceConfig` → `SaveAppearanceConfigToUnified`.
+- `storage/appearance_config.go` is now dead code and will be removed in a future cleanup.
+
 ## [3.7.0] - 2026-03-08
 
 ### Added
