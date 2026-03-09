@@ -13,74 +13,142 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/gist"
+	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
+
+// ── States ────────────────────────────────────────────────────────────────────
 
 type gistState int
 
 const (
 	gistStateMenu             gistState = iota
-	gistStateCreateVisibility           // Ask public or secret
-	gistStateCreateName                 // Enter gist name/description
-	gistStateCreate
-	gistStateList
-	gistStateUpdate
-	gistStateDelete
-	gistStateRecover
-	gistStateImportURL // NEW: Import from URL
+	gistStateCreateVisibility           // public/secret choice
+	gistStateCreateName                 // gist description input
+	gistStateCreate                     // transient: uploading
+	gistStateList                       // browse my gists
+	gistStateUpdate                     // pick gist to update
+	gistStateDelete                     // pick gist to delete
+	gistStateRecover                    // pick gist to recover
+	gistStateImportURL                  // import from URL
 	gistStateTokenMenu
 	gistStateTokenSetup
 	gistStateTokenView
 	gistStateTokenDelete
 	gistStateUpdateInput
 	gistStateDeleteConfirm
+	// ── Phase 3: Sync & Backup ────────────────────────────────────────────────
+	gistStateExportChecklist      // category checklist → zip export
+	gistStateExportPath           // path prompt for zip destination
+	gistStateRestoreZipPath       // path prompt for zip source
+	gistStateRestoreZipChecklist  // category checklist for zip restore
+	gistStateSyncGistChecklist    // category checklist → Gist push
+	gistStateRestoreGistChecklist // category checklist for Gist pull
+	gistStateOverwriteWarn        // warn before clobbering existing files
+	gistStateSyncProgress         // transient: show result then return to menu
 )
 
-type gistItem struct {
-	meta *gist.GistMetadata
+// overwriteSource distinguishes which restore flow triggered the overwrite warning.
+type overwriteSource int
+
+const (
+	overwriteSourceZip  overwriteSource = iota
+	overwriteSourceGist overwriteSource = iota
+)
+
+// ── Internal message types ─────────────────────────────────────────────────────
+
+// Returned by async Cmds to signal multi-step flow transitions.
+type zipInspectedMsg struct {
+	path      string
+	available storage.SyncPrefs
 }
+type zipConflictCheckMsg struct {
+	zipPath   string
+	prefs     storage.SyncPrefs
+	conflicts []string
+}
+type gistRestoreAvailableMsg struct {
+	available storage.SyncPrefs
+}
+type gistConflictCheckMsg struct {
+	prefs     storage.SyncPrefs
+	conflicts []string
+}
+
+// ── Existing message types (kept for compatibility) ────────────────────────────
+
+type successMsg struct{ msg string }
+type gistsMsg []*gist.GistMetadata
+type tokenSavedMsg struct{ token, user string }
+type tokenDeletedMsg struct{}
+
+// ── gistItem (list.Item) ──────────────────────────────────────────────────────
+
+type gistItem struct{ meta *gist.GistMetadata }
 
 func (i gistItem) Title() string       { return i.meta.Description }
 func (i gistItem) Description() string { return i.meta.CreatedAt.Format("2006-01-02 15:04") }
 func (i gistItem) FilterValue() string { return i.meta.Description }
 
+// ── GistModel ─────────────────────────────────────────────────────────────────
+
 type GistModel struct {
-	state           gistState
-	favoritePath    string
-	gistClient      *gist.Client
-	menuList        list.Model
-	tokenMenuList   list.Model
-	visibilityMenu  list.Model
-	gistList        list.Model
+	// core
+	state        gistState
+	favoritePath string
+	gistClient   *gist.Client
+	// list widgets
+	menuList       list.Model
+	tokenMenuList  list.Model
+	visibilityMenu list.Model
+	gistList       list.Model
+	// gist data
 	gists           []*gist.GistMetadata
 	selectedGist    *gist.GistMetadata
-	textInput       textinput.Model
-	message         string
-	messageIsError  bool
-	width           int
-	height          int
-	token           string
-	quitting        bool
-	inputPurpose    string // "token", "description", "delete"
-	createPublic    bool   // true for public gist, false for secret
-	gistDescription string // custom gist description/name
+	gistDescription string
+	createPublic    bool
+	// text input
+	textInput    textinput.Model
+	// Phase 3: backup/sync
+	checklist      components.ChecklistModel
+	syncPrefs      storage.SyncPrefs
+	backupManager  *storage.BackupManager
+	gistSyncMgr    *storage.GistSyncManager
+	pendingZipPath string          // zip path set after path prompt
+	pendingPrefs   storage.SyncPrefs // prefs confirmed before conflict check
+	overwritePaths []string          // files that would be clobbered
+	overwriteSrc   overwriteSource
+	// ui
+	message        string
+	messageIsError bool
+	width          int
+	height         int
+	token          string
+	quitting       bool
 }
 
+// ── Constructor ───────────────────────────────────────────────────────────────
+
 func NewGistModel(favoritePath string) GistModel {
-	// Main Menu
 	menuItems := []components.MenuItem{
-		components.NewMenuItem("Create a gist", "Upload favorites to a new secret gist", "1"),
-		components.NewMenuItem("My Gists", "View and manage your saved gists", "2"),
-		components.NewMenuItem("Recover favorites", "Download and restore favorites from your gists", "3"),
-		components.NewMenuItem("Import from URL", "Import favorites from any public gist URL", "4"),
-		components.NewMenuItem("Update a gist", "Update description of an existing gist", "5"),
-		components.NewMenuItem("Delete a gist", "Remove a gist permanently", "6"),
-		components.NewMenuItem("Token Management", "Manage your GitHub Personal Access Token", "7"),
+		// — Favorites Gist —
+		components.NewMenuItem("Create favorites gist", "Upload favorites to a new secret gist", "1"),
+		components.NewMenuItem("My favorites gists", "View and manage your saved gists", "2"),
+		components.NewMenuItem("Recover favorites gist", "Download and restore favorites from a gist", "3"),
+		components.NewMenuItem("Import favorites from URL", "Import favorites from any public gist URL", "4"),
+		components.NewMenuItem("Update favorites gist", "Update description of an existing gist", "5"),
+		components.NewMenuItem("Delete favorites gist", "Remove a gist permanently", "6"),
+		// — Full Backup —
+		components.NewMenuItem("Export backup (zip)", "Save all data to a local zip file", "7"),
+		components.NewMenuItem("Restore from backup (zip)", "Restore data from a local zip file", "8"),
+		components.NewMenuItem("Sync all data to Gist", "Push selected data to a backup Gist", "9"),
+		components.NewMenuItem("Restore all data from Gist", "Pull selected data from a backup Gist", "a"),
+		// — Account —
+		components.NewMenuItem("Token Management", "Manage your GitHub Personal Access Token", "t"),
 	}
+	menuList := components.CreateMenu(menuItems, "Sync & Backup", 0, 0)
 
-	menuList := components.CreateMenu(menuItems, "TERA Gist Menu", 0, 0)
-
-	// Token Management Menu
 	tokenMenuItems := []components.MenuItem{
 		components.NewMenuItem("Setup/Change Token", "Configure your GitHub Personal Access Token", "1"),
 		components.NewMenuItem("View Current Token", "See your masked token", "2"),
@@ -89,17 +157,14 @@ func NewGistModel(favoritePath string) GistModel {
 	}
 	tokenMenuList := components.CreateMenu(tokenMenuItems, "Token Menu", 0, 0)
 
-	// Visibility Menu for create gist
 	visibilityMenuItems := []components.MenuItem{
 		components.NewMenuItem("Secret gist", "Only you can see this gist (recommended)", "1"),
 		components.NewMenuItem("Public gist", "Anyone can see this gist", "2"),
 	}
 	visibilityMenu := components.CreateMenu(visibilityMenuItems, "Visibility", 0, 0)
 
-	// Gist List (initialized empty)
-	// Use styled delegate for consistency
 	delegate := createStyledDelegate()
-	gistList := list.New([]list.Item{}, delegate, 50, 20) // Default size, will be updated on WindowSizeMsg
+	gistList := list.New([]list.Item{}, delegate, 50, 20)
 	gistList.Title = "My Gists"
 	gistList.SetShowStatusBar(false)
 	gistList.SetShowHelp(false)
@@ -109,11 +174,16 @@ func NewGistModel(favoritePath string) GistModel {
 	ti := textinput.New()
 	ti.Placeholder = "Type here..."
 	ti.Focus()
-	ti.CharLimit = 156
-	ti.Width = 40
+	ti.CharLimit = 256
+	ti.Width = 50
 
-	// Check for token
 	token, tokenErr := gist.LoadToken()
+	syncPrefs, _ := storage.LoadSyncPrefs()
+
+	var backupMgr *storage.BackupManager
+	if bm, err := storage.NewBackupManager(); err == nil {
+		backupMgr = bm
+	}
 
 	m := GistModel{
 		state:          gistStateMenu,
@@ -124,9 +194,10 @@ func NewGistModel(favoritePath string) GistModel {
 		gistList:       gistList,
 		textInput:      ti,
 		token:          token,
+		syncPrefs:      syncPrefs,
+		backupManager:  backupMgr,
 	}
 
-	// Surface token loading errors to user
 	if tokenErr != nil {
 		m.message = fmt.Sprintf("Warning: could not load token: %v", tokenErr)
 		m.messageIsError = true
@@ -134,42 +205,39 @@ func NewGistModel(favoritePath string) GistModel {
 
 	if token != "" {
 		m.gistClient = gist.NewClient(token)
+		if sm, err := storage.NewGistSyncManager(m.gistClient); err == nil {
+			m.gistSyncMgr = sm
+		}
 	}
 
 	return m
 }
 
-func (m GistModel) Init() tea.Cmd {
-	return nil
-}
+func (m GistModel) Init() tea.Cmd { return nil }
+
+// ── Update ────────────────────────────────────────────────────────────────────
 
 func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	// ── global messages ────────────────────────────────────────────────────────
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle Ctrl+C globally
 		if msg.String() == "ctrl+c" {
 			m.quitting = true
 			return m, tea.Quit
 		}
-
-		// Handle ESC and 0 based on state
+		// Global Esc handling per state.
 		switch m.state {
 		case gistStateMenu:
 			if msg.String() == "esc" || msg.String() == "0" {
-				// Go back to main app menu
 				m.quitting = true
 				return m, func() tea.Msg { return backToMainMsg{} }
 			}
-		case gistStateCreateVisibility:
-			if msg.String() == "esc" {
-				m.state = gistStateMenu
-				m.message = ""
-				return m, nil
-			}
-		case gistStateList, gistStateUpdate, gistStateDelete, gistStateRecover, gistStateTokenMenu:
+		case gistStateCreateVisibility,
+			gistStateList, gistStateUpdate, gistStateDelete,
+			gistStateRecover, gistStateTokenMenu:
 			if msg.String() == "esc" {
 				m.state = gistStateMenu
 				m.message = ""
@@ -184,14 +252,20 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tokenMenuList.SetWidth(msg.Width)
 		m.visibilityMenu.SetWidth(msg.Width)
 		m.gistList.SetWidth(msg.Width)
-		m.gistList.SetHeight(msg.Height - 10) // Leave room for header and footer
+		m.gistList.SetHeight(availableListHeight(msg.Height))
+		m.checklist.SetWidth(msg.Width)
 		return m, nil
 
 	case errMsg:
 		m.message = msg.err.Error()
 		m.messageIsError = true
-		// If we're in a gist list state or create state and get an error, go back to menu
-		if m.state == gistStateCreate || m.state == gistStateList || m.state == gistStateUpdate || m.state == gistStateDelete || m.state == gistStateRecover || m.state == gistStateImportURL {
+		// Dismiss transient states on error.
+		switch m.state {
+		case gistStateCreate, gistStateList, gistStateUpdate, gistStateDelete,
+			gistStateRecover, gistStateImportURL, gistStateSyncProgress,
+			gistStateExportPath, gistStateRestoreZipPath,
+			gistStateRestoreZipChecklist, gistStateSyncGistChecklist,
+			gistStateRestoreGistChecklist:
 			m.state = gistStateMenu
 		}
 		return m, nil
@@ -199,8 +273,10 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case successMsg:
 		m.message = msg.msg
 		m.messageIsError = false
-		// After successful create/update/delete/recover/import, go back to menu
-		if m.state == gistStateCreate || m.state == gistStateRecover || m.state == gistStateUpdateInput || m.state == gistStateDeleteConfirm || m.state == gistStateImportURL {
+		switch m.state {
+		case gistStateCreate, gistStateRecover, gistStateUpdateInput,
+			gistStateDeleteConfirm, gistStateImportURL, gistStateSyncProgress,
+			gistStateExportPath, gistStateSyncGistChecklist:
 			m.state = gistStateMenu
 		}
 		return m, nil
@@ -212,17 +288,19 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items[i] = gistItem{meta: g}
 		}
 		m.gistList.SetItems(items)
-		// Ensure list has proper height
 		if m.height > 0 {
-			m.gistList.SetHeight(m.height - 10)
+			m.gistList.SetHeight(availableListHeight(m.height))
 		} else {
-			m.gistList.SetHeight(20) // Default height
+			m.gistList.SetHeight(10)
 		}
 		return m, nil
 
 	case tokenSavedMsg:
 		m.token = msg.token
 		m.gistClient = gist.NewClient(m.token)
+		if sm, err := storage.NewGistSyncManager(m.gistClient); err == nil {
+			m.gistSyncMgr = sm
+		}
 		m.message = fmt.Sprintf("Token saved! User: %s", msg.user)
 		m.messageIsError = false
 		m.state = gistStateTokenMenu
@@ -231,104 +309,78 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tokenDeletedMsg:
 		m.token = ""
 		m.gistClient = nil
+		m.gistSyncMgr = nil
 		m.message = "✓ Token has been deleted successfully!"
 		m.messageIsError = false
 		m.state = gistStateTokenMenu
 		return m, nil
+
+	// ── Phase 3: checklist events ──────────────────────────────────────────────
+	case components.ChecklistConfirmedMsg:
+		return m.handleChecklistConfirmed(msg)
+
+	case components.ChecklistCancelledMsg:
+		m.state = gistStateMenu
+		m.message = ""
+		return m, nil
+
+	// ── Phase 3: intermediate async results ────────────────────────────────────
+
+	case zipInspectedMsg:
+		// Zip opened OK — show checklist of available categories.
+		m.pendingZipPath = msg.path
+		m.checklist = availableChecklist("Select categories to restore from zip:", msg.available)
+		m.state = gistStateRestoreZipChecklist
+		return m, nil
+
+	case zipConflictCheckMsg:
+		if len(msg.conflicts) == 0 {
+			// No conflicts — restore immediately (force=false is fine).
+			return m, m.restoreZipCmd(msg.zipPath, msg.prefs, false)
+		}
+		// Conflicts exist — warn user.
+		m.pendingZipPath = msg.zipPath
+		m.pendingPrefs = msg.prefs
+		m.overwritePaths = msg.conflicts
+		m.overwriteSrc = overwriteSourceZip
+		m.state = gistStateOverwriteWarn
+		return m, nil
+
+	case gistRestoreAvailableMsg:
+		m.checklist = availableChecklist("Select categories to restore from Gist:", msg.available)
+		m.state = gistStateRestoreGistChecklist
+		return m, nil
+
+	case gistConflictCheckMsg:
+		if len(msg.conflicts) == 0 {
+			return m, m.restoreGistCmd(msg.prefs, false)
+		}
+		m.pendingPrefs = msg.prefs
+		m.overwritePaths = msg.conflicts
+		m.overwriteSrc = overwriteSourceGist
+		m.state = gistStateOverwriteWarn
+		return m, nil
 	}
 
+	// ── State machine ──────────────────────────────────────────────────────────
 	switch m.state {
 	case gistStateMenu:
-		// Always update the menu list first to handle navigation
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			var selected int
-			m.menuList, selected = components.HandleMenuKey(keyMsg, m.menuList)
-
-			// If an item was selected (Enter or number key pressed)
-			if selected >= 0 {
-				// Clear any previous messages
-				m.message = ""
-				m.messageIsError = false
-
-				switch selected {
-				case 0: // Create - go to visibility selection first
-					if m.token == "" {
-						m.message = "No token configured!"
-						m.messageIsError = true
-						return m, nil
-					}
-					m.state = gistStateCreateVisibility
-					return m, nil
-				case 1: // My Gists
-					m.state = gistStateList
-					return m.initGistList()
-				case 2: // Recover
-					m.state = gistStateRecover
-					return m.initGistList()
-				case 3: // Import from URL
-					m.state = gistStateImportURL
-					m.inputPurpose = "import_url"
-					m.textInput.Placeholder = "https://gist.github.com/user/id or gist ID"
-					m.textInput.SetValue("")
-					m.textInput.EchoMode = textinput.EchoNormal
-					m.textInput.Focus()
-					return m, nil
-				case 4: // Update
-					m.state = gistStateUpdate
-					return m.initGistList()
-				case 5: // Delete
-					m.state = gistStateDelete
-					return m.initGistList()
-				case 6: // Token Management
-					m.state = gistStateTokenMenu
-					return m.initTokenMenu()
-				}
-			}
-		}
-		return m, nil
+		return m.updateMenu(msg)
 
 	case gistStateCreateVisibility:
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			// Handle ESC to go back
-			if keyMsg.String() == "esc" {
-				m.state = gistStateMenu
-				return m, nil
-			}
-
-			var selected int
-			m.visibilityMenu, selected = components.HandleMenuKey(keyMsg, m.visibilityMenu)
-
-			if selected >= 0 {
-				switch selected {
-				case 0: // Secret gist
-					m.createPublic = false
-				case 1: // Public gist
-					m.createPublic = true
-				}
-				// Go to name input
-				m.state = gistStateCreateName
-				m.inputPurpose = "gist_name"
-				m.textInput.Placeholder = "Enter gist name (or press Enter for default)"
-				timestamp := time.Now().Format("2006-01-02 15:04:05")
-				m.textInput.SetValue(fmt.Sprintf("TERA Radio Favorites - %s", timestamp))
-				m.textInput.EchoMode = textinput.EchoNormal
-				m.textInput.Focus()
-				return m, nil
-			}
-		}
-		return m, nil
+		return m.updateCreateVisibility(msg)
 
 	case gistStateCreateName:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
+			switch keyMsg.String() {
+			case "enter":
 				m.gistDescription = m.textInput.Value()
 				if m.gistDescription == "" {
-					timestamp := time.Now().Format("2006-01-02 15:04:05")
-					m.gistDescription = fmt.Sprintf("TERA Radio Favorites - %s", timestamp)
+					m.gistDescription = fmt.Sprintf("TERA Radio Favorites - %s", time.Now().Format("2006-01-02 15:04:05"))
 				}
 				m.state = gistStateCreate
 				return m.initCreateGist()
-			} else if keyMsg.String() == "esc" {
+			case "esc":
 				m.state = gistStateCreateVisibility
 				return m, nil
 			}
@@ -338,57 +390,18 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case gistStateCreate:
-		// This state is transient - handled by initCreateGist
 		return m, nil
 
 	case gistStateList, gistStateUpdate, gistStateDelete, gistStateRecover:
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
-				selectedItem, ok := m.gistList.SelectedItem().(gistItem)
-				if ok {
-					m.selectedGist = selectedItem.meta
-					switch m.state {
-					case gistStateList:
-						// Open in browser
-						if err := openBrowser(m.selectedGist.URL); err != nil {
-							m.message = fmt.Sprintf("Failed to open browser: %v", err)
-							m.messageIsError = true
-						} else {
-							m.message = fmt.Sprintf("Opened %s in browser", m.selectedGist.URL)
-							m.messageIsError = false
-						}
-						return m, nil
-					case gistStateUpdate:
-						m.inputPurpose = "description"
-						m.textInput.Placeholder = "New description"
-						m.textInput.SetValue(m.selectedGist.Description)
-						m.textInput.EchoMode = textinput.EchoNormal
-						m.state = gistStateUpdateInput
-						m.textInput.Focus()
-						return m, nil
-					case gistStateDelete:
-						m.inputPurpose = "delete"
-						m.textInput.Placeholder = "Type 'yes' to confirm"
-						m.textInput.SetValue("")
-						m.textInput.EchoMode = textinput.EchoNormal
-						m.state = gistStateDeleteConfirm
-						m.textInput.Focus()
-						return m, nil
-					case gistStateRecover:
-						return m, m.recoverGistCmd(m.selectedGist.ID)
-					}
-				}
-			}
-		}
-		m.gistList, cmd = m.gistList.Update(msg)
-		cmds = append(cmds, cmd)
+		return m.updateGistList(msg)
 
 	case gistStateUpdateInput:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
+			switch keyMsg.String() {
+			case "enter":
 				return m, m.updateGistCmd(m.selectedGist.ID, m.textInput.Value())
-			} else if keyMsg.String() == "esc" {
-				m.state = gistStateUpdate // Back to list
+			case "esc":
+				m.state = gistStateUpdate
 				return m, nil
 			}
 		}
@@ -397,7 +410,8 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gistStateDeleteConfirm:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
+			switch keyMsg.String() {
+			case "enter":
 				if strings.ToLower(m.textInput.Value()) == "yes" {
 					return m, m.deleteGistCmd(m.selectedGist.ID)
 				}
@@ -405,8 +419,8 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messageIsError = true
 				m.state = gistStateMenu
 				return m, nil
-			} else if keyMsg.String() == "esc" {
-				m.state = gistStateDelete // Back to list
+			case "esc":
+				m.state = gistStateDelete
 				return m, nil
 			}
 		}
@@ -415,7 +429,8 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gistStateImportURL:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
+			switch keyMsg.String() {
+			case "enter":
 				input := m.textInput.Value()
 				gistID, err := gist.ParseGistURL(input)
 				if err != nil {
@@ -424,7 +439,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				return m, m.importGistCmd(gistID)
-			} else if keyMsg.String() == "esc" {
+			case "esc":
 				m.state = gistStateMenu
 				return m, nil
 			}
@@ -433,65 +448,16 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case gistStateTokenMenu:
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			// Handle ESC to go back
-			if keyMsg.String() == "esc" {
-				m.state = gistStateMenu
-				m.message = ""
-				return m, nil
-			}
-
-			var selected int
-			m.tokenMenuList, selected = components.HandleMenuKey(keyMsg, m.tokenMenuList)
-
-			if selected >= 0 {
-				m.message = ""
-				m.messageIsError = false
-
-				switch selected {
-				case 0: // Setup
-					m.state = gistStateTokenSetup
-					m.inputPurpose = "token"
-					m.textInput.Placeholder = "Paste GitHub Token"
-					m.textInput.SetValue("")
-					m.textInput.EchoMode = textinput.EchoPassword
-					m.textInput.Focus()
-					return m, nil
-				case 1: // View
-					m.state = gistStateTokenView
-					return m, nil
-				case 2: // Validate
-					if m.token == "" {
-						m.message = "No token configured!"
-						m.messageIsError = true
-						return m, nil
-					}
-					return m, m.validateTokenCmd()
-				case 3: // Delete
-					if m.token == "" {
-						m.message = "No token to delete!"
-						m.messageIsError = true
-						return m, nil
-					}
-					m.state = gistStateTokenDelete
-					m.inputPurpose = "delete_token"
-					m.textInput.Placeholder = "Type 'yes' to confirm"
-					m.textInput.SetValue("")
-					m.textInput.EchoMode = textinput.EchoNormal
-					m.textInput.Focus()
-					return m, nil
-				}
-			}
-		}
+		return m.updateTokenMenu(msg)
 
 	case gistStateTokenSetup:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
-				token := m.textInput.Value()
-				if token != "" {
+			switch keyMsg.String() {
+			case "enter":
+				if token := m.textInput.Value(); token != "" {
 					return m, m.saveTokenCmd(token)
 				}
-			} else if keyMsg.String() == "esc" {
+			case "esc":
 				m.state = gistStateTokenMenu
 				return m, nil
 			}
@@ -509,7 +475,8 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gistStateTokenDelete:
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			if keyMsg.String() == "enter" {
+			switch keyMsg.String() {
+			case "enter":
 				if strings.ToLower(m.textInput.Value()) == "yes" {
 					return m, m.deleteTokenCmd()
 				}
@@ -517,97 +484,587 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messageIsError = false
 				m.state = gistStateTokenMenu
 				return m, nil
-			} else if keyMsg.String() == "esc" {
+			case "esc":
 				m.state = gistStateTokenMenu
 				return m, nil
 			}
 		}
 		m.textInput, cmd = m.textInput.Update(msg)
 		cmds = append(cmds, cmd)
+
+	// ── Phase 3: checklist states forward to the checklist widget ─────────────
+	case gistStateExportChecklist, gistStateRestoreZipChecklist,
+		gistStateSyncGistChecklist, gistStateRestoreGistChecklist:
+		var checkCmd tea.Cmd
+		m.checklist, checkCmd = m.checklist.Update(msg)
+		cmds = append(cmds, checkCmd)
+
+	// ── Phase 3: path prompts ─────────────────────────────────────────────────
+	case gistStateExportPath:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "enter":
+				return m, m.doExportZipCmd(m.textInput.Value(), m.pendingPrefs)
+			case "esc":
+				m.state = gistStateExportChecklist
+				return m, nil
+			}
+		}
+		m.textInput, cmd = m.textInput.Update(msg)
+		cmds = append(cmds, cmd)
+
+	case gistStateRestoreZipPath:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "enter":
+				return m, m.doInspectZipCmd(m.textInput.Value())
+			case "esc":
+				m.state = gistStateMenu
+				return m, nil
+			}
+		}
+		m.textInput, cmd = m.textInput.Update(msg)
+		cmds = append(cmds, cmd)
+
+	// ── Phase 3: overwrite confirmation ───────────────────────────────────────
+	case gistStateOverwriteWarn:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "enter":
+				switch m.overwriteSrc {
+				case overwriteSourceZip:
+					return m, m.restoreZipCmd(m.pendingZipPath, m.pendingPrefs, true)
+				case overwriteSourceGist:
+					return m, m.restoreGistCmd(m.pendingPrefs, true)
+				}
+			case "esc":
+				m.state = gistStateMenu
+				m.message = "Restore cancelled."
+				m.messageIsError = false
+				return m, nil
+			}
+		}
+
+	case gistStateSyncProgress:
+		return m, nil
 	}
 
 	return m, tea.Batch(cmds...)
 }
 
+// ── Sub-update helpers ────────────────────────────────────────────────────────
+
+func (m GistModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	var selected int
+	m.menuList, selected = components.HandleMenuKey(keyMsg, m.menuList)
+	if selected < 0 {
+		return m, nil
+	}
+	m.message = ""
+	m.messageIsError = false
+
+	switch selected {
+	case 0: // Create favorites gist
+		if m.token == "" {
+			m.message = "No token configured. Set up a token first."
+			m.messageIsError = true
+			return m, nil
+		}
+		m.state = gistStateCreateVisibility
+		return m, nil
+
+	case 1: // My favorites gists
+		m.state = gistStateList
+		return m.initGistList()
+
+	case 2: // Recover favorites gist
+		m.state = gistStateRecover
+		return m.initGistList()
+
+	case 3: // Import from URL
+		m.state = gistStateImportURL
+		m.textInput.Placeholder = "https://gist.github.com/user/id or gist ID"
+		m.textInput.SetValue("")
+		m.textInput.EchoMode = textinput.EchoNormal
+		m.textInput.Focus()
+		return m, nil
+
+	case 4: // Update favorites gist
+		m.state = gistStateUpdate
+		return m.initGistList()
+
+	case 5: // Delete favorites gist
+		m.state = gistStateDelete
+		return m.initGistList()
+
+	case 6: // Export backup (zip)
+		m.checklist = m.buildDefaultChecklist("Select categories to include in the backup zip:")
+		m.state = gistStateExportChecklist
+		return m, nil
+
+	case 7: // Restore from backup (zip)
+		m.state = gistStateRestoreZipPath
+		m.textInput.Placeholder = "Path to backup zip file"
+		defaultPath, _ := storage.DefaultBackupPath()
+		m.textInput.SetValue(defaultPath)
+		m.textInput.EchoMode = textinput.EchoNormal
+		m.textInput.Focus()
+		return m, nil
+
+	case 8: // Sync all data to Gist
+		if m.token == "" {
+			m.message = "No token configured. Set up a token first."
+			m.messageIsError = true
+			return m, nil
+		}
+		m.checklist = m.buildDefaultChecklist("Select categories to sync to Gist:")
+		m.state = gistStateSyncGistChecklist
+		return m, nil
+
+	case 9: // Restore all data from Gist
+		if m.token == "" {
+			m.message = "No token configured. Set up a token first."
+			m.messageIsError = true
+			return m, nil
+		}
+		m.state = gistStateSyncProgress
+		return m, m.doFetchAvailableGistCategoriesCmd()
+
+	case 10: // Token Management
+		m.state = gistStateTokenMenu
+		return m.initTokenMenu()
+	}
+
+	return m, nil
+}
+
+func (m GistModel) updateCreateVisibility(msg tea.Msg) (tea.Model, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	if keyMsg.String() == "esc" {
+		m.state = gistStateMenu
+		return m, nil
+	}
+	var selected int
+	m.visibilityMenu, selected = components.HandleMenuKey(keyMsg, m.visibilityMenu)
+	if selected < 0 {
+		return m, nil
+	}
+	m.createPublic = selected == 1
+	m.state = gistStateCreateName
+	m.textInput.Placeholder = "Enter gist name (or press Enter for default)"
+	m.textInput.SetValue(fmt.Sprintf("TERA Radio Favorites - %s", time.Now().Format("2006-01-02 15:04:05")))
+	m.textInput.EchoMode = textinput.EchoNormal
+	m.textInput.Focus()
+	return m, nil
+}
+
+func (m GistModel) updateGistList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg.String() == "enter" {
+			if selectedItem, ok := m.gistList.SelectedItem().(gistItem); ok {
+				m.selectedGist = selectedItem.meta
+				switch m.state {
+				case gistStateList:
+					if err := openBrowser(m.selectedGist.URL); err != nil {
+						m.message = fmt.Sprintf("Failed to open browser: %v", err)
+						m.messageIsError = true
+					} else {
+						m.message = fmt.Sprintf("Opened %s in browser", m.selectedGist.URL)
+					}
+					return m, nil
+				case gistStateUpdate:
+					m.textInput.Placeholder = "New description"
+					m.textInput.SetValue(m.selectedGist.Description)
+					m.textInput.EchoMode = textinput.EchoNormal
+					m.state = gistStateUpdateInput
+					m.textInput.Focus()
+					return m, nil
+				case gistStateDelete:
+					m.textInput.Placeholder = "Type 'yes' to confirm"
+					m.textInput.SetValue("")
+					m.textInput.EchoMode = textinput.EchoNormal
+					m.state = gistStateDeleteConfirm
+					m.textInput.Focus()
+					return m, nil
+				case gistStateRecover:
+					return m, m.recoverGistCmd(m.selectedGist.ID)
+				}
+			}
+		}
+	}
+	m.gistList, cmd = m.gistList.Update(msg)
+	return m, cmd
+}
+
+func (m GistModel) updateTokenMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	if keyMsg.String() == "esc" {
+		m.state = gistStateMenu
+		m.message = ""
+		return m, nil
+	}
+	var selected int
+	m.tokenMenuList, selected = components.HandleMenuKey(keyMsg, m.tokenMenuList)
+	if selected < 0 {
+		return m, nil
+	}
+	m.message = ""
+	m.messageIsError = false
+	switch selected {
+	case 0:
+		m.state = gistStateTokenSetup
+		m.textInput.Placeholder = "Paste GitHub Token"
+		m.textInput.SetValue("")
+		m.textInput.EchoMode = textinput.EchoPassword
+		m.textInput.Focus()
+	case 1:
+		m.state = gistStateTokenView
+	case 2:
+		if m.token == "" {
+			m.message = "No token configured!"
+			m.messageIsError = true
+			return m, nil
+		}
+		return m, m.validateTokenCmd()
+	case 3:
+		if m.token == "" {
+			m.message = "No token to delete!"
+			m.messageIsError = true
+			return m, nil
+		}
+		m.state = gistStateTokenDelete
+		m.textInput.Placeholder = "Type 'yes' to confirm"
+		m.textInput.SetValue("")
+		m.textInput.EchoMode = textinput.EchoNormal
+		m.textInput.Focus()
+	}
+	return m, nil
+}
+
+// ── Checklist helpers ─────────────────────────────────────────────────────────
+
+// buildDefaultChecklist returns a ChecklistModel pre-populated from syncPrefs.
+func (m GistModel) buildDefaultChecklist(title string) components.ChecklistModel {
+	items := []components.ChecklistItem{
+		{Key: "favorites", Label: "Favorites (playlists)", Checked: m.syncPrefs.Favorites},
+		{Key: "settings", Label: "Settings (config.yaml)", Detail: "machine-specific", Checked: m.syncPrefs.Settings},
+		{Key: "ratings_votes", Label: "Ratings & votes", Checked: m.syncPrefs.RatingsVotes},
+		{Key: "blocklist", Label: "Blocklist", Checked: m.syncPrefs.Blocklist},
+		{Key: "metadata_tags", Label: "Station metadata & tags", Checked: m.syncPrefs.MetadataTags},
+		{Key: "search_history", Label: "Search history", Checked: m.syncPrefs.SearchHistory},
+	}
+	return components.NewChecklistModel(title, items)
+}
+
+// availableChecklist builds a checklist from a SyncPrefs mask (only truthy
+// categories shown, all pre-checked). Used for restore flows.
+func availableChecklist(title string, available storage.SyncPrefs) components.ChecklistModel {
+	type entry struct {
+		key   string
+		label string
+		avail bool
+	}
+	all := []entry{
+		{"favorites", "Favorites (playlists)", available.Favorites},
+		{"settings", "Settings (config.yaml)", available.Settings},
+		{"ratings_votes", "Ratings & votes", available.RatingsVotes},
+		{"blocklist", "Blocklist", available.Blocklist},
+		{"metadata_tags", "Station metadata & tags", available.MetadataTags},
+		{"search_history", "Search history", available.SearchHistory},
+	}
+	var items []components.ChecklistItem
+	for _, e := range all {
+		if e.avail {
+			items = append(items, components.ChecklistItem{Key: e.key, Label: e.label, Checked: true})
+		}
+	}
+	return components.NewChecklistModel(title, items)
+}
+
+// checklistToPrefs converts confirmed checklist items back to SyncPrefs.
+func checklistToPrefs(items []components.ChecklistItem) storage.SyncPrefs {
+	var p storage.SyncPrefs
+	for _, item := range items {
+		switch item.Key {
+		case "favorites":
+			p.Favorites = item.Checked
+		case "settings":
+			p.Settings = item.Checked
+		case "ratings_votes":
+			p.RatingsVotes = item.Checked
+		case "blocklist":
+			p.Blocklist = item.Checked
+		case "metadata_tags":
+			p.MetadataTags = item.Checked
+		case "search_history":
+			p.SearchHistory = item.Checked
+		}
+	}
+	return p
+}
+
+// handleChecklistConfirmed dispatches based on the current checklist state.
+func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg) (tea.Model, tea.Cmd) {
+	prefs := checklistToPrefs(msg.Items)
+	m.syncPrefs = prefs
+	_ = storage.SaveSyncPrefs(prefs)
+
+	switch m.state {
+	case gistStateExportChecklist:
+		// Move to path prompt
+		defaultPath, _ := storage.DefaultBackupPath()
+		m.textInput.Placeholder = "Save location"
+		m.textInput.SetValue(defaultPath)
+		m.textInput.EchoMode = textinput.EchoNormal
+		m.textInput.Focus()
+		m.pendingPrefs = prefs
+		m.state = gistStateExportPath
+		return m, nil
+
+	case gistStateRestoreZipChecklist:
+		m.pendingPrefs = prefs
+		return m, m.doCheckZipConflictsCmd(m.pendingZipPath, prefs)
+
+	case gistStateSyncGistChecklist:
+		m.pendingPrefs = prefs
+		return m, m.doSyncToGistCmd(prefs)
+
+	case gistStateRestoreGistChecklist:
+		m.pendingPrefs = prefs
+		return m, m.doCheckGistConflictsCmd(prefs)
+	}
+
+	return m, nil
+}
+
+// ── Async Cmd factories (Phase 3) ─────────────────────────────────────────────
+
+func (m GistModel) doExportZipCmd(rawPath string, prefs storage.SyncPrefs) tea.Cmd {
+	bm := m.backupManager
+	return func() tea.Msg {
+		if bm == nil {
+			return errMsg{fmt.Errorf("backup manager unavailable")}
+		}
+		resolved, err := storage.ResolveBackupPath(rawPath)
+		if err != nil {
+			return errMsg{fmt.Errorf("invalid path: %w", err)}
+		}
+		if err := bm.Export(resolved, prefs); err != nil {
+			return errMsg{fmt.Errorf("export failed: %w", err)}
+		}
+		return successMsg{fmt.Sprintf("✓ Backup saved to %s", resolved)}
+	}
+}
+
+func (m GistModel) doInspectZipCmd(rawPath string) tea.Cmd {
+	bm := m.backupManager
+	return func() tea.Msg {
+		if bm == nil {
+			return errMsg{fmt.Errorf("backup manager unavailable")}
+		}
+		resolved, err := storage.ResolveBackupPath(rawPath)
+		if err != nil {
+			return errMsg{fmt.Errorf("invalid path: %w", err)}
+		}
+		available, err := bm.ListArchiveCategories(resolved)
+		if err != nil {
+			return errMsg{fmt.Errorf("cannot read zip: %w", err)}
+		}
+		if available == (storage.SyncPrefs{}) {
+			return errMsg{fmt.Errorf("zip contains no recognised tera data files")}
+		}
+		return zipInspectedMsg{path: resolved, available: available}
+	}
+}
+
+func (m GistModel) doCheckZipConflictsCmd(zipPath string, prefs storage.SyncPrefs) tea.Cmd {
+	bm := m.backupManager
+	return func() tea.Msg {
+		if bm == nil {
+			return errMsg{fmt.Errorf("backup manager unavailable")}
+		}
+		conflicts, err := bm.ConflictingFiles(zipPath, prefs)
+		if err != nil {
+			return errMsg{fmt.Errorf("conflict check failed: %w", err)}
+		}
+		return zipConflictCheckMsg{zipPath: zipPath, prefs: prefs, conflicts: conflicts}
+	}
+}
+
+func (m GistModel) restoreZipCmd(zipPath string, prefs storage.SyncPrefs, force bool) tea.Cmd {
+	bm := m.backupManager
+	return func() tea.Msg {
+		if bm == nil {
+			return errMsg{fmt.Errorf("backup manager unavailable")}
+		}
+		if err := bm.Restore(zipPath, prefs, force); err != nil {
+			return errMsg{fmt.Errorf("restore failed: %w", err)}
+		}
+		return successMsg{"✓ Data restored successfully from zip."}
+	}
+}
+
+func (m GistModel) doFetchAvailableGistCategoriesCmd() tea.Cmd {
+	mgr := m.gistSyncMgr
+	return func() tea.Msg {
+		if mgr == nil {
+			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
+		}
+		available, err := mgr.AvailableCategories()
+		if err != nil {
+			return errMsg{fmt.Errorf("failed to inspect backup Gist: %w", err)}
+		}
+		if available == (storage.SyncPrefs{}) {
+			return errMsg{fmt.Errorf("no backup Gist found (description \"tera-data-backup\"); sync all data to Gist first")}
+		}
+		return gistRestoreAvailableMsg{available: available}
+	}
+}
+
+func (m GistModel) doSyncToGistCmd(prefs storage.SyncPrefs) tea.Cmd {
+	mgr := m.gistSyncMgr
+	return func() tea.Msg {
+		if mgr == nil {
+			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
+		}
+		if err := mgr.Push(prefs); err != nil {
+			return errMsg{fmt.Errorf("gist sync failed: %w", err)}
+		}
+		return successMsg{"✓ Data synced to Gist (tera-data-backup)."}
+	}
+}
+
+func (m GistModel) doCheckGistConflictsCmd(prefs storage.SyncPrefs) tea.Cmd {
+	mgr := m.gistSyncMgr
+	return func() tea.Msg {
+		if mgr == nil {
+			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
+		}
+		g, err := mgr.FindBackupGist()
+		if err != nil {
+			return errMsg{fmt.Errorf("failed to find backup Gist: %w", err)}
+		}
+		if g == nil {
+			return errMsg{fmt.Errorf("no backup Gist found")}
+		}
+		conflicts, err := mgr.ConflictingGistFiles(g, prefs)
+		if err != nil {
+			return errMsg{fmt.Errorf("conflict check failed: %w", err)}
+		}
+		return gistConflictCheckMsg{prefs: prefs, conflicts: conflicts}
+	}
+}
+
+func (m GistModel) restoreGistCmd(prefs storage.SyncPrefs, force bool) tea.Cmd {
+	mgr := m.gistSyncMgr
+	return func() tea.Msg {
+		if mgr == nil {
+			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
+		}
+		if err := mgr.Pull(prefs, force); err != nil {
+			return errMsg{fmt.Errorf("gist restore failed: %w", err)}
+		}
+		return successMsg{"✓ Data restored from Gist."}
+	}
+}
+
+// ── View ──────────────────────────────────────────────────────────────────────
+
 func (m GistModel) View() string {
 	if m.quitting {
 		return ""
 	}
-
 	h := m.height
+
 	switch m.state {
 	case gistStateMenu:
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Gist Management",
+			Title:    "Sync & Backup",
 			Subtitle: "Select an Option",
-			Content:  m.menuList.View() + "\n" + m.renderMessage(),
-			Help:     "↑↓/jk: Navigate • Enter: Select • 1-7: Quick select • Esc: Back • Ctrl+C: Quit",
+			Content:  m.viewMenuWithSections() + "\n" + m.renderMessage(),
+			Help:     "↑↓/jk: Navigate • Enter/1-9/a/t: Select • Esc: Back",
 		}, h)
+
 	case gistStateCreateVisibility:
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Create Gist",
+			Title:    "Create Favorites Gist",
 			Subtitle: "Choose Visibility",
 			Content:  m.visibilityMenu.View() + "\n" + m.renderMessage(),
-			Help:     "↑↓/jk: Navigate • Enter: Select • 1-2: Quick select • Esc: Back",
+			Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back",
 		}, h)
+
 	case gistStateCreateName:
-		visibility := "Secret"
+		vis := "Secret"
 		if m.createPublic {
-			visibility = "Public"
+			vis = "Public"
 		}
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Create Gist",
-			Subtitle: fmt.Sprintf("Enter Gist Name (%s)", visibility),
-			Content:  fmt.Sprintf("Enter a name/description for your gist:\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Title:    "Create Favorites Gist",
+			Subtitle: fmt.Sprintf("Enter Gist Name (%s)", vis),
+			Content:  fmt.Sprintf("Name/description for your gist:\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Create • Esc: Back",
 		}, h)
+
 	case gistStateCreate:
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Create Gist",
-			Subtitle: "Uploading favorites to GitHub",
-			Content:  "Creating gist...\n\nPlease wait while your favorites are uploaded.\n\n" + m.renderMessage(),
-			Help:     "Please wait...",
+			Title:    "Create Favorites Gist",
+			Subtitle: "Uploading…",
+			Content:  "Creating gist, please wait…\n\n" + m.renderMessage(),
+			Help:     "Please wait…",
 		}, h)
+
 	case gistStateImportURL:
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Import from URL",
+			Title:    "Import Favorites from URL",
 			Subtitle: "Paste a public gist URL or ID",
-			Content: fmt.Sprintf("Enter a gist URL or ID to import favorites:\n\n"+
-				"Supported formats:\n"+
-				"  • https://gist.github.com/username/gist_id\n"+
-				"  • Raw gist ID (e.g., abc123def456...)\n\n"+
-				"%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Content: fmt.Sprintf(
+				"Enter a gist URL or ID:\n\n"+
+					"  • https://gist.github.com/username/gist_id\n"+
+					"  • Raw gist ID (e.g., abc123def456…)\n\n"+
+					"%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help: "Enter: Import • Esc: Back",
 		}, h)
+
 	case gistStateList, gistStateUpdate, gistStateDelete, gistStateRecover:
-		action := "My Gists"
+		action := "My Favorites Gists"
 		switch m.state {
 		case gistStateUpdate:
-			action = "Update Gist"
+			action = "Update Favorites Gist"
 		case gistStateDelete:
-			action = "Delete Gist"
+			action = "Delete Favorites Gist"
 		case gistStateRecover:
-			action = "Recover from Gist"
+			action = "Recover Favorites Gist"
 		}
-
 		content := m.gistList.View()
 		if len(m.gists) == 0 {
-			content = "No gists available.\n\nCreate a gist first from the main menu."
+			content = "No gists available.\n\nCreate a favorites gist first."
 		}
-
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:    action,
 			Subtitle: "Select a Gist",
 			Content:  content + "\n" + m.renderMessage(),
 			Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back",
 		}, h)
+
 	case gistStateTokenMenu:
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Token Management",
 			Subtitle: "Manage your GitHub Token",
 			Content:  m.tokenMenuList.View() + "\n" + m.renderMessage(),
-			Help:     "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
+			Help:     "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back",
 		}, h)
+
 	case gistStateTokenSetup:
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Setup Token",
@@ -615,13 +1072,13 @@ func (m GistModel) View() string {
 			Content:  fmt.Sprintf("Token will be hidden for security.\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Save • Esc: Cancel",
 		}, h)
+
 	case gistStateTokenView:
 		masked := gist.GetMaskedToken(m.token)
 		sourceInfo := ""
 		if m.token == "" {
 			masked = "No token configured"
 		} else {
-			// Get token source
 			if source, err := gist.GetTokenSource(); err == nil {
 				switch source {
 				case gist.SourceKeychain:
@@ -629,9 +1086,7 @@ func (m GistModel) View() string {
 				case gist.SourceEnvironment:
 					sourceInfo = "\nStorage: Environment Variable (TERA_GITHUB_TOKEN)"
 				case gist.SourceFile:
-					sourceInfo = "\nStorage: File (legacy, consider migrating with 'tera config migrate-token')"
-				default:
-					sourceInfo = "\nStorage: Unknown"
+					sourceInfo = "\nStorage: File (legacy)"
 				}
 			}
 		}
@@ -641,31 +1096,118 @@ func (m GistModel) View() string {
 			Content:  fmt.Sprintf("Token: %s%s", masked, sourceInfo) + "\n\n" + m.renderMessage(),
 			Help:     "Enter/Esc: Back",
 		}, h)
+
 	case gistStateUpdateInput:
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Update Gist",
+			Title:    "Update Favorites Gist",
 			Subtitle: "Enter new description",
 			Content:  fmt.Sprintf("Current: %s\n\nNew Description:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Update • Esc: Cancel",
 		}, h)
+
 	case gistStateDeleteConfirm:
 		return RenderPageWithBottomHelp(PageLayout{
-			Title:    "Delete Gist",
+			Title:    "Delete Favorites Gist",
 			Subtitle: "Confirm Deletion",
-			Content:  fmt.Sprintf("Are you sure you want to delete this gist?\n%s\n\nType 'yes' to confirm:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Content:  fmt.Sprintf("Delete gist?\n%s\n\nType 'yes' to confirm:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Confirm • Esc: Cancel",
 		}, h)
+
 	case gistStateTokenDelete:
 		masked := gist.GetMaskedToken(m.token)
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:    "Delete Token",
 			Subtitle: "⚠️  WARNING",
-			Content:  fmt.Sprintf("This will delete your stored GitHub token!\n\nToken: %s\n\nYou won't be able to use Gist features until you set up a new token.\n\nType 'yes' to confirm deletion:\n%s", masked, m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Content:  fmt.Sprintf("This will delete your stored GitHub token!\n\nToken: %s\n\nType 'yes' to confirm:\n%s", masked, m.textInput.View()) + "\n\n" + m.renderMessage(),
 			Help:     "Enter: Confirm • Esc: Cancel",
+		}, h)
+
+	// ── Phase 3 views ──────────────────────────────────────────────────────────
+
+	case gistStateExportChecklist, gistStateRestoreZipChecklist,
+		gistStateSyncGistChecklist, gistStateRestoreGistChecklist:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "Sync & Backup",
+			Content: m.checklist.View() + m.renderMessage(),
+		}, h)
+
+	case gistStateExportPath:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:    "Export Backup",
+			Subtitle: "Save location",
+			Content: fmt.Sprintf(
+				"Enter path for the zip file:\n\n%s\n\n%s",
+				m.textInput.View(),
+				dimStyle().Render("Tip: enter a directory to use the default filename"),
+			) + "\n\n" + m.renderMessage(),
+			Help: "Enter: Export • Esc: Back",
+		}, h)
+
+	case gistStateRestoreZipPath:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:    "Restore from Backup",
+			Subtitle: "Zip file location",
+			Content:  fmt.Sprintf("Enter path to the backup zip:\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Help:     "Enter: Open • Esc: Cancel",
+		}, h)
+
+	case gistStateOverwriteWarn:
+		paths := strings.Join(m.overwritePaths, "\n  ")
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:    "Overwrite Warning",
+			Subtitle: "⚠️  The following files already exist:",
+			Content:  fmt.Sprintf("  %s\n\nPress Enter to overwrite, Esc to cancel.", paths) + "\n\n" + m.renderMessage(),
+			Help:     "Enter: Overwrite • Esc: Cancel",
+		}, h)
+
+	case gistStateSyncProgress:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "Sync & Backup",
+			Content: "Working…\n\n" + m.renderMessage(),
 		}, h)
 	}
 
 	return ""
+}
+
+// viewMenuWithSections renders the menu with visual section dividers.
+func (m GistModel) viewMenuWithSections() string {
+	var b strings.Builder
+
+	items := m.menuList.Items()
+	cursor := m.menuList.Index()
+
+	sections := []struct {
+		beforeIdx int
+		label     string
+	}{
+		{0, "— Favorites Gist —"},
+		{6, "— Full Backup —"},
+		{10, "— Account —"},
+	}
+
+	sIdx := 0
+	for i, item := range items {
+		for sIdx < len(sections) && sections[sIdx].beforeIdx == i {
+			b.WriteString(dimStyle().Render("  "+sections[sIdx].label) + "\n")
+			sIdx++
+		}
+		mi, ok := item.(components.MenuItem)
+		if !ok {
+			continue
+		}
+		label := mi.Title()
+		if s := mi.Shortcut(); s != "" {
+			label = fmt.Sprintf("%s. %s", s, label)
+		}
+		if i == cursor {
+			b.WriteString(selectedItemStyle().Render("> " + label))
+		} else {
+			b.WriteString(normalItemStyle().Render("  " + label))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 func (m GistModel) renderMessage() string {
@@ -678,7 +1220,7 @@ func (m GistModel) renderMessage() string {
 	return successStyle().Render(m.message)
 }
 
-// Commands
+// ── Commands (pre-existing favorites Gist flows) ───────────────────────────────
 
 func (m *GistModel) initCreateGist() (tea.Model, tea.Cmd) {
 	if m.token == "" {
@@ -687,100 +1229,79 @@ func (m *GistModel) initCreateGist() (tea.Model, tea.Cmd) {
 		m.state = gistStateMenu
 		return *m, nil
 	}
-	m.message = "Creating gist..."
+	m.message = "Creating gist…"
 	return *m, m.createGistCmd
 }
 
 func (m *GistModel) createGistCmd() tea.Msg {
-	// 1. Read files
 	files := make(map[string]string)
 	entries, err := os.ReadDir(m.favoritePath)
 	if err != nil {
 		return errMsg{err}
 	}
-
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			content, err := os.ReadFile(filepath.Join(m.favoritePath, entry.Name()))
-			if err == nil {
+			if content, err := os.ReadFile(filepath.Join(m.favoritePath, entry.Name())); err == nil {
 				files[entry.Name()] = string(content)
 			}
 		}
 	}
-
 	if len(files) == 0 {
 		return errMsg{fmt.Errorf("no favorite lists found in %s", m.favoritePath)}
 	}
-
-	// 2. Create Gist with user-provided description
 	description := m.gistDescription
 	if description == "" {
-		timestamp := time.Now().Format("2006-01-02 15:04:05")
-		description = fmt.Sprintf("TERA Radio Favorites - %s", timestamp)
+		description = fmt.Sprintf("TERA Radio Favorites - %s", time.Now().Format("2006-01-02 15:04:05"))
 	}
-
 	newGist, err := m.gistClient.CreateGist(description, files, m.createPublic)
 	if err != nil {
 		return errMsg{err}
 	}
-
-	// 3. Save Metadata
 	meta := &gist.GistMetadata{
-		ID:          newGist.ID,
-		URL:         newGist.URL,
-		Description: newGist.Description,
-		CreatedAt:   newGist.CreatedAt,
-		UpdatedAt:   newGist.UpdatedAt,
+		ID: newGist.ID, URL: newGist.URL, Description: newGist.Description,
+		CreatedAt: newGist.CreatedAt, UpdatedAt: newGist.UpdatedAt,
 	}
 	if err := gist.SaveMetadata(meta); err != nil {
 		return errMsg{err}
 	}
-
-	visibility := "secret"
+	vis := "secret"
 	if m.createPublic {
-		visibility = "public"
+		vis = "public"
 	}
-	return successMsg{fmt.Sprintf("Gist created (%s)! %s", visibility, newGist.URL)}
+	return successMsg{fmt.Sprintf("Gist created (%s)! %s", vis, newGist.URL)}
 }
 
 func (m *GistModel) initGistList() (tea.Model, tea.Cmd) {
-	// Check if token is configured
 	if m.token == "" || m.gistClient == nil {
-		m.message = "No GitHub token configured! Please set up a token first."
+		m.message = "No GitHub token configured. Set up a token first."
 		m.messageIsError = true
 		m.state = gistStateMenu
 		return *m, nil
 	}
-	// Return a command that loads gists
 	return *m, func() tea.Msg {
 		gists, err := gist.GetAllGists()
 		if err != nil {
 			return errMsg{err}
 		}
 		if len(gists) == 0 {
-			return errMsg{fmt.Errorf("no gists found - create a gist first")}
+			return errMsg{fmt.Errorf("no gists found — create a favorites gist first")}
 		}
 		return gistsMsg(gists)
 	}
 }
 
-func (m *GistModel) initTokenMenu() (tea.Model, tea.Cmd) {
-	return *m, nil
-}
+func (m *GistModel) initTokenMenu() (tea.Model, tea.Cmd) { return *m, nil }
 
 func (m *GistModel) saveTokenCmd(token string) tea.Cmd {
 	return func() tea.Msg {
-		// Validate
 		client := gist.NewClient(token)
 		user, err := client.ValidateToken()
 		if err != nil {
 			return errMsg{fmt.Errorf("invalid token: %v", err)}
 		}
-
 		if err := gist.SaveToken(token); err != nil {
 			return errMsg{err}
 		}
-
 		return tokenSavedMsg{token, user}
 	}
 }
@@ -791,14 +1312,10 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-
-		// Create backup of existing files before overwriting
 		backupDir := filepath.Join(m.favoritePath, ".backup")
 		if err := os.MkdirAll(backupDir, 0755); err != nil {
 			return errMsg{fmt.Errorf("failed to create backup directory: %w", err)}
 		}
-
-		// Backup existing files that will be overwritten
 		timestamp := time.Now().Format("20060102-150405")
 		var backupFailures []string
 		for filename := range g.Files {
@@ -808,11 +1325,9 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 			}
 			existingPath := filepath.Join(m.favoritePath, cleanName)
 			if _, err := os.Stat(existingPath); err == nil {
-				// File exists, create backup
-				backupName := fmt.Sprintf("%s.%s.bak", cleanName, timestamp)
-				backupPath := filepath.Join(backupDir, backupName)
+				backupPath := filepath.Join(backupDir, fmt.Sprintf("%s.%s.bak", cleanName, timestamp))
 				if data, err := os.ReadFile(existingPath); err == nil {
-					if writeErr := os.WriteFile(backupPath, data, 0644); writeErr != nil {
+					if err := os.WriteFile(backupPath, data, 0644); err != nil {
 						backupFailures = append(backupFailures, cleanName)
 					}
 				} else {
@@ -820,57 +1335,40 @@ func (m *GistModel) recoverGistCmd(gistID string) tea.Cmd {
 				}
 			}
 		}
-
-		// Restore files
 		for filename, file := range g.Files {
-			// Validate filename to prevent directory traversal
 			cleanName := filepath.Base(filename)
 			if cleanName != filename || cleanName == "." || cleanName == ".." {
 				continue
 			}
-			path := filepath.Join(m.favoritePath, cleanName)
-			if err := os.WriteFile(path, []byte(file.Content), 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(m.favoritePath, cleanName), []byte(file.Content), 0644); err != nil {
 				return errMsg{err}
 			}
 		}
-
 		if len(backupFailures) > 0 {
-			return successMsg{fmt.Sprintf("Favorites restored! (Warning: %d backup(s) failed to save)", len(backupFailures))}
+			return successMsg{fmt.Sprintf("Favorites restored! (Warning: %d backup(s) failed)", len(backupFailures))}
 		}
 		return successMsg{"Favorites restored successfully! (backups saved in .backup folder)"}
 	}
 }
 
-// importGistCmd imports favorites from any public gist without requiring authentication
 func (m *GistModel) importGistCmd(gistID string) tea.Cmd {
 	return func() tea.Msg {
-		// Use public API - no token required for public gists
-		// If token is available and gist is private, try with token first
 		var g *gist.Gist
 		var err error
-
 		if m.gistClient != nil {
-			// Try with authentication first (works for both public and private gists)
 			g, err = m.gistClient.GetGist(gistID)
 		}
-
 		if g == nil || err != nil {
-			// Fall back to public API (only works for public gists)
 			g, err = gist.GetGistPublic(gistID)
 			if err != nil {
 				return errMsg{fmt.Errorf("failed to fetch gist: %w", err)}
 			}
 		}
-
-		// Create backup of existing files before overwriting
 		backupDir := filepath.Join(m.favoritePath, ".backup")
 		if err := os.MkdirAll(backupDir, 0755); err != nil {
 			return errMsg{fmt.Errorf("failed to create backup directory: %w", err)}
 		}
-
-		// Backup existing files that will be overwritten
 		timestamp := time.Now().Format("20060102-150405")
-		var backupFailures []string
 		for filename := range g.Files {
 			cleanName := filepath.Base(filename)
 			if cleanName != filename || cleanName == "." || cleanName == ".." {
@@ -878,38 +1376,24 @@ func (m *GistModel) importGistCmd(gistID string) tea.Cmd {
 			}
 			existingPath := filepath.Join(m.favoritePath, cleanName)
 			if _, err := os.Stat(existingPath); err == nil {
-				// File exists, create backup
-				backupName := fmt.Sprintf("%s.%s.bak", cleanName, timestamp)
-				backupPath := filepath.Join(backupDir, backupName)
+				backupPath := filepath.Join(backupDir, fmt.Sprintf("%s.%s.bak", cleanName, timestamp))
 				if data, err := os.ReadFile(existingPath); err == nil {
-					if writeErr := os.WriteFile(backupPath, data, 0644); writeErr != nil {
-						backupFailures = append(backupFailures, cleanName)
-					}
-				} else {
-					backupFailures = append(backupFailures, cleanName)
+					_ = os.WriteFile(backupPath, data, 0644)
 				}
 			}
 		}
-
-		// Import files
 		importedCount := 0
 		for filename, file := range g.Files {
-			// Validate filename to prevent directory traversal
 			cleanName := filepath.Base(filename)
 			if cleanName != filename || cleanName == "." || cleanName == ".." {
 				continue
 			}
-			path := filepath.Join(m.favoritePath, cleanName)
-			if err := os.WriteFile(path, []byte(file.Content), 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(m.favoritePath, cleanName), []byte(file.Content), 0644); err != nil {
 				return errMsg{err}
 			}
 			importedCount++
 		}
-
-		if len(backupFailures) > 0 {
-			return successMsg{fmt.Sprintf("Imported %d file(s)! (Warning: %d backup(s) failed)", importedCount, len(backupFailures))}
-		}
-		return successMsg{fmt.Sprintf("Successfully imported %d file(s) from gist! (backups in .backup folder)", importedCount)}
+		return successMsg{fmt.Sprintf("Successfully imported %d file(s) from gist!", importedCount)}
 	}
 }
 
@@ -918,7 +1402,6 @@ func (m *GistModel) updateGistCmd(id, description string) tea.Cmd {
 		if err := m.gistClient.UpdateGist(id, description); err != nil {
 			return errMsg{err}
 		}
-		// Update local metadata cache
 		if err := gist.UpdateMetadata(id, description); err != nil {
 			return errMsg{fmt.Errorf("gist updated remotely but local cache failed: %w", err)}
 		}
@@ -928,16 +1411,11 @@ func (m *GistModel) updateGistCmd(id, description string) tea.Cmd {
 
 func (m *GistModel) validateTokenCmd() tea.Cmd {
 	return func() tea.Msg {
-		if m.token == "" {
-			return errMsg{fmt.Errorf("no token configured")}
-		}
-
 		client := gist.NewClient(m.token)
 		user, err := client.ValidateToken()
 		if err != nil {
 			return errMsg{fmt.Errorf("token validation failed: %v", err)}
 		}
-
 		return successMsg{fmt.Sprintf("✓ Token is VALID! GitHub user: %s", user)}
 	}
 }
@@ -950,7 +1428,6 @@ func (m *GistModel) deleteGistCmd(id string) tea.Cmd {
 		if err := m.gistClient.DeleteGist(id); err != nil {
 			return errMsg{err}
 		}
-		// Delete local metadata cache
 		if err := gist.DeleteMetadata(id); err != nil {
 			return errMsg{fmt.Errorf("gist deleted remotely but local cache failed: %w", err)}
 		}
@@ -967,10 +1444,9 @@ func (m *GistModel) deleteTokenCmd() tea.Cmd {
 	}
 }
 
-// openBrowser opens the specified URL in the default browser
+// openBrowser opens url in the default system browser.
 func openBrowser(url string) error {
 	var cmd *exec.Cmd
-
 	switch runtime.GOOS {
 	case "darwin":
 		cmd = exec.Command("open", url)
@@ -981,15 +1457,5 @@ func openBrowser(url string) error {
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
-
 	return cmd.Start()
 }
-
-// Messages
-
-type successMsg struct{ msg string }
-type gistsMsg []*gist.GistMetadata
-type tokenSavedMsg struct {
-	token, user string
-}
-type tokenDeletedMsg struct{}

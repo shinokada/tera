@@ -122,6 +122,34 @@ func (c *Client) UpdateGist(gistID, description string) error {
 	return c.do(req, nil)
 }
 
+// UpdateGistFiles updates or replaces the files of an existing gist.
+// Each key in files is the filename; the value is the new content.
+// Passing an empty string as content deletes that file from the gist.
+func (c *Client) UpdateGistFiles(gistID string, files map[string]string) error {
+	gistFiles := make(map[string]GistFile)
+	for filename, content := range files {
+		gistFiles[filename] = GistFile{Content: content}
+	}
+
+	payload := struct {
+		Files map[string]GistFile `json:"files"`
+	}{
+		Files: gistFiles,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update payload: %w", err)
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/gists/%s", c.baseURL, gistID), bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	return c.do(req, nil)
+}
+
 // DeleteGist deletes a gist
 func (c *Client) DeleteGist(gistID string) error {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/gists/%s", c.baseURL, gistID), nil)
