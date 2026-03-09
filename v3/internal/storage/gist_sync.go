@@ -177,12 +177,16 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		return fmt.Errorf("failed to collect category files: %w", err)
 	}
 
-	files := make(map[string]string)
+	// present holds files to upsert; skipped tracks names explicitly excluded
+	// due to being empty or missing, so we never tombstone them accidentally.
+	present := make(map[string]string)
+	skipped := make(map[string]struct{})
 	for _, relPath := range relPaths {
 		absPath := filepath.Join(m.configDir, relPath)
 		data, err := os.ReadFile(absPath)
 		if err != nil {
 			if os.IsNotExist(err) {
+				skipped[gistFilename(relPath)] = struct{}{}
 				continue // skip missing files silently
 			}
 			return fmt.Errorf("failed to read %s: %w", relPath, err)
@@ -190,9 +194,10 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		// Guard against empty reads: UpdateGistFiles interprets "" as a deletion
 		// tombstone. All valid tera data files contain at least "{}" or "[]".
 		if len(data) == 0 {
+			skipped[gistFilename(relPath)] = struct{}{}
 			continue
 		}
-		files[gistFilename(relPath)] = string(data)
+		present[gistFilename(relPath)] = string(data)
 	}
 
 	existing, err := m.FindBackupGist()
@@ -201,15 +206,16 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 	}
 
 	if existing == nil {
-		if len(files) == 0 {
+		if len(present) == 0 {
 			return fmt.Errorf("no files found to push for the selected categories")
 		}
-		_, err = m.client.CreateGist(backupGistDescription, files, false)
+		_, err = m.client.CreateGist(backupGistDescription, present, false)
 		return err
 	}
 
-	// Add tombstones (empty string → null → delete) for in-scope files that no
-	// longer exist locally but are still present in the backup Gist.
+	// Add tombstones (empty string → null → delete) only for in-scope files
+	// that no longer exist locally. Files skipped due to being empty or missing
+	// are left untouched in the remote Gist.
 	full, err := m.client.GetGist(existing.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch backup gist: %w", err)
@@ -219,12 +225,16 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
 			continue
 		}
-		if _, ok := files[name]; !ok {
-			files[name] = "" // tombstone: will be sent as null
+		if _, inPresent := present[name]; inPresent {
+			continue
 		}
+		if _, wasSkipped := skipped[name]; wasSkipped {
+			continue // empty/missing locally — preserve remote copy
+		}
+		present[name] = "" // tombstone: file was intentionally removed
 	}
 
-	return m.client.UpdateGistFiles(existing.ID, files)
+	return m.client.UpdateGistFiles(existing.ID, present)
 }
 
 // ConflictingGistFiles returns the relative paths of files that would be

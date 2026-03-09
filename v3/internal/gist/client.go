@@ -93,19 +93,28 @@ func (c *Client) CreateGist(description string, files map[string]string, public 
 	return &gist, nil
 }
 
-// ListGists lists all gists for the authenticated user
+// ListGists lists all gists for the authenticated user, paginating through
+// all pages so callers see the complete set regardless of account size.
 func (c *Client) ListGists() ([]*Gist, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/gists", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	var all []*Gist
+	page := 1
+	for {
+		url := fmt.Sprintf("%s/gists?per_page=100&page=%d", c.baseURL, page)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		var pageGists []*Gist
+		if err := c.do(req, &pageGists); err != nil {
+			return nil, err
+		}
+		all = append(all, pageGists...)
+		if len(pageGists) < 100 {
+			break // last page
+		}
+		page++
 	}
-
-	var gists []*Gist
-	if err := c.do(req, &gists); err != nil {
-		return nil, err
-	}
-
-	return gists, nil
+	return all, nil
 }
 
 // UpdateGist updates the description of an existing gist
