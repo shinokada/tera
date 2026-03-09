@@ -48,6 +48,13 @@ type GistFile struct {
 	RawURL   string `json:"raw_url,omitempty"`
 }
 
+// GistFileUpdate wraps the content field for PATCH requests.
+// A nil pointer signals deletion (marshals to null, which removes the file);
+// a non-nil pointer sets or replaces the content.
+type GistFileUpdate struct {
+	Content *string `json:"content"`
+}
+
 // CreateGist creates a new gist with the provided files
 // If public is true, the gist will be publicly visible; otherwise it will be secret
 func (c *Client) CreateGist(description string, files map[string]string, public bool) (*Gist, error) {
@@ -124,15 +131,20 @@ func (c *Client) UpdateGist(gistID, description string) error {
 
 // UpdateGistFiles updates or replaces the files of an existing gist.
 // Each key in files is the filename; the value is the new content.
-// Passing an empty string as content deletes that file from the gist.
+// Passing an empty string as content signals deletion: the file is removed
+// from the gist by sending null per the GitHub API specification.
 func (c *Client) UpdateGistFiles(gistID string, files map[string]string) error {
-	gistFiles := make(map[string]GistFile)
+	gistFiles := make(map[string]*GistFileUpdate)
 	for filename, content := range files {
-		gistFiles[filename] = GistFile{Content: content}
+		if content == "" {
+			gistFiles[filename] = nil // marshals to null → deletes the file
+		} else {
+			gistFiles[filename] = &GistFileUpdate{Content: &content}
+		}
 	}
 
 	payload := struct {
-		Files map[string]GistFile `json:"files"`
+		Files map[string]*GistFileUpdate `json:"files"`
 	}{
 		Files: gistFiles,
 	}

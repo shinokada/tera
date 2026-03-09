@@ -102,7 +102,7 @@ func (b *BackupManager) categoryFiles(prefs SyncPrefs) []string {
 
 // Export creates a zip archive at destPath containing the files selected by prefs.
 // Only files that actually exist on disk are included; missing files are silently skipped.
-func (b *BackupManager) Export(destPath string, prefs SyncPrefs) error {
+func (b *BackupManager) Export(destPath string, prefs SyncPrefs) (err error) {
 	resolved, err := ResolveBackupPath(destPath)
 	if err != nil {
 		return err
@@ -116,10 +116,16 @@ func (b *BackupManager) Export(destPath string, prefs SyncPrefs) error {
 	if err != nil {
 		return fmt.Errorf("failed to create zip file: %w", err)
 	}
-	defer func() { _ = zipFile.Close() }()
 
 	w := zip.NewWriter(zipFile)
-	defer func() { _ = w.Close() }()
+	defer func() {
+		if closeErr := w.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to finalize zip archive: %w", closeErr)
+		}
+		if closeErr := zipFile.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close zip file: %w", closeErr)
+		}
+	}()
 
 	for _, relPath := range b.categoryFiles(prefs) {
 		absPath := filepath.Join(b.configDir, relPath)
@@ -133,6 +139,21 @@ func (b *BackupManager) Export(destPath string, prefs SyncPrefs) error {
 	}
 
 	return nil
+}
+
+// archiveEntryPath safely resolves a zip entry name relative to baseDir.
+// It rejects absolute paths and any traversal that would escape baseDir (zip-slip).
+func archiveEntryPath(baseDir, slashName string) (string, error) {
+	cleaned := filepath.Clean(filepath.FromSlash(slashName))
+	if filepath.IsAbs(cleaned) {
+		return "", fmt.Errorf("invalid archive entry %q", slashName)
+	}
+	destPath := filepath.Join(baseDir, cleaned)
+	rel, err := filepath.Rel(baseDir, destPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("archive entry escapes config dir: %q", slashName)
+	}
+	return destPath, nil
 }
 
 // ConflictingFiles returns the list of relative paths that would be overwritten
@@ -151,7 +172,10 @@ func (b *BackupManager) ConflictingFiles(srcPath string, prefs SyncPrefs) ([]str
 		if !zipEntryWanted(slashName, prefs) {
 			continue
 		}
-		absPath := filepath.Join(b.configDir, filepath.FromSlash(slashName))
+		absPath, err := archiveEntryPath(b.configDir, slashName)
+		if err != nil {
+			return nil, err
+		}
 		if _, err := os.Stat(absPath); err == nil {
 			conflicts = append(conflicts, slashName)
 		}
@@ -188,9 +212,11 @@ func (b *BackupManager) Restore(srcPath string, prefs SyncPrefs, force bool) err
 		if !zipEntryWanted(slashName, prefs) {
 			continue
 		}
-		// Build dest using FromSlash so subdirectories are created correctly on
-		// all platforms.
-		destPath := filepath.Join(b.configDir, filepath.FromSlash(slashName))
+		// Build dest using archiveEntryPath to guard against zip-slip.
+		destPath, err := archiveEntryPath(b.configDir, slashName)
+		if err != nil {
+			return err
+		}
 		if err := extractFileFromZip(f, destPath); err != nil {
 			return fmt.Errorf("failed to restore %s: %w", slashName, err)
 		}
@@ -246,20 +272,6 @@ func (b *BackupManager) ListArchiveCategories(srcPath string) (SyncPrefs, error)
 		}
 	}
 	return prefs, nil
-}
-
-// intersectPrefs returns a SyncPrefs where a category is true only if it is
-// true in both a and b. Used to restrict a restore to what is both available
-// in the archive and requested by the user.
-func intersectPrefs(a, b SyncPrefs) SyncPrefs {
-	return SyncPrefs{
-		Favorites:     a.Favorites && b.Favorites,
-		Settings:      a.Settings && b.Settings,
-		RatingsVotes:  a.RatingsVotes && b.RatingsVotes,
-		Blocklist:     a.Blocklist && b.Blocklist,
-		MetadataTags:  a.MetadataTags && b.MetadataTags,
-		SearchHistory: a.SearchHistory && b.SearchHistory,
-	}
 }
 
 // addFileToZip adds the file at absPath to the zip writer using relPath as the

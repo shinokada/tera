@@ -156,9 +156,17 @@ func (m *GistSyncManager) AvailableCategories() (SyncPrefs, error) {
 	return prefs, nil
 }
 
+// syncPrefForRelPath reports whether the given config-relative path belongs to
+// one of the selected sync categories. It reuses zipEntryWanted by converting
+// the OS-native path to a slash-separated one.
+func syncPrefForRelPath(relPath string, prefs SyncPrefs) bool {
+	return zipEntryWanted(filepath.ToSlash(relPath), prefs)
+}
+
 // Push uploads selected files to the dedicated backup Gist.
 // If no backup Gist exists it is created (secret); otherwise its files are updated.
-// Only files that actually exist on disk are included; missing files are skipped.
+// Files that exist locally are pushed; files that are in-scope in the Gist but
+// no longer exist locally are deleted (sent as null per the GitHub API).
 func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 	bm := &BackupManager{configDir: m.configDir}
 	relPaths := bm.categoryFiles(prefs)
@@ -176,18 +184,33 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		files[gistFilename(relPath)] = string(data)
 	}
 
-	if len(files) == 0 {
-		return fmt.Errorf("no files found to push for the selected categories")
-	}
-
 	existing, err := m.FindBackupGist()
 	if err != nil {
 		return err
 	}
 
 	if existing == nil {
+		if len(files) == 0 {
+			return fmt.Errorf("no files found to push for the selected categories")
+		}
 		_, err = m.client.CreateGist(backupGistDescription, files, false)
 		return err
+	}
+
+	// Add tombstones (empty string → null → delete) for in-scope files that no
+	// longer exist locally but are still present in the backup Gist.
+	full, err := m.client.GetGist(existing.ID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup gist: %w", err)
+	}
+	for name := range full.Files {
+		relPath := gistFilenameToRelPath(name)
+		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
+			continue
+		}
+		if _, ok := files[name]; !ok {
+			files[name] = "" // tombstone: will be sent as null
+		}
 	}
 
 	return m.client.UpdateGistFiles(existing.ID, files)
@@ -195,16 +218,24 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 
 // ConflictingGistFiles returns the relative paths of files that would be
 // overwritten by a Pull of the given Gist using the given prefs.
+// It drives the check from the Gist's own file list so it works correctly on
+// a fresh machine where no local favorites exist yet to enumerate.
 func (m *GistSyncManager) ConflictingGistFiles(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
-	available, err := m.AvailableCategories()
-	if err != nil {
-		return nil, err
+	// Ensure we have the full file list (ListGists omits file details).
+	if len(g.Files) == 0 {
+		var err error
+		g, err = m.client.GetGist(g.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch backup gist: %w", err)
+		}
 	}
-	effective := intersectPrefs(available, prefs)
-	bm := &BackupManager{configDir: m.configDir}
 
 	var conflicts []string
-	for _, relPath := range bm.categoryFiles(effective) {
+	for name := range g.Files {
+		relPath := gistFilenameToRelPath(name)
+		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
+			continue
+		}
 		absPath := filepath.Join(m.configDir, relPath)
 		if _, err := os.Stat(absPath); err == nil {
 			conflicts = append(conflicts, relPath)
@@ -241,15 +272,15 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 		}
 	}
 
-	available, err := m.AvailableCategories()
-	if err != nil {
-		return err
-	}
-	effective := intersectPrefs(available, prefs)
-	bm := &BackupManager{configDir: m.configDir}
+	// Drive wanted from the Gist's own file list so restores work on a fresh
+	// machine where categoryFiles would return nothing for missing favorites.
 	wanted := make(map[string]string) // gist filename → rel path
-	for _, relPath := range bm.categoryFiles(effective) {
-		wanted[gistFilename(relPath)] = relPath
+	for name := range full.Files {
+		relPath := gistFilenameToRelPath(name)
+		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
+			continue
+		}
+		wanted[name] = relPath
 	}
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}

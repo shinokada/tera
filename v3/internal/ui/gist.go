@@ -336,6 +336,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case zipConflictCheckMsg:
 		if len(msg.conflicts) == 0 {
 			// No conflicts — restore immediately (force=false is fine).
+			m.state = gistStateSyncProgress
 			return m, m.restoreZipCmd(msg.zipPath, msg.prefs, false)
 		}
 		// Conflicts exist — warn user.
@@ -353,6 +354,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gistConflictCheckMsg:
 		if len(msg.conflicts) == 0 {
+			m.state = gistStateSyncProgress
 			return m, m.restoreGistCmd(msg.prefs, false)
 		}
 		m.pendingPrefs = msg.prefs
@@ -531,6 +533,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			switch keyMsg.String() {
 			case "enter":
+				m.state = gistStateSyncProgress
 				switch m.overwriteSrc {
 				case overwriteSourceZip:
 					return m, m.restoreZipCmd(m.pendingZipPath, m.pendingPrefs, true)
