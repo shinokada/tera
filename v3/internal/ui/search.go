@@ -1538,10 +1538,10 @@ func (m SearchModel) View() string {
 			}
 		}
 
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Content: content.String(),
 			Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
-		})
+		}, m.height)
 
 	case searchStateStationInfo:
 		return m.renderStationInfo()

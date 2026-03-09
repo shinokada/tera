@@ -59,31 +59,38 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Parse YAML
-	var cfg Config
+	// Parse YAML — seed from defaults so fields absent in legacy configs
+	// (e.g. play_history introduced in v3.7) get proper default values
+	// instead of Go zero-values which Validate() cannot fully recover.
+	cfg := DefaultConfig()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Validate and fix any issues
+	// Validate and fix any issues.
+	// If validation corrects anything, save the fixed config back to disk
+	// so the warning is only ever printed once (on first run after upgrade).
 	if err := cfg.Validate(); err != nil {
-		// Log validation errors but continue with corrected values
 		fmt.Fprintf(os.Stderr, "Config validation warnings: %v\n", err)
+		// Best-effort save — ignore error so a read-only filesystem doesn't
+		// prevent startup, but do silence the duplicate save-time warning by
+		// calling Save directly rather than going through the public helper.
+		_ = saveRaw(configPath, &cfg)
 	}
 
 	return &cfg, nil
 }
 
-// Save saves the configuration to disk
+// Save validates cfg, then saves it to disk.
 func Save(cfg *Config) error {
 	if cfg == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
 
-	// Validate before saving
+	// Validate before saving; corrections are applied in-place.
+	// Warnings are only printed here when Save is called directly with an
+	// out-of-range value — the Load path handles its own warning.
 	if err := cfg.Validate(); err != nil {
-		// Validation errors have already corrected the values
-		// Log warnings but proceed with save
 		fmt.Fprintf(os.Stderr, "Config validation warnings: %v\n", err)
 	}
 
@@ -91,7 +98,12 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to get config path: %w", err)
 	}
+	return saveRaw(configPath, cfg)
+}
 
+// saveRaw writes cfg to configPath without re-running Validate.
+// Used by Load to persist corrected values without double-printing warnings.
+func saveRaw(configPath string, cfg *Config) error {
 	// Ensure config directory exists
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -108,11 +120,18 @@ func Save(cfg *Config) error {
 	header := generateConfigHeader()
 	content := []byte(header + string(data))
 
-	// Write to file
-	if err := os.WriteFile(configPath, content, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+	// Write atomically via a temp file in the same directory, then rename.
+	// This prevents a crash or short write from leaving a malformed config.yaml
+	// that would break the next launch.
+	tmpPath := configPath + ".tmp"
+	if err := os.WriteFile(tmpPath, content, 0644); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to write config temp file: %w", err)
 	}
-
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return fmt.Errorf("failed to rename config file: %w", err)
+	}
 	return nil
 }
 

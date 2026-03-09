@@ -13,12 +13,13 @@ const (
 
 // Config represents the unified application configuration
 type Config struct {
-	Version   string          `yaml:"version"`
-	Player    PlayerConfig    `yaml:"player"`
-	UI        UIConfig        `yaml:"ui"`
-	Network   NetworkConfig   `yaml:"network"`
-	Shuffle   ShuffleConfig   `yaml:"shuffle"`
-	Blocklist BlocklistConfig `yaml:"blocklist"`
+	Version     string            `yaml:"version"`
+	Player      PlayerConfig      `yaml:"player"`
+	UI          UIConfig          `yaml:"ui"`
+	Network     NetworkConfig     `yaml:"network"`
+	Shuffle     ShuffleConfig     `yaml:"shuffle"`
+	Blocklist   BlocklistConfig   `yaml:"blocklist"`
+	PlayHistory PlayHistoryConfig `yaml:"play_history"`
 }
 
 // PlayerConfig represents player settings
@@ -83,6 +84,22 @@ type ShuffleConfig struct {
 	MaxHistory      int  `yaml:"max_history"` // Number of stations to remember
 }
 
+// PlayHistoryConfig holds Recently Played display settings for the main menu
+type PlayHistoryConfig struct {
+	Enabled        bool `yaml:"enabled"`         // Show Recently Played section in main menu (default: true)
+	Size           int  `yaml:"size"`            // Number of stations to display, range [1, 20] (default: 5)
+	AllowDuplicate bool `yaml:"allow_duplicate"` // Allow same station to appear more than once (default: false)
+}
+
+// DefaultPlayHistoryConfig returns a PlayHistoryConfig with sensible defaults.
+func DefaultPlayHistoryConfig() PlayHistoryConfig {
+	return PlayHistoryConfig{
+		Enabled:        true,
+		Size:           5,
+		AllowDuplicate: false,
+	}
+}
+
 // DefaultConfig returns a new Config with sensible defaults
 func DefaultConfig() Config {
 	return Config{
@@ -138,6 +155,7 @@ func DefaultConfig() Config {
 			RememberHistory: true,
 			MaxHistory:      5,
 		},
+		PlayHistory: DefaultPlayHistoryConfig(),
 	}
 }
 
@@ -168,6 +186,11 @@ func (c *Config) Validate() error {
 	// Validate Shuffle config
 	if err := c.Shuffle.Validate(); err != nil {
 		errs = append(errs, fmt.Sprintf("shuffle: %v", err))
+	}
+
+	// Validate PlayHistory config
+	if err := c.PlayHistory.Validate(); err != nil {
+		errs = append(errs, fmt.Sprintf("play_history: %v", err))
 	}
 
 	if len(errs) > 0 {
@@ -429,6 +452,25 @@ func (s *ShuffleConfig) Validate() error {
 	if !validHistory[s.MaxHistory] {
 		s.MaxHistory = 5
 		errs = append(errs, "max_history must be 3, 5, 7, or 10, set to 5")
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+// Validate validates PlayHistoryConfig, clamping Size to [1, 20].
+func (p *PlayHistoryConfig) Validate() error {
+	var errs []string
+
+	if p.Size < 1 {
+		p.Size = 1
+		errs = append(errs, "size must be >= 1, set to 1")
+	}
+	if p.Size > 20 {
+		p.Size = 20
+		errs = append(errs, "size must be <= 20, set to 20")
 	}
 
 	if len(errs) > 0 {

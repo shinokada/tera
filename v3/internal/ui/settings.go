@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/theme"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -21,7 +22,9 @@ const (
 	settingsStateMenu settingsState = iota
 	settingsStateTheme
 	settingsStateConnection
-	settingsStateHistory
+	settingsStateHistory        // top-level: Search History or Play History
+	settingsStateSearchHistory  // existing search history sub-menu
+	settingsStatePlayHistory    // NEW: play history settings
 	settingsStateUpdates
 	settingsStateAbout
 )
@@ -31,18 +34,21 @@ var Version = "dev"
 
 // SettingsModel represents the settings screen
 type SettingsModel struct {
-	state            settingsState
-	menuList         list.Model
-	themeList        list.Model
-	historyMenuList  list.Model
-	width            int
-	height           int
-	message          string
-	messageTime      int
-	messageIsSuccess bool
-	currentTheme     string
-	favoritePath     string
-	searchHistory    *storage.SearchHistoryStore
+	state                settingsState
+	menuList             list.Model
+	themeList            list.Model
+	historyMenuList      list.Model
+	historyMenuIndex     int // cursor for the top-level History switcher
+	width                int
+	height               int
+	message              string
+	messageTime          int
+	messageIsSuccess     bool
+	currentTheme         string
+	favoritePath         string
+	searchHistory        *storage.SearchHistoryStore
+	playHistoryCfg       config.PlayHistoryConfig
+	metadataManager      *storage.MetadataManager
 	// Update checking
 	latestVersion   string
 	updateAvailable bool
@@ -203,7 +209,7 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		components.NewMenuItem("Appearance", "Customize header and layout", "2"),
 		components.NewMenuItem("Connection Settings", "Auto-reconnect and buffering", "3"),
 		components.NewMenuItem("Shuffle Settings", "Configure shuffle mode behavior", "4"),
-		components.NewMenuItem("Search History", "Manage search history settings", "5"),
+		components.NewMenuItem("History", "Search and play history settings", "5"),
 		components.NewMenuItem("Check for Updates", "Check for new versions", "6"),
 		components.NewMenuItem("About TERA", "Version and information", "7"),
 	}
@@ -225,13 +231,13 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 	themeList.SetFilteringEnabled(false)
 	themeList.SetShowHelp(false)
 
-	// History settings menu
+	// Search history settings menu
 	historyMenuItems := []components.MenuItem{
 		components.NewMenuItem("Increase (+5)", "", "1"),
 		components.NewMenuItem("Decrease (-5)", "", "2"),
 		components.NewMenuItem("Reset to Default", "", "3"),
 		components.NewMenuItem("Clear History", "", "4"),
-		components.NewMenuItem("Back to Settings", "", "5"),
+		components.NewMenuItem("Back", "", "5"),
 	}
 	historyMenuList := components.CreateMenu(historyMenuItems, "", 50, 10)
 
@@ -254,6 +260,12 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		history = storage.NewSearchHistoryStore()
 	}
 
+	// Load play history config
+	phCfg, err := storage.LoadPlayHistoryConfigFromUnified()
+	if err != nil {
+		phCfg = config.DefaultPlayHistoryConfig()
+	}
+
 	// Detect installation method
 	installInfo := api.DetectInstallMethod()
 
@@ -265,6 +277,7 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		currentTheme:    currentTheme,
 		favoritePath:    favoritePath,
 		searchHistory:   history,
+		playHistoryCfg:  phCfg,
 		// Update fields initialized to defaults
 		updateChecked:  false,
 		updateChecking: false,
@@ -301,7 +314,11 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Connection settings handled in app.go
 			return m, nil
 		case settingsStateHistory:
-			return m.updateHistory(msg)
+			return m.updateHistoryMenu(msg)
+		case settingsStateSearchHistory:
+			return m.updateSearchHistory(msg)
+		case settingsStatePlayHistory:
+			return m.updatePlayHistory(msg)
 		case settingsStateUpdates:
 			return m.updateUpdates(msg)
 		case settingsStateAbout:
@@ -489,10 +506,53 @@ func (m SettingsModel) updateAbout(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m SettingsModel) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// updateHistoryMenu handles the top-level History switcher (Search vs Play).
+func (m SettingsModel) updateHistoryMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	const historyMenuItems = 3 // Search History, Play History, Back
+	switch msg.String() {
+	case "esc", "3":
+		m.state = settingsStateMenu
+		return m, nil
+	case "0":
+		return m, func() tea.Msg { return backToMainMsg{} }
+	case "1":
+		m.historyMenuIndex = 0
+		m.state = settingsStateSearchHistory
+		return m, nil
+	case "2":
+		m.historyMenuIndex = 0
+		m.state = settingsStatePlayHistory
+		return m, nil
+	case "up", "k":
+		if m.historyMenuIndex > 0 {
+			m.historyMenuIndex--
+		}
+		return m, nil
+	case "down", "j":
+		if m.historyMenuIndex < historyMenuItems-1 {
+			m.historyMenuIndex++
+		}
+		return m, nil
+	case "enter":
+		switch m.historyMenuIndex {
+		case 0:
+			m.historyMenuIndex = 0
+			m.state = settingsStateSearchHistory
+		case 1:
+			m.historyMenuIndex = 0
+			m.state = settingsStatePlayHistory
+		case 2:
+			m.state = settingsStateMenu
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m SettingsModel) updateSearchHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "5":
-		m.state = settingsStateMenu
+		m.state = settingsStateHistory
 		return m, nil
 	case "0":
 		return m, func() tea.Msg { return backToMainMsg{} }
@@ -558,15 +618,15 @@ func (m SettingsModel) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		idx := m.historyMenuList.Index()
 		switch idx {
 		case 0:
-			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+			return m.updateSearchHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 		case 1:
-			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+			return m.updateSearchHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 		case 2:
-			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+			return m.updateSearchHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 		case 3:
-			return m.updateHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+			return m.updateSearchHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
 		case 4:
-			m.state = settingsStateMenu
+			m.state = settingsStateHistory
 			return m, nil
 		}
 	}
@@ -585,7 +645,11 @@ func (m SettingsModel) View() string {
 	case settingsStateTheme:
 		return m.viewTheme()
 	case settingsStateHistory:
-		return m.viewHistory()
+		return m.viewHistoryMenu()
+	case settingsStateSearchHistory:
+		return m.viewSearchHistory()
+	case settingsStatePlayHistory:
+		return m.viewPlayHistory()
 	case settingsStateUpdates:
 		return m.viewUpdates()
 	case settingsStateAbout:
@@ -640,7 +704,57 @@ func (m SettingsModel) viewTheme() string {
 	}, m.height)
 }
 
-func (m SettingsModel) viewHistory() string {
+func (m SettingsModel) viewHistoryMenu() string {
+	var content strings.Builder
+
+	// Stats line
+	searchCount := 0
+	if m.searchHistory != nil {
+		searchCount = len(m.searchHistory.SearchItems)
+	}
+	playCount := 0
+	if m.metadataManager != nil {
+		playCount = m.metadataManager.GetTotalStations()
+	}
+
+	content.WriteString(stationFieldStyle().Render("Search history items: "))
+	content.WriteString(highlightStyle().Render(fmt.Sprintf("%d", searchCount)))
+	content.WriteString("\n")
+	content.WriteString(stationFieldStyle().Render("Play history tracked:  "))
+	content.WriteString(highlightStyle().Render(fmt.Sprintf("%d stations", playCount)))
+	content.WriteString("\n\n")
+
+	items := []string{
+		"1. Search History   Manage search query history",
+		"2. Play History     Recently Played display settings",
+		"3. Back",
+	}
+	for i, item := range items {
+		if i == m.historyMenuIndex {
+			content.WriteString(selectedItemStyle().Render("> " + item))
+		} else {
+			content.WriteString(normalItemStyle().Render("  " + item))
+		}
+		content.WriteString("\n")
+	}
+
+	if m.message != "" {
+		content.WriteString("\n")
+		if m.messageIsSuccess {
+			content.WriteString(successStyle().Render(m.message))
+		} else {
+			content.WriteString(errorStyle().Render(m.message))
+		}
+	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "⚙️  Settings > History",
+		Content: content.String(),
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Shortcut • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
+}
+
+func (m SettingsModel) viewSearchHistory() string {
 	var content strings.Builder
 
 	// Current history size
@@ -681,9 +795,146 @@ func (m SettingsModel) viewHistory() string {
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
-		Title:   "⚙️  Settings > Search History",
+		Title:   "⚙️  Settings > History > Search History",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter/1-5: Select • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
+}
+
+// updatePlayHistory handles keys in the Play History settings sub-menu.
+func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	cfg := m.playHistoryCfg
+	switch msg.String() {
+	case "esc", "5":
+		m.state = settingsStateHistory
+		return m, nil
+	case "0":
+		return m, func() tea.Msg { return backToMainMsg{} }
+	case "1": // Toggle Show
+		cfg.Enabled = !cfg.Enabled
+		if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+			m.playHistoryCfg = cfg
+			showStr := "No"
+			if cfg.Enabled {
+				showStr = "Yes"
+			}
+			m.message = fmt.Sprintf("✓ Show Recently Played: %s", showStr)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	case "2": // Increase size
+		oldSize := cfg.Size
+		cfg.Size++
+		_ = cfg.Validate() // Clamps to [1, 20]
+		if cfg.Size == oldSize {
+			m.message = fmt.Sprintf("ℹ Size already at maximum (%d)", cfg.Size)
+			m.messageIsSuccess = true
+		} else if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+			m.playHistoryCfg = cfg
+			m.message = fmt.Sprintf("✓ Size increased to %d", cfg.Size)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	case "3": // Decrease size
+		oldSize := cfg.Size
+		cfg.Size--
+		_ = cfg.Validate() // Clamps to [1, 20]
+		if cfg.Size == oldSize {
+			m.message = fmt.Sprintf("ℹ Size already at minimum (%d)", cfg.Size)
+			m.messageIsSuccess = true
+		} else if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+			m.playHistoryCfg = cfg
+			m.message = fmt.Sprintf("✓ Size decreased to %d", cfg.Size)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	case "4": // Reset All Play Stats
+		// ClearAll() wipes the entire metadata store (play counts, last played,
+		// duration) — it is intentionally labelled "Reset All Play Stats" in the
+		// UI so users understand it also resets Most Played, not just Recently Played.
+		if m.metadataManager != nil {
+			if err := m.metadataManager.ClearAll(); err == nil {
+				m.message = "✓ All play stats reset"
+				m.messageIsSuccess = true
+			} else {
+				m.message = fmt.Sprintf("✗ Failed: %v", err)
+				m.messageIsSuccess = false
+			}
+		} else {
+			m.message = "✗ Metadata manager not available"
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	}
+	return m, nil
+}
+
+// viewPlayHistory renders the Play History settings screen.
+func (m SettingsModel) viewPlayHistory() string {
+	var content strings.Builder
+
+	showStr := "No"
+	if m.playHistoryCfg.Enabled {
+		showStr = "Yes"
+	}
+	sizeUp := m.playHistoryCfg.Size + 1
+	if sizeUp > 20 {
+		sizeUp = 20
+	}
+	sizeDown := m.playHistoryCfg.Size - 1
+	if sizeDown < 1 {
+		sizeDown = 1
+	}
+
+	content.WriteString(stationFieldStyle().Render("  Current Size: "))
+	content.WriteString(highlightStyle().Render(fmt.Sprintf("%d", m.playHistoryCfg.Size)))
+	content.WriteString("\n\n")
+
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  1. Toggle Show           (currently: %s)", showStr)))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  2. Increase Size (+1)     → %d", sizeUp)))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  3. Decrease Size (-1)     → %d", sizeDown)))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render("  4. Reset All Play Stats"))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render("      (clears play counts, Most Played, and Recently Played)"))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render("  5. Back"))
+	content.WriteString("\n")
+
+	if m.metadataManager != nil {
+		total := m.metadataManager.GetTotalStations()
+		content.WriteString("\n")
+		content.WriteString(helpStyle().Render(fmt.Sprintf("  Total tracked stations: %d", total)))
+	}
+
+	if m.message != "" {
+		content.WriteString("\n")
+		if m.messageIsSuccess {
+			content.WriteString(successStyle().Render(m.message))
+		} else {
+			content.WriteString(errorStyle().Render(m.message))
+		}
+	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "⚙️  Settings > History > Play History",
+		Content: content.String(),
+		Help:    "1-5: Select • Esc/5: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
 }
 

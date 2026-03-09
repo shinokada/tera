@@ -5,6 +5,29 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-03-08
+
+### Added
+- **Recently Played** — Last N stations now appear in the main menu below Quick Play Favorites, with number shortcuts continuing from where Quick Play ends.
+  - Navigate and play with `↑↓` + `Enter` or number shortcuts
+  - Shows station name, country, and time since last played
+  - `▶` indicator marks the currently playing station
+  - Zero new storage — reuses `station_metadata.json` via `MetadataManager`
+- **Play History settings** (`Settings > History > Play History`)
+  - Toggle show/hide (`1`)
+  - Increase/decrease section size, 1–20 stations (`2`/`3`)
+  - Toggle Allow Duplicate (`4`)
+  - Clear all play history (`5`)
+- **History top-level menu** — `Settings > 5. History` now acts as a switcher between Search History and Play History sub-menus, with stats (search items count, tracked stations count).
+
+### Changed
+- Settings menu item `Search History` renamed to `History` to cover both search and play history.
+- `PlayHistoryConfig` added to unified `config.yaml` (`play_history` section).
+
+### Tests
+- Added `internal/ui/app_test.go`: `TestLoadRecentlyPlayed_*` and `TestPlayRecentStation_*` covering disabled state, nil manager, empty history, size clamping, valid/invalid indices.
+- `internal/config/config_test.go`: `TestPlayHistoryConfigDefaults` and `TestPlayHistoryConfigValidation` (added in Phase 1).
+
 ## [3.5.1] - 2026-02-26
 
 * **Documentation**

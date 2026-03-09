@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	internaltimer "github.com/shinokada/tera/v3/internal/timer"
@@ -74,6 +75,8 @@ type App struct {
 	quickFavPlayer           *player.MPVPlayer
 	playingFromMain          bool
 	playingStation           *api.Station
+	playHistoryCfg           config.PlayHistoryConfig    // cached play history settings
+	recentlyPlayed           []storage.StationWithMetadata // refreshed on each return to main menu
 	numberBuffer             string               // Buffer for multi-digit number input
 	unifiedMenuIndex         int                  // Unified index for navigating both menu and favorites
 	helpModel                components.HelpModel // Help overlay
@@ -187,6 +190,13 @@ func NewApp() *App {
 		app.quickFavPlayer.SetMetadataManager(metadataMgr)
 	}
 
+	// Load play history config
+	if ph, err := storage.LoadPlayHistoryConfigFromUnified(); err == nil {
+		app.playHistoryCfg = ph
+	} else {
+		app.playHistoryCfg = config.DefaultPlayHistoryConfig()
+	}
+
 	// Initialize header renderer
 	InitializeHeaderRenderer()
 
@@ -198,6 +208,9 @@ func NewApp() *App {
 
 	// Load quick favorites
 	app.loadQuickFavorites()
+
+	// Load recently played history
+	app.loadRecentlyPlayed()
 
 	return app
 }
@@ -534,6 +547,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.gistScreen.Init()
 		case screenSettings:
 			a.settingsScreen = NewSettingsModel(a.favoritePath)
+			// Pass metadata manager for play history clear action
+			a.settingsScreen.metadataManager = a.metadataManager
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.settingsScreen.width = a.width
@@ -579,8 +594,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.blocklistScreen.Init()
 		case screenMainMenu:
-			// Return to main menu and reload favorites
+			// Return to main menu and reload favorites and play history
 			a.loadQuickFavorites()
+			a.refreshPlayHistoryConfig()
+			a.loadRecentlyPlayed()
 			a.unifiedMenuIndex = 0
 			a.numberBuffer = ""
 			return a, nil
@@ -670,8 +687,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
-		// Reload quick favorites in case they were updated
+		// Reload quick favorites and play history in case they were updated
 		a.loadQuickFavorites()
+		a.refreshPlayHistoryConfig()
+		a.loadRecentlyPlayed()
 		a.unifiedMenuIndex = 0
 		a.numberBuffer = ""
 		return a, nil
@@ -955,19 +974,26 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(key) == 1 && key >= "0" && key <= "9" {
 			a.numberBuffer += key
 
-			// maxFavNum is the highest valid QF number (quick favorites start at 10)
-			maxFavNum := 9 + len(a.quickFavorites)
+			// maxFavNum is the highest valid shortcut number (QF start at 10, RP follow)
+			maxFavNum := 9 + len(a.quickFavorites) + len(a.recentlyPlayed)
 
 			// For 2+ digit buffers, check for QF matches
 			if len(a.numberBuffer) >= 2 {
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 
-				// Valid QF number — play it immediately
+				// Valid QF or RP number — play it immediately
 				if num >= 10 && num <= maxFavNum {
 					idx := num - 10
 					a.numberBuffer = ""
-					return a.playQuickFavorite(idx)
+					if idx < len(a.quickFavorites) {
+						return a.playQuickFavorite(idx)
+					}
+					rpIdx := idx - len(a.quickFavorites)
+					if rpIdx < len(a.recentlyPlayed) {
+						return a.playRecentStation(rpIdx)
+					}
+					return a, nil
 				}
 
 				// Out of range or 3+ digits — clear and ignore
@@ -1012,12 +1038,16 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 				a.numberBuffer = ""
 
-				// Quick favorites 10+ must be checked before the menu-item range,
-				// which also covers 10 and 11 (mainMenuItemCount == 11).
+				// QF and RP shortcuts (10+) must be checked before the menu-item
+				// range, which also covers 10 and 11 (mainMenuItemCount == 11).
 				if num >= 10 {
 					idx := num - 10
 					if idx < len(a.quickFavorites) {
 						return a.playQuickFavorite(idx)
+					}
+					rpIdx := idx - len(a.quickFavorites)
+					if rpIdx < len(a.recentlyPlayed) {
+						return a.playRecentStation(rpIdx)
 					}
 					return a, nil
 				}
@@ -1037,12 +1067,15 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			menuItemCount := mainMenuItemCount
 			if a.unifiedMenuIndex < menuItemCount {
 				return a.executeMenuAction(a.unifiedMenuIndex)
-			} else {
-				// It's a quick favorite
-				favIndex := a.unifiedMenuIndex - menuItemCount
-				if favIndex < len(a.quickFavorites) {
-					return a.playQuickFavorite(favIndex)
-				}
+			}
+			// It's a quick favorite or recently played
+			offset := a.unifiedMenuIndex - menuItemCount
+			if offset < len(a.quickFavorites) {
+				return a.playQuickFavorite(offset)
+			}
+			rpIdx := offset - len(a.quickFavorites)
+			if rpIdx < len(a.recentlyPlayed) {
+				return a.playRecentStation(rpIdx)
 			}
 			return a, nil
 		}
@@ -1050,7 +1083,7 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle arrow keys for unified menu navigation
 		menuItemCount := mainMenuItemCount
 		favCount := len(a.quickFavorites)
-		totalItems := menuItemCount + favCount
+		totalItems := menuItemCount + favCount + len(a.recentlyPlayed)
 
 		switch msg.String() {
 		case "up", "k":
@@ -1133,6 +1166,26 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// refreshPlayHistoryConfig reloads the play history config from disk so that
+// changes made in Settings (e.g. decreasing the size) are reflected immediately.
+func (a *App) refreshPlayHistoryConfig() {
+	if ph, err := storage.LoadPlayHistoryConfigFromUnified(); err == nil {
+		a.playHistoryCfg = ph
+	}
+}
+
+// loadRecentlyPlayed loads recently played stations from metadata, respecting
+// the play history config (enabled flag and size limit).
+// Callers that need a fresh config from disk should call refreshPlayHistoryConfig
+// first (e.g. when returning to the main menu from Settings).
+func (a *App) loadRecentlyPlayed() {
+	if !a.playHistoryCfg.Enabled || a.metadataManager == nil {
+		a.recentlyPlayed = nil
+		return
+	}
+	a.recentlyPlayed = a.metadataManager.GetRecentlyPlayed(a.playHistoryCfg.Size)
+}
+
 // playQuickFavorite plays a station from the quick favorites list
 func (a *App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	if index >= len(a.quickFavorites) {
@@ -1140,6 +1193,32 @@ func (a *App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	}
 
 	station := a.quickFavorites[index]
+	a.playingStation = &station
+	a.playingFromMain = true
+
+	// Stop any currently playing station
+	if a.quickFavPlayer != nil {
+		_ = a.quickFavPlayer.Stop()
+	}
+
+	// Start playback
+	return a, func() tea.Msg {
+		if a.quickFavPlayer != nil {
+			if err := a.quickFavPlayer.Play(&station); err != nil {
+				return playbackErrorMsg{err}
+			}
+		}
+		return playbackStartedMsg{}
+	}
+}
+
+// playRecentStation plays a station from the recently played list
+func (a *App) playRecentStation(index int) (tea.Model, tea.Cmd) {
+	if index >= len(a.recentlyPlayed) {
+		return a, nil
+	}
+
+	station := a.recentlyPlayed[index].Station
 	a.playingStation = &station
 	a.playingFromMain = true
 
@@ -1356,6 +1435,53 @@ func (a *App) viewMainMenu() string {
 		}
 	}
 
+	// Add recently played section if available
+	if len(a.recentlyPlayed) > 0 {
+		content.WriteString("\n")
+		content.WriteString(quickFavoritesStyle().Render("─── Recently Played ───"))
+		content.WriteString("\n")
+
+		rpShortcutStart := 10 + len(a.quickFavorites)
+		for i, entry := range a.recentlyPlayed {
+			shortcut := fmt.Sprintf("%d", rpShortcutStart+i)
+
+			var stationInfo strings.Builder
+			stationInfo.WriteString(entry.Station.TrimName())
+			if entry.Station.Country != "" {
+				stationInfo.WriteString(" • ")
+				stationInfo.WriteString(entry.Station.Country)
+			}
+			if entry.Metadata != nil {
+				stationInfo.WriteString(" • ")
+				stationInfo.WriteString(storage.FormatLastPlayed(entry.Metadata.LastPlayed))
+			}
+
+			unifiedIdx := mainMenuItemCount + len(a.quickFavorites) + i
+			prefix := "  "
+			if unifiedIdx == a.unifiedMenuIndex {
+				prefix = "> "
+			}
+
+			if a.playingFromMain && a.playingStation != nil &&
+				a.playingStation.StationUUID == entry.Station.StationUUID {
+				playingLine := fmt.Sprintf("%s%s. ▶ %s", prefix, shortcut, stationInfo.String())
+				if unifiedIdx == a.unifiedMenuIndex {
+					content.WriteString(selectedItemStyle().Render(playingLine))
+				} else {
+					content.WriteString(normalItemStyle().Render(playingLine))
+				}
+			} else {
+				lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
+				if unifiedIdx == a.unifiedMenuIndex {
+					content.WriteString(selectedItemStyle().Render(lineContent))
+				} else {
+					content.WriteString(normalItemStyle().Render(lineContent))
+				}
+			}
+			content.WriteString("\n")
+		}
+	}
+
 	// Add volume display if visible
 	if a.volumeDisplay != "" {
 		content.WriteString("\n")
@@ -1368,7 +1494,7 @@ func (a *App) viewMainMenu() string {
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-0/-: Menu shortcuts • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-0/-: Menu shortcuts • 10+: QF/RP • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)
