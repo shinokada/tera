@@ -47,8 +47,8 @@ func NewGistSyncManager(client *gist.Client) (*GistSyncManager, error) {
 //	data/station_ratings.json         → ratings.json
 //	data/station_tags.json            → tags.json
 //	data/station_metadata.json        → metadata.json
-//	data/favorites/Jazz.json          → fav--Jazz.json
-//	data/cache/search-history.json    → search-history.json
+//	data/favorites/Jazz.json               → fav--Jazz.json
+//	data/favorites/search-history.json    → search-history.json
 func gistFilename(relPath string) string {
 	slashPath := filepath.ToSlash(relPath)
 	switch slashPath {
@@ -64,7 +64,7 @@ func gistFilename(relPath string) string {
 		return "tags.json"
 	case "data/station_metadata.json":
 		return "metadata.json"
-	case "data/cache/search-history.json":
+	case "data/favorites/" + SystemFileSearchHistory:
 		return "search-history.json"
 	}
 	// data/favorites/Jazz.json → fav--Jazz.json
@@ -93,7 +93,7 @@ func gistFilenameToRelPath(name string) string {
 	case "metadata.json":
 		return filepath.Join("data", "station_metadata.json")
 	case "search-history.json":
-		return filepath.Join("data", "cache", "search-history.json")
+		return filepath.Join("data", "favorites", SystemFileSearchHistory)
 	}
 	if strings.HasPrefix(name, "fav--") {
 		base := strings.TrimPrefix(name, "fav--")
@@ -149,7 +149,7 @@ func (m *GistSyncManager) AvailableCategories() (SyncPrefs, error) {
 		case relPath == filepath.Join("data", "station_metadata.json") ||
 			relPath == filepath.Join("data", "station_tags.json"):
 			prefs.MetadataTags = true
-		case relPath == filepath.Join("data", "cache", "search-history.json"):
+		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
 			prefs.SearchHistory = true
 		}
 	}
