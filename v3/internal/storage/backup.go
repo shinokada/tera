@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -66,14 +67,25 @@ func (b *BackupManager) categoryFiles(prefs SyncPrefs) []string {
 	if prefs.Settings {
 		files = append(files, "config.yaml")
 	}
-	if prefs.Favorites {
-		// Add all *.json files from data/favorites/
+	if prefs.Favorites || prefs.SearchHistory {
+		// Add *.json files from data/favorites/, routing search-history.json
+		// to SearchHistory and all others to Favorites.
 		favDir := filepath.Join(b.configDir, "data", "favorites")
 		entries, err := os.ReadDir(favDir)
 		if err == nil {
 			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
-					files = append(files, filepath.Join("data", "favorites", e.Name()))
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+					continue
+				}
+				relPath := filepath.Join("data", "favorites", e.Name())
+				if e.Name() == SystemFileSearchHistory {
+					if prefs.SearchHistory {
+						files = append(files, relPath)
+					}
+					continue
+				}
+				if prefs.Favorites {
+					files = append(files, relPath)
 				}
 			}
 		}
@@ -93,56 +105,90 @@ func (b *BackupManager) categoryFiles(prefs SyncPrefs) []string {
 			filepath.Join("data", "station_tags.json"),
 		)
 	}
-	if prefs.SearchHistory {
-		files = append(files, filepath.Join("data", "cache", "search-history.json"))
-	}
 
 	return files
 }
 
 // Export creates a zip archive at destPath containing the files selected by prefs.
 // Only files that actually exist on disk are included; missing files are silently skipped.
+// Uses a temp-file-and-rename strategy so a failed export never corrupts an
+// existing backup at the destination path.
 func (b *BackupManager) Export(destPath string, prefs SyncPrefs) (err error) {
 	resolved, err := ResolveBackupPath(destPath)
 	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(resolved), 0755); err != nil {
+	destDir := filepath.Dir(resolved)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	zipFile, err := os.Create(resolved)
+	// Write to a temp file in the same directory so the rename is atomic.
+	tmpFile, err := os.CreateTemp(destDir, ".tera-backup-*.zip.tmp")
 	if err != nil {
-		return fmt.Errorf("failed to create zip file: %w", err)
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
+	tmpName := tmpFile.Name()
 
-	w := zip.NewWriter(zipFile)
+	// On any error path, remove the temp file.
 	defer func() {
-		if closeErr := w.Close(); err == nil && closeErr != nil {
-			err = fmt.Errorf("failed to finalize zip archive: %w", closeErr)
-		}
-		if closeErr := zipFile.Close(); err == nil && closeErr != nil {
-			err = fmt.Errorf("failed to close zip file: %w", closeErr)
+		if err != nil {
+			_ = os.Remove(tmpName)
 		}
 	}()
 
-	for _, relPath := range b.categoryFiles(prefs) {
-		absPath := filepath.Join(b.configDir, relPath)
-		if _, err := os.Stat(absPath); os.IsNotExist(err) {
-			continue // skip missing files silently
+	w := zip.NewWriter(tmpFile)
+	writeErr := func() error {
+		for _, relPath := range b.categoryFiles(prefs) {
+			absPath := filepath.Join(b.configDir, relPath)
+			if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
+				continue // skip missing files silently
+			}
+			if addErr := addFileToZip(w, absPath, relPath); addErr != nil {
+				return fmt.Errorf("failed to add %s to archive: %w", relPath, addErr)
+			}
 		}
-
-		if err := addFileToZip(w, absPath, relPath); err != nil {
-			return fmt.Errorf("failed to add %s to archive: %w", relPath, err)
-		}
+		return nil
+	}()
+	if writeErr != nil {
+		_ = w.Close()
+		_ = tmpFile.Close()
+		return writeErr
+	}
+	if err = w.Close(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to finalize zip archive: %w", err)
+	}
+	if err = tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
+	// Atomically replace destination.
+	if err = os.Rename(tmpName, resolved); err != nil {
+		return fmt.Errorf("failed to finalize backup file: %w", err)
+	}
 	return nil
+}
+
+// cleanArchiveEntryName normalises a raw ZIP entry name to a clean forward-slash
+// path and rejects anything that is absolute or starts with a traversal segment.
+// This must be called before zipEntryWanted so that category matching always
+// sees the canonical form of the name, preventing crafted names like
+// "data/favorites/../../config.yaml" from matching the wrong category.
+func cleanArchiveEntryName(name string) (string, error) {
+	cleaned := path.Clean(filepath.ToSlash(name))
+	if cleaned == "." || cleaned == ".." ||
+		strings.HasPrefix(cleaned, "../") ||
+		strings.HasPrefix(cleaned, "/") {
+		return "", fmt.Errorf("invalid archive entry %q", name)
+	}
+	return cleaned, nil
 }
 
 // archiveEntryPath safely resolves a zip entry name relative to baseDir.
 // It rejects absolute paths and any traversal that would escape baseDir (zip-slip).
+// Callers should pre-clean the name with cleanArchiveEntryName first.
 func archiveEntryPath(baseDir, slashName string) (string, error) {
 	cleaned := filepath.Clean(filepath.FromSlash(slashName))
 	if filepath.IsAbs(cleaned) {
@@ -168,7 +214,13 @@ func (b *BackupManager) ConflictingFiles(srcPath string, prefs SyncPrefs) ([]str
 
 	var conflicts []string
 	for _, f := range r.File {
-		slashName := filepath.ToSlash(f.Name)
+		slashName, err := cleanArchiveEntryName(f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if f.FileInfo().IsDir() {
+			continue
+		}
 		if !zipEntryWanted(slashName, prefs) {
 			continue
 		}
@@ -208,7 +260,13 @@ func (b *BackupManager) Restore(srcPath string, prefs SyncPrefs, force bool) err
 	// categoryFiles on the (possibly empty) restore target, which would miss
 	// favorites because the target dir contains no files yet to enumerate.
 	for _, f := range r.File {
-		slashName := filepath.ToSlash(f.Name)
+		slashName, err := cleanArchiveEntryName(f.Name)
+		if err != nil {
+			return err
+		}
+		if f.FileInfo().IsDir() {
+			continue
+		}
 		if !zipEntryWanted(slashName, prefs) {
 			continue
 		}
@@ -227,10 +285,13 @@ func (b *BackupManager) Restore(srcPath string, prefs SyncPrefs, force bool) err
 
 // zipEntryWanted reports whether a zip entry (named with forward slashes)
 // belongs to one of the selected categories.
+// slashName must already be cleaned via cleanArchiveEntryName.
 func zipEntryWanted(slashName string, prefs SyncPrefs) bool {
 	switch {
 	case slashName == "config.yaml":
 		return prefs.Settings
+	case slashName == "data/favorites/"+SystemFileSearchHistory:
+		return prefs.SearchHistory
 	case strings.HasPrefix(slashName, "data/favorites/"):
 		return prefs.Favorites
 	case slashName == "data/station_ratings.json" || slashName == "data/voted_stations.json":
@@ -239,8 +300,6 @@ func zipEntryWanted(slashName string, prefs SyncPrefs) bool {
 		return prefs.Blocklist
 	case slashName == "data/station_metadata.json" || slashName == "data/station_tags.json":
 		return prefs.MetadataTags
-	case slashName == "data/cache/search-history.json":
-		return prefs.SearchHistory
 	}
 	return false
 }
@@ -255,10 +314,15 @@ func (b *BackupManager) ListArchiveCategories(srcPath string) (SyncPrefs, error)
 
 	var prefs SyncPrefs
 	for _, f := range r.File {
-		name := filepath.ToSlash(f.Name)
+		name, err := cleanArchiveEntryName(f.Name)
+		if err != nil {
+			return SyncPrefs{}, err
+		}
 		switch {
 		case name == "config.yaml":
 			prefs.Settings = true
+		case name == "data/favorites/"+SystemFileSearchHistory:
+			prefs.SearchHistory = true
 		case strings.HasPrefix(name, "data/favorites/"):
 			prefs.Favorites = true
 		case name == "data/station_ratings.json" || name == "data/voted_stations.json":
@@ -267,8 +331,6 @@ func (b *BackupManager) ListArchiveCategories(srcPath string) (SyncPrefs, error)
 			prefs.Blocklist = true
 		case name == "data/station_metadata.json" || name == "data/station_tags.json":
 			prefs.MetadataTags = true
-		case name == "data/cache/search-history.json":
-			prefs.SearchHistory = true
 		}
 	}
 	return prefs, nil

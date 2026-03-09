@@ -506,6 +506,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			switch keyMsg.String() {
 			case "enter":
+				m.state = gistStateSyncProgress
 				return m, m.doExportZipCmd(m.textInput.Value(), m.pendingPrefs)
 			case "esc":
 				m.state = gistStateExportChecklist
@@ -820,11 +821,12 @@ func checklistToPrefs(items []components.ChecklistItem) storage.SyncPrefs {
 // handleChecklistConfirmed dispatches based on the current checklist state.
 func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg) (tea.Model, tea.Cmd) {
 	prefs := checklistToPrefs(msg.Items)
-	m.syncPrefs = prefs
-	_ = storage.SaveSyncPrefs(prefs)
 
 	switch m.state {
 	case gistStateExportChecklist:
+		// Persist selections — this is a write/export flow, not a restore.
+		m.syncPrefs = prefs
+		_ = storage.SaveSyncPrefs(prefs)
 		// Move to path prompt
 		defaultPath, _ := storage.DefaultBackupPath()
 		m.textInput.Placeholder = "Save location"
@@ -840,7 +842,10 @@ func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg
 		return m, m.doCheckZipConflictsCmd(m.pendingZipPath, prefs)
 
 	case gistStateSyncGistChecklist:
+		m.syncPrefs = prefs
+		_ = storage.SaveSyncPrefs(prefs)
 		m.pendingPrefs = prefs
+		m.state = gistStateSyncProgress
 		return m, m.doSyncToGistCmd(prefs)
 
 	case gistStateRestoreGistChecklist:
