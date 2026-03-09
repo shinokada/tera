@@ -7,13 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.7.1] - 2026-03-09
 
-### Changed
-- Appearance settings now read and write exclusively to `config.yaml` (`ui.appearance` section) instead of the separate `appearance_config.yaml` file.
-- `appearance_config.yaml` is no longer used by the application and can be safely deleted.
+### Fixed
+- Fixed a regression where appearance settings were still being read from and written to the obsolete `appearance_config.yaml` file instead of `config.yaml`. Changes made in Settings were saved to `config.yaml` correctly but the header reloaded stale values from the old file, causing the UI to not reflect updates until restart.
+- Fixed a regression where malformed appearance values in `config.yaml` (invalid mode, out-of-range width, unknown alignment) were not validated on load, allowing them to reach rendering directly.
 
 ### Internal
 - `appearance_settings.go`: switched `LoadAppearanceConfig` → `LoadAppearanceConfigFromUnified` and `SaveAppearanceConfig` → `SaveAppearanceConfigToUnified`.
-- `header.go`: switched both `NewHeaderRenderer()` and `Reload()` to use `LoadAppearanceConfigFromUnified`, fixing a bug where saving appearance settings would immediately reload stale data from the old `appearance_config.yaml`.
+- `header.go`: switched both `NewHeaderRenderer()` and `Reload()` to use `LoadAppearanceConfigFromUnified`; added `Validate()` call after load to preserve the bounds and normalisation that the old loader enforced.
 - `storage/appearance_config.go` is now dead code and will be removed in a future cleanup.
 
 ## [3.7.0] - 2026-03-08

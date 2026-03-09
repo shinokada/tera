@@ -17,6 +17,8 @@ func NewHeaderRenderer() *HeaderRenderer {
 	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
 		config = storage.DefaultAppearanceConfig()
+	} else if err := config.Validate(); err != nil {
+		config = storage.DefaultAppearanceConfig()
 	}
 
 	return &HeaderRenderer{
@@ -149,6 +151,9 @@ func (h *HeaderRenderer) styleASCII(art string) string {
 func (h *HeaderRenderer) Reload() error {
 	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
+		return err
+	}
+	if err := config.Validate(); err != nil {
 		return err
 	}
 	h.config = config
