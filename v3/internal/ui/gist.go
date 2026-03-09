@@ -53,7 +53,7 @@ type overwriteSource int
 
 const (
 	overwriteSourceZip  overwriteSource = iota
-	overwriteSourceGist overwriteSource = iota
+	overwriteSourceGist
 )
 
 // ── Internal message types ─────────────────────────────────────────────────────
