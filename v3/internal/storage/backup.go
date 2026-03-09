@@ -359,7 +359,7 @@ func addFileToZip(w *zip.Writer, absPath, relPath string) error {
 
 // extractFileFromZip extracts a single zip.File entry to destPath,
 // creating parent directories as needed.
-func extractFileFromZip(f *zip.File, destPath string) error {
+func extractFileFromZip(f *zip.File, destPath string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
@@ -374,7 +374,11 @@ func extractFileFromZip(f *zip.File, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer func() { _ = out.Close() }()
+	defer func() {
+		if closeErr := out.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("failed to close file: %w", closeErr)
+		}
+	}()
 
 	if _, err := io.Copy(out, rc); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)

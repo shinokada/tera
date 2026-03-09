@@ -15,7 +15,6 @@ func setupBackupDir(t *testing.T) (configDir string, bm *BackupManager) {
 
 	dirs := []string{
 		filepath.Join(configDir, "data", "favorites"),
-		filepath.Join(configDir, "data", "cache"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0755); err != nil {
@@ -24,15 +23,15 @@ func setupBackupDir(t *testing.T) (configDir string, bm *BackupManager) {
 	}
 
 	files := map[string]string{
-		"config.yaml":                          "version: 3.0\n",
-		"data/blocklist.json":                  `{"stations":[]}`,
-		"data/voted_stations.json":             `{"stations":[]}`,
-		"data/station_ratings.json":            `{}`,
-		"data/station_tags.json":               `{}`,
-		"data/station_metadata.json":           `{}`,
-		"data/cache/search-history.json":       `{"search_items":[]}`,
-		"data/favorites/Jazz.json":             `[]`,
-		"data/favorites/Pops.json":             `[]`,
+		"config.yaml":                                 "version: 3.0\n",
+		"data/blocklist.json":                         `{"stations":[]}`,
+		"data/voted_stations.json":                    `{"stations":[]}`,
+		"data/station_ratings.json":                   `{}`,
+		"data/station_tags.json":                      `{}`,
+		"data/station_metadata.json":                  `{}`,
+		"data/favorites/search-history.json":          `{"search_items":[]}`,
+		"data/favorites/Jazz.json":                    `[]`,
+		"data/favorites/Pops.json":                    `[]`,
 	}
 	for rel, content := range files {
 		path := filepath.Join(configDir, filepath.FromSlash(rel))
@@ -85,7 +84,7 @@ func TestExport_AllCategories(t *testing.T) {
 		}
 	}
 	// Search history should be absent (default prefs have it off)
-	if _, ok := got["data/cache/search-history.json"]; ok {
+	if _, ok := got["data/favorites/search-history.json"]; ok {
 		t.Error("search-history.json should not be in archive when SearchHistory=false")
 	}
 }

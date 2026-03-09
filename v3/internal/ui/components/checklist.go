@@ -45,7 +45,6 @@ type ChecklistModel struct {
 	Title  string
 	Items  []ChecklistItem
 	cursor int
-	width  int
 }
 
 // NewChecklistModel creates a ChecklistModel with the given title and items.
@@ -56,10 +55,9 @@ func NewChecklistModel(title string, items []ChecklistItem) ChecklistModel {
 	}
 }
 
-// SetWidth sets the render width (used for padding and alignment).
-func (m *ChecklistModel) SetWidth(w int) {
-	m.width = w
-}
+// SetWidth is a no-op placeholder that keeps the call-site API stable.
+// Reserved for future width-constrained layout (truncation, wrapping).
+func (m *ChecklistModel) SetWidth(_ int) {}
 
 // SetItems replaces the item list and resets the cursor.
 func (m *ChecklistModel) SetItems(items []ChecklistItem) {
