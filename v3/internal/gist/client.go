@@ -55,20 +55,30 @@ type GistFileUpdate struct {
 	Content *string `json:"content"`
 }
 
-// CreateGist creates a new gist with the provided files
-// If public is true, the gist will be publicly visible; otherwise it will be secret
-func (c *Client) CreateGist(description string, files map[string]string, public bool) (*Gist, error) {
-	gistFiles := make(map[string]GistFile)
+// gistFileCreate is the per-file payload for POST /gists.
+// Content is a plain string without omitempty so that empty files are
+// serialised as {"content":""} rather than being silently dropped.
+type gistFileCreate struct {
+	Content string `json:"content"`
+}
+
+// CreateGist creates a new gist with the provided files.
+// If public is true, the gist will be publicly visible; otherwise it will be
+// secret. Each map value is a pointer: nil entries are skipped (deletion has
+// no meaning on create), non-nil pointers set the file content.
+func (c *Client) CreateGist(description string, files map[string]*string, public bool) (*Gist, error) {
+	gistFiles := make(map[string]gistFileCreate)
 	for filename, content := range files {
-		gistFiles[filename] = GistFile{
-			Content: content,
+		if content == nil {
+			continue // nothing to create for a nil entry
 		}
+		gistFiles[filename] = gistFileCreate{Content: *content}
 	}
 
 	payload := struct {
-		Description string              `json:"description"`
-		Public      bool                `json:"public"`
-		Files       map[string]GistFile `json:"files"`
+		Description string                     `json:"description"`
+		Public      bool                       `json:"public"`
+		Files       map[string]gistFileCreate  `json:"files"`
 	}{
 		Description: description,
 		Public:      public,

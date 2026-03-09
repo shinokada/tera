@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -202,12 +203,7 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		if len(present) == 0 {
 			return fmt.Errorf("no files found to push for the selected categories")
 		}
-		// CreateGist takes map[string]string; extract values for the initial create.
-		initFiles := make(map[string]string, len(present))
-		for name, ptr := range present {
-			initFiles[name] = *ptr
-		}
-		_, err = m.client.CreateGist(backupGistDescription, initFiles, false)
+		_, err = m.client.CreateGist(backupGistDescription, present, false)
 		return err
 	}
 
@@ -257,6 +253,7 @@ func (m *GistSyncManager) ConflictingGistFiles(g *gist.Gist, prefs SyncPrefs) ([
 			conflicts = append(conflicts, relPath)
 		}
 	}
+	sort.Strings(conflicts)
 	return conflicts, nil
 }
 
