@@ -49,8 +49,8 @@ type GistFile struct {
 }
 
 // GistFileUpdate wraps the content field for PATCH requests.
-// A nil pointer signals deletion (marshals to null, which removes the file);
-// a non-nil pointer sets or replaces the content.
+// Deletion is represented by a nil file entry in the parent files map;
+// a non-nil GistFileUpdate sets or replaces the file content.
 type GistFileUpdate struct {
 	Content *string `json:"content"`
 }
