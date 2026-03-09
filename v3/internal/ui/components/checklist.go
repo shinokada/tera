@@ -89,7 +89,12 @@ func (m ChecklistModel) AnyChecked() bool {
 }
 
 // allChecked returns true if every item is checked.
+// Returns false for an empty list so that 'toggle all' on an empty checklist
+// selects all (zero) items rather than deselecting them.
 func (m ChecklistModel) allChecked() bool {
+	if len(m.Items) == 0 {
+		return false
+	}
 	for _, item := range m.Items {
 		if !item.Checked {
 			return false

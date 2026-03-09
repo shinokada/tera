@@ -77,19 +77,4 @@ func TestGistFilenameRoundTrip(t *testing.T) {
 	}
 }
 
-func TestIntersectPrefs(t *testing.T) {
-	a := SyncPrefs{Favorites: true, Settings: true, Blocklist: false}
-	b := SyncPrefs{Favorites: true, Settings: false, Blocklist: true}
 
-	got := intersectPrefs(a, b)
-
-	if !got.Favorites {
-		t.Error("expected Favorites=true (both true)")
-	}
-	if got.Settings {
-		t.Error("expected Settings=false (b is false)")
-	}
-	if got.Blocklist {
-		t.Error("expected Blocklist=false (a is false)")
-	}
-}

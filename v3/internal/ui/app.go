@@ -1157,7 +1157,7 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 9: // Gist Management
+	case 9: // Sync & Backup
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}

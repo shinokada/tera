@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -230,16 +231,16 @@ func TestView_NonEmpty(t *testing.T) {
 	if v == "" {
 		t.Error("View should return non-empty string")
 	}
-	if !contains(v, "Pick categories") {
+	if !strings.Contains(v, "Pick categories") {
 		t.Error("View should contain the title")
 	}
-	if !contains(v, "Favorites") {
+	if !strings.Contains(v, "Favorites") {
 		t.Error("View should contain item label")
 	}
-	if !contains(v, "[x]") {
+	if !strings.Contains(v, "[x]") {
 		t.Error("View should show [x] for checked items")
 	}
-	if !contains(v, "[ ]") {
+	if !strings.Contains(v, "[ ]") {
 		t.Error("View should show [ ] for unchecked items")
 	}
 }
@@ -249,16 +250,4 @@ func TestInit_ReturnsNil(t *testing.T) {
 	if m.Init() != nil {
 		t.Error("Init should return nil")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		func() bool {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-			return false
-		}())
 }
