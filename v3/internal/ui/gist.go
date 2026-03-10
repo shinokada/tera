@@ -632,6 +632,11 @@ func (m GistModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messageIsError = true
 			return m, nil
 		}
+		if m.gistSyncMgr == nil {
+			m.message = "Gist sync unavailable — check token setup."
+			m.messageIsError = true
+			return m, nil
+		}
 		m.checklist = m.buildDefaultChecklist("Select categories to sync to Gist:")
 		m.state = gistStateSyncGistChecklist
 		return m, nil
@@ -639,6 +644,11 @@ func (m GistModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case 9: // Restore all data from Gist
 		if m.token == "" {
 			m.message = "No token configured. Set up a token first."
+			m.messageIsError = true
+			return m, nil
+		}
+		if m.gistSyncMgr == nil {
+			m.message = "Gist sync unavailable — check token setup."
 			m.messageIsError = true
 			return m, nil
 		}
