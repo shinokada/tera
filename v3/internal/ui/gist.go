@@ -826,7 +826,10 @@ func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg
 	case gistStateExportChecklist:
 		// Persist selections — this is a write/export flow, not a restore.
 		m.syncPrefs = prefs
-		_ = storage.SaveSyncPrefs(prefs)
+		if err := storage.SaveSyncPrefs(prefs); err != nil {
+			m.message = fmt.Sprintf("Warning: could not save category preferences: %v", err)
+			m.messageIsError = true
+		}
 		// Move to path prompt
 		defaultPath, _ := storage.DefaultBackupPath()
 		m.textInput.Placeholder = "Save location"
@@ -843,7 +846,10 @@ func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg
 
 	case gistStateSyncGistChecklist:
 		m.syncPrefs = prefs
-		_ = storage.SaveSyncPrefs(prefs)
+		if err := storage.SaveSyncPrefs(prefs); err != nil {
+			m.message = fmt.Sprintf("Warning: could not save category preferences: %v", err)
+			m.messageIsError = true
+		}
 		m.pendingPrefs = prefs
 		m.state = gistStateSyncProgress
 		return m, m.doSyncToGistCmd(prefs)
