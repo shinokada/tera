@@ -88,7 +88,7 @@ type ShuffleConfig struct {
 type PlayHistoryConfig struct {
 	Enabled        bool `yaml:"enabled"`          // Show Recently Played section in main menu (default: true)
 	Size           int  `yaml:"size"`             // Stations tracked/stored in history, range [1, 20] (default: 5)
-	DisplayRows    int  `yaml:"display_rows"`     // Max rows visible at once in main menu, range [1, 10] (default: 0 = auto)
+	DisplayRows    int  `yaml:"display_rows"`     // Max rows visible at once in main menu, range [0, 10] (default: 0 = auto)
 	AllowDuplicate bool `yaml:"allow_duplicate"`  // Allow same station to appear more than once (default: false)
 }
 

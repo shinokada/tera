@@ -1532,9 +1532,9 @@ func (a *App) viewMainMenu() string {
 			visibleRP = len(a.recentlyPlayed)
 		}
 
-		// Cache the visible window size so key-event handlers can pass it to
-		// updateRPViewOffset, keeping navigation consistent with the actual
-		// on-screen layout without waiting for the next View() call.
+		// NOTE: We mutate state here (unusual in View) because the accurate
+		// visible window size is only known at render time and must be cached
+		// for key-event handlers to use during navigation.
 		a.rpVisibleWindow = visibleRP
 		// Keep viewport in sync with cursor now that we know the window size.
 		a.updateRPViewOffset(visibleRP)
@@ -1542,6 +1542,12 @@ func (a *App) viewMainMenu() string {
 		content.WriteString("\n")
 		content.WriteString(quickFavoritesStyle().Render("─── Recently Played ───"))
 		content.WriteString("\n")
+
+		// Scroll indicator: show how many entries are hidden above.
+		if a.rpViewOffset > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↑ %d more (↑/k to scroll)", a.rpViewOffset)))
+			content.WriteString("\n")
+		}
 
 		rpShortcutStart := 10 + len(a.quickFavorites)
 		end := a.rpViewOffset + visibleRP
