@@ -7,9 +7,9 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/storage"
-	"github.com/shinokada/tera/v2/internal/theme"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/theme"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
 // Shared configuration for reconnect delay options

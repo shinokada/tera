@@ -51,7 +51,7 @@ nfpms:
     ids:
       - tera
     vendor: shinokada
-    homepage: https://github.com/shinokada/tera
+    homepage: https://tera.codewithshin.com/
     maintainer: shinokada <shinokada@users.noreply.github.com>
     description: Terminal-based internet radio player
     license: MIT
@@ -88,7 +88,7 @@ brews:
       name: homebrew-tera
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: https://github.com/shinokada/tera
+    homepage: https://tera.codewithshin.com/
     description: Terminal-based internet radio player
     license: MIT
     dependencies:
@@ -105,7 +105,8 @@ scoops:
       owner: shinokada
       name: scoop-bucket
       token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
-    homepage: https://github.com/shinokada/tera
+    folder: bucket
+    homepage: https://tera.codewithshin.com/
     description: Terminal-based internet radio player
     license: MIT
 
@@ -152,14 +153,16 @@ release:
     scoop install tera
     ```
 
+    #### Go
+    ```sh
+    go install github.com/shinokada/tera/v3/cmd/tera@latest
+    ```
+
     #### Manual Installation
     ```sh
     # macOS/Linux - Download and extract, then move to PATH
     tar -xzf tera_{{.Version}}_<os>_<arch>.tar.gz
     sudo mv tera /usr/local/bin/
-    
-    # Or install via Go
-    go install github.com/shinokada/tera/v2/cmd/tera@{{.Version}}
     ```
   footer: |
     ---

@@ -1,35 +1,44 @@
 package player
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/storage"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/storage"
 )
 
 // MPVPlayer manages the MPV process for playing radio streams
 type MPVPlayer struct {
-	cmd          *exec.Cmd
-	playing      bool
-	paused       bool // Pause state
-	station      *api.Station
-	volume       int // Current volume (0-100)
-	muted        bool
-	lastVolume   int // Volume before mute
-	mu           sync.Mutex
-	stopCh       chan struct{}
-	socketPath   string     // IPC socket path for runtime control
-	conn         net.Conn   // Connection to IPC socket
-	trackHistory []string   // Last 5 track names
-	currentTrack string     // Current playing track
-	trackMu      sync.Mutex // Protect track history
+	cmd             *exec.Cmd
+	playing         bool
+	paused          bool // Pause state
+	station         *api.Station
+	volume          int // Current volume (0-100)
+	muted           bool
+	lastVolume      int // Volume before mute
+	mu              sync.Mutex
+	stopCh          chan struct{}
+	socketPath      string                   // IPC socket path for runtime control
+	conn            net.Conn                 // Connection to IPC socket
+	connReader      *bufio.Reader            // Buffered reader for newline-delimited IPC responses
+	nextRequestID   atomic.Uint64            // Monotonically increasing IPC request ID
+	trackHistory    []string                 // Last 5 track names
+	currentTrack    string                   // Current playing track
+	trackMu         sync.Mutex               // Protect track history
+	metadataManager *storage.MetadataManager // Track play statistics
 }
 
 // NewMPVPlayer creates a new MPV player instance
@@ -70,11 +79,16 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		volumeToUse = 100
 	}
 
-	// Create unique socket path for IPC
-	p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
-
-	// Remove any existing socket file
-	_ = os.Remove(p.socketPath)
+	// Create unique socket path for IPC (platform-specific)
+	if runtime.GOOS == "windows" {
+		// Windows: Use TCP socket for IPC (more reliable than named pipes)
+		p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+os.Getpid()%50000)
+	} else {
+		// Unix/Linux/macOS use Unix sockets
+		p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
+		// Remove any existing socket file (Unix only)
+		_ = os.Remove(p.socketPath)
+	}
 
 	// Load connection configuration
 	connConfig, err := storage.LoadConnectionConfig()
@@ -114,8 +128,15 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		args = append(args, "--no-cache")
 	}
 
+	// Validate URL scheme before passing to mpv to prevent local file access
+	// via file:// or other unexpected schemes from a malicious API response.
+	safeURL, err := validateStreamURL(station.URLResolved)
+	if err != nil {
+		return err
+	}
+
 	// Add URL as final argument
-	args = append(args, station.URLResolved)
+	args = append(args, safeURL)
 
 	// Create mpv command
 	p.cmd = exec.Command("mpv", args...)
@@ -136,6 +157,11 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 	p.paused = false
 	p.station = station
 	p.stopCh = make(chan struct{})
+
+	// Record play start for statistics (errors are non-fatal)
+	if p.metadataManager != nil {
+		_ = p.metadataManager.StartPlay(station)
+	}
 
 	// Connect to IPC socket (with retry for socket creation delay)
 	go p.connectToSocket()
@@ -163,7 +189,16 @@ func (p *MPVPlayer) connectToSocket() {
 		socketPath := p.socketPath
 		p.mu.Unlock()
 
-		conn, err := net.Dial("unix", socketPath)
+		// Platform-specific connection
+		var conn net.Conn
+		var err error
+		if runtime.GOOS == "windows" {
+			// On Windows, connect via TCP
+			conn, err = net.Dial("tcp", socketPath)
+		} else {
+			// On Unix-like systems, connect via Unix socket
+			conn, err = net.Dial("unix", socketPath)
+		}
 		if err == nil {
 			p.mu.Lock()
 			// Guard against stale IPC connections when Play restarts quickly
@@ -173,6 +208,7 @@ func (p *MPVPlayer) connectToSocket() {
 				return
 			}
 			p.conn = conn
+			p.connReader = bufio.NewReader(conn)
 			currentVol := p.volume
 			muted := p.muted
 			// Sync volume state to mpv after connection establishes
@@ -186,43 +222,77 @@ func (p *MPVPlayer) connectToSocket() {
 	}
 }
 
-// sendCommand sends a JSON command to mpv via IPC
+// sendCommand sends a JSON command to mpv via IPC.
+// It tags every outbound message with a unique request_id and reads back
+// lines until it finds the matching reply, discarding unrelated events
+// (e.g. property-change notifications, or replies to prior set_property
+// calls whose responses were never consumed).
+// Caller must hold p.mu.
 func (p *MPVPlayer) sendCommand(command []interface{}) error {
-	if p.conn == nil {
+	if p.conn == nil || p.connReader == nil {
 		return fmt.Errorf("not connected to mpv")
 	}
 
+	reqID := p.nextRequestID.Add(1)
 	msg := map[string]interface{}{
-		"command": command,
+		"command":    command,
+		"request_id": reqID,
 	}
 
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-
-	// Add newline as message terminator
 	data = append(data, '\n')
 
-	// Prevent UI stalls on blocked IPC writes
+	// Prevent UI stalls on blocked IPC writes.
 	_ = p.conn.SetWriteDeadline(time.Now().Add(250 * time.Millisecond))
 	defer func() { _ = p.conn.SetWriteDeadline(time.Time{}) }()
 
-	_, err = p.conn.Write(data)
-	return err
+	if _, err := p.conn.Write(data); err != nil {
+		return err
+	}
+
+	// Drain the reply for this command so it is never left in the buffer
+	// to confuse a subsequent getProperty call.
+	_ = p.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+	defer func() { _ = p.conn.SetReadDeadline(time.Time{}) }()
+
+	for {
+		line, err := p.connReader.ReadString('\n')
+		if err != nil {
+			return err
+		}
+		var reply ipcReply
+		if jsonErr := json.Unmarshal([]byte(line), &reply); jsonErr != nil {
+			continue
+		}
+		if reply.RequestID == reqID {
+			if reply.Error != "" && reply.Error != "success" {
+				return fmt.Errorf("mpv error: %s", reply.Error)
+			}
+			return nil
+		}
+		// Discard unrelated events/replies and keep reading.
+	}
 }
 
-// getProperty retrieves a property value from mpv via IPC
+// getProperty retrieves a property value from mpv via IPC.
+// It tags every request with a unique request_id and skips lines until
+// the matching reply arrives, so stale set_property responses left in the
+// buffer by sendCommand can never corrupt the returned value.
 func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.conn == nil {
+	if p.conn == nil || p.connReader == nil {
 		return nil, fmt.Errorf("not connected to mpv")
 	}
 
+	reqID := p.nextRequestID.Add(1)
 	msg := map[string]interface{}{
-		"command": []interface{}{"get_property", name},
+		"command":    []interface{}{"get_property", name},
+		"request_id": reqID,
 	}
 
 	data, err := json.Marshal(msg)
@@ -231,7 +301,7 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 	}
 	data = append(data, '\n')
 
-	// Set deadline for write and read
+	// Set deadline for write and read.
 	_ = p.conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
 	defer func() { _ = p.conn.SetDeadline(time.Time{}) }()
 
@@ -239,26 +309,59 @@ func (p *MPVPlayer) getProperty(name string) (interface{}, error) {
 		return nil, err
 	}
 
-	// Read response
-	buf := make([]byte, 1024)
-	n, err := p.conn.Read(buf)
-	if err != nil {
-		return nil, err
+	// Read lines until we find the reply that matches our request_id,
+	// discarding unrelated events (property notifications, prior command acks).
+	for {
+		line, err := p.connReader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		var reply ipcReply
+		if jsonErr := json.Unmarshal([]byte(line), &reply); jsonErr != nil {
+			continue
+		}
+		if reply.RequestID != reqID {
+			continue // discard: belongs to a different command or is an event
+		}
+		if reply.Error != "success" {
+			return nil, fmt.Errorf("mpv error: %s", reply.Error)
+		}
+		return reply.Data, nil
+	}
+}
+
+// ipcReply is the subset of fields present in every mpv IPC response line.
+type ipcReply struct {
+	RequestID uint64      `json:"request_id"`
+	Data      interface{} `json:"data"`
+	Error     string      `json:"error"`
+}
+
+// validateStreamURL checks that the URL uses a safe streaming scheme and
+// returns the trimmed, validated URL. This prevents a malicious or compromised
+// API response from supplying a file:// or fd:// URL that would cause mpv to
+// open local resources. A URL with leading/trailing whitespace is trimmed so
+// the sanitized value is forwarded to mpv rather than the raw input.
+func validateStreamURL(rawURL string) (string, error) {
+	cleaned := strings.TrimSpace(rawURL)
+	if cleaned == "" {
+		return "", fmt.Errorf("station URL is empty")
 	}
 
-	var resp struct {
-		Data  interface{} `json:"data"`
-		Error string      `json:"error"`
-	}
-	if err := json.Unmarshal(buf[:n], &resp); err != nil {
-		return nil, err
+	u, err := url.Parse(cleaned)
+	if err != nil || u.Scheme == "" {
+		return "", fmt.Errorf("station URL is invalid: %q", rawURL)
 	}
 
-	if resp.Error != "success" {
-		return nil, fmt.Errorf("mpv error: %s", resp.Error)
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "rtsp", "rtmp", "rtsps", "rtmps":
+		if u.Host == "" {
+			return "", fmt.Errorf("station URL must include a host: %q", rawURL)
+		}
+		return cleaned, nil
+	default:
+		return "", fmt.Errorf("station URL has disallowed scheme (must be http/https/rtsp/rtmp/rtsps/rtmps): %q", rawURL)
 	}
-
-	return resp.Data, nil
 }
 
 // GetAudioBitrate returns the current audio bitrate (useful for checking signal)
@@ -288,6 +391,14 @@ func (p *MPVPlayer) GetCurrentTrack() (string, error) {
 	}
 
 	return "", nil
+}
+
+// GetCachedTrack returns the current track name from the in-memory cache without IPC.
+// Use this in render paths to avoid potential UI jank from synchronous IPC calls.
+func (p *MPVPlayer) GetCachedTrack() string {
+	p.trackMu.Lock()
+	defer p.trackMu.Unlock()
+	return p.currentTrack
 }
 
 // GetTrackHistory returns the last 5 track names
@@ -372,30 +483,23 @@ func (p *MPVPlayer) Stop() error {
 	return p.stopInternal()
 }
 
-// stopInternal stops playback without locking (internal use)
-func (p *MPVPlayer) stopInternal() error {
+// cleanupResourcesLocked releases IPC connection, socket file, and all player
+// state fields. Must be called with p.mu already held.
+func (p *MPVPlayer) cleanupResourcesLocked() {
 	// Close IPC connection
 	if p.conn != nil {
 		_ = p.conn.Close()
 		p.conn = nil
+		p.connReader = nil
 	}
 
-	// Remove socket file
-	if p.socketPath != "" {
+	// Remove socket file (Unix only, Windows named pipes auto-cleanup)
+	if p.socketPath != "" && runtime.GOOS != "windows" {
 		_ = os.Remove(p.socketPath)
-		p.socketPath = ""
 	}
+	p.socketPath = ""
 
-	if p.cmd != nil && p.cmd.Process != nil {
-		// Send termination signal
-		if err := p.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to stop mpv: %w", err)
-		}
-		// Wait for process to finish
-		_ = p.cmd.Wait()
-	}
-
-	// Signal monitoring goroutine to stop
+	// Signal monitorMetadata goroutine to stop
 	close(p.stopCh)
 
 	p.playing = false
@@ -408,7 +512,44 @@ func (p *MPVPlayer) stopInternal() error {
 	p.trackHistory = []string{}
 	p.currentTrack = ""
 	p.trackMu.Unlock()
+}
 
+// stopInternal stops playback without locking (internal use)
+func (p *MPVPlayer) stopInternal() error {
+	// Record play stop for statistics (errors are non-fatal)
+	if p.metadataManager != nil && p.station != nil {
+		_ = p.metadataManager.StopPlay(p.station.StationUUID)
+	}
+
+	if p.cmd != nil && p.cmd.Process != nil {
+		// Send termination signal
+		// On Windows, Process.Kill() should work, but we add a timeout
+		if err := p.cmd.Process.Kill(); err != nil {
+			// Process may have already exited
+			if !errors.Is(err, os.ErrProcessDone) {
+				return fmt.Errorf("failed to stop mpv: %w", err)
+			}
+		}
+
+		// Wait for process to finish (with timeout to prevent hanging)
+		done := make(chan error, 1)
+		go func() {
+			done <- p.cmd.Wait()
+		}()
+
+		select {
+		case <-done:
+			// Process exited cleanly
+		case <-time.After(2 * time.Second):
+			// Process didn't exit in time, force kill on Windows
+			if runtime.GOOS == "windows" {
+				// Use taskkill as last resort on Windows
+				_ = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", p.cmd.Process.Pid)).Run()
+			}
+		}
+	}
+
+	p.cleanupResourcesLocked()
 	return nil
 }
 
@@ -564,6 +705,13 @@ func (p *MPVPlayer) IsPaused() bool {
 	return p.paused
 }
 
+// SetMetadataManager sets the metadata manager for play statistics tracking
+func (p *MPVPlayer) SetMetadataManager(mgr *storage.MetadataManager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.metadataManager = mgr
+}
+
 // monitor watches the mpv process and updates state when it exits
 func (p *MPVPlayer) monitor() {
 	p.mu.Lock()
@@ -586,14 +734,20 @@ func (p *MPVPlayer) monitor() {
 
 	select {
 	case <-done:
-		// Process ended (could be error or natural end)
+		// Process ended naturally (stream drop, network loss, error).
+		// Guard with p.playing: stopInternal may have raced us here (it kills the
+		// process, then calls cleanupResourcesLocked which sets playing=false and
+		// closes stopCh). If it won the lock first, skip to avoid a double-close.
 		p.mu.Lock()
-		p.playing = false
-		p.station = nil
-		p.cmd = nil
+		if p.playing {
+			if p.metadataManager != nil && p.station != nil {
+				_ = p.metadataManager.StopPlay(p.station.StationUUID)
+			}
+			p.cleanupResourcesLocked()
+		}
 		p.mu.Unlock()
 	case <-p.stopCh:
-		// Stop was called, process already killed
+		// Stop was called, process already killed and resources cleaned up
 		return
 	}
 }

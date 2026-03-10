@@ -914,7 +914,7 @@ Your favorites and user data are never touched during migration.
 ### Run from source
 ```sh
 git clone https://github.com/shinokada/tera.git
-cd tera/v3
+cd tera
 go run cmd/tera/main.go
 ```
 
@@ -925,7 +925,6 @@ go test ./... -v
 
 ### Build
 ```sh
-cd v3
 go build -o tera cmd/tera/main.go
 ```
 
@@ -946,5 +945,5 @@ Contributions are welcome! Please:
 - [GitHub Repository](https://github.com/shinokada/tera)
 - [Issue Tracker](https://github.com/shinokada/tera/issues)
 - [Radio Browser](https://www.radio-browser.info/) - Station database
-- [Migration Guide](v3/docs/MIGRATION.md) - Upgrading from v2 to v3
+- [Migration Guide](/docs/MIGRATION.md) - Upgrading from v2 to v3
 - [Changelog](CHANGELOG.md) - Version history

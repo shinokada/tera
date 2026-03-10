@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/storage"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
 type appearanceState int
@@ -58,7 +58,7 @@ type AppearanceSettingsModel struct {
 
 func NewAppearanceSettingsModel() AppearanceSettingsModel {
 	// Load current config
-	config, err := storage.LoadAppearanceConfig()
+	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
 		config = storage.DefaultAppearanceConfig()
 	}
@@ -260,6 +260,13 @@ func (m AppearanceSettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.helpModel.Toggle()
 			return m, nil
+
+		case "ctrl+d":
+			// Clear ASCII art when in the ASCII input state
+			if m.state == appearanceStateAsciiInput {
+				m.asciiInput.SetValue("")
+				return m, nil
+			}
 
 		case "enter":
 			return m.handleEnter()
@@ -490,7 +497,7 @@ func (m *AppearanceSettingsModel) saveConfig() (AppearanceSettingsModel, tea.Cmd
 	}
 
 	// Save config
-	if err := storage.SaveAppearanceConfig(m.config); err != nil {
+	if err := storage.SaveAppearanceConfigToUnified(m.config); err != nil {
 		m.showMessage(fmt.Sprintf("Failed to save: %v", err), false)
 		return *m, nil
 	}
@@ -586,7 +593,7 @@ func (m AppearanceSettingsModel) viewAsciiInput() string {
 	var b strings.Builder
 	b.WriteString("Paste or type your ASCII art (max 15 lines):\n\n")
 	b.WriteString(m.asciiInput.View())
-	b.WriteString("\n\nPress Enter to save, Esc to cancel")
+	b.WriteString("\n\nCtrl+D: Clear all • Enter: Save • Esc: Cancel")
 	b.WriteString("\nTip: Use https://patorjk.com/software/taag/ or 'figlet' to generate ASCII art")
 	return b.String()
 }

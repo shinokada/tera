@@ -10,9 +10,10 @@ import (
 
 // Message display durations (in seconds, 1 tick = 1 second)
 const (
-	messageDisplayShort  = 3  // 3 seconds
-	messageDisplayMedium = 5  // 5 seconds
-	messageDisplayLong   = 10 // 10 seconds
+	messageDisplayShort      = 3  // 3 seconds
+	messageDisplayMedium     = 5  // 5 seconds
+	messageDisplayLong       = 10 // 10 seconds
+	messageDisplayPersistent = -1 // never auto-clear; must be reset explicitly
 )
 
 // tickMsg is sent on a timer for countdown/animation purposes
@@ -20,6 +21,20 @@ type tickMsg time.Time
 
 // backToMainMsg signals return to main menu from any screen
 type backToMainMsg struct{}
+
+// sleepTimerActivateMsg is sent by a player screen when the user presses Z to set.
+type sleepTimerActivateMsg struct {
+	Minutes int
+}
+
+// sleepTimerCancelMsg is sent by a player screen when the user presses Z to cancel.
+type sleepTimerCancelMsg struct{}
+
+// sleepTimerExtendMsg is sent by a player screen when the user presses + to extend.
+// Minutes carries the extension duration so the handler does not need a hard-coded value.
+type sleepTimerExtendMsg struct {
+	Minutes int
+}
 
 // stationBlockedMsg is sent when a station is blocked
 type stationBlockedMsg struct {

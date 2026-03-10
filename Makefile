@@ -1,6 +1,6 @@
 .PHONY: build test clean clean-cache clean-all run lint lint-fix coverage install
 
-build:
+build: test
 	go build -o tera cmd/tera/main.go
 
 test:

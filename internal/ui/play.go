@@ -13,11 +13,11 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/blocklist"
-	"github.com/shinokada/tera/v2/internal/player"
-	"github.com/shinokada/tera/v2/internal/storage"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/player"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
 // playState represents the current state in the play screen
@@ -29,6 +29,9 @@ const (
 	playStatePlaying
 	playStateSavePrompt
 	playStateDeleteConfirm
+	playStateTagInput
+	playStateManageTags
+	playStateSleepTimer
 )
 
 // PlayModel represents the play screen
@@ -56,8 +59,23 @@ type PlayModel struct {
 	helpModel        components.HelpModel   // Help overlay
 	votedStations    *storage.VotedStations // Track voted stations
 	blocklistManager *blocklist.Manager
+	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
 	trackHistory     []string // Last 5 tracks played
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
+	// Tag fields
+	tagsManager *storage.TagsManager
+	tagRenderer *components.TagRenderer
+	tagInput    components.TagInput
+	manageTags  components.ManageTags
+	// Sleep timer fields
+	sleepTimerDialog components.SleepTimerDialog
+	dataPath         string // for loading last-used duration preference
+	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
+	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -73,6 +91,7 @@ func (i playListItem) Description() string { return "" }
 type stationListItem struct {
 	station   api.Station
 	isBlocked bool
+	tagPills  string // pre-rendered tag pills (empty if no tags)
 }
 
 func (i stationListItem) FilterValue() string { return i.station.Name }
@@ -94,7 +113,11 @@ func (i stationListItem) Title() string {
 		}
 		parts = append(parts, codecInfo)
 	}
-	return strings.Join(parts, " • ")
+	line := strings.Join(parts, " • ")
+	if i.tagPills != "" {
+		line += "  " + i.tagPills
+	}
+	return line
 }
 func (i stationListItem) Description() string {
 	// Return empty to show single line
@@ -124,6 +147,7 @@ func NewPlayModel(favoritePath string, blocklistManager *blocklist.Manager) Play
 		helpModel:        components.NewHelpModel(components.CreateFavoritesHelp()),
 		votedStations:    votedStations,
 		blocklistManager: blocklistManager,
+		tagRenderer:      components.NewTagRenderer(),
 	}
 }
 
@@ -153,14 +177,27 @@ func (m PlayModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cmd
 			return nil
 		}
 
+		// Check for audio bitrate
 		bitrate, err := m.player.GetAudioBitrate()
 		if err == nil && bitrate > 0 {
-			// Signal detected!
+			// Signal detected via bitrate!
+			return playbackStartedMsg{}
+		}
+
+		// Also check for media-title as fallback (some streams don't report bitrate)
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" {
+			// Signal detected via media title!
 			return playbackStartedMsg{}
 		}
 
 		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
-			return favoritesPlaybackStalledMsg{station: station}
+			// Only report stalled if the process actually died.
+			// IPC checks can fail while audio is playing (slow socket,
+			// buffering, missing metadata), so trust IsPlaying() here.
+			if !m.player.IsPlaying() {
+				return favoritesPlaybackStalledMsg{station: station}
+			}
+			return playbackStartedMsg{}
 		}
 
 		return favoritesCheckSignalMsg{station: station, attempt: attempt + 1}
@@ -284,17 +321,20 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSavePrompt(msg)
 		case playStateDeleteConfirm:
 			return m.updateDeleteConfirm(msg)
+		case playStateTagInput:
+			return m.updateTagInput(msg)
+		case playStateManageTags:
+			return m.updateManageTags(msg)
+		case playStateSleepTimer:
+			return m.updateSleepTimerDialog(msg)
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate usable height
-		listHeight := msg.Height - 14
-		if listHeight < 5 {
-			listHeight = 5
-		}
+		// Calculate usable height based on actual header size
+		listHeight := availableListHeight(msg.Height)
 
 		// Initialize models if we have data but they're not initialized yet
 		if len(m.listItems) > 0 && m.listModel.Items() == nil {
@@ -315,14 +355,16 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		// Only start tick if not already running
-		if m.saveMessageTime == 0 {
+		// Only start tick if not already running (saveMessageTime == 0 means no tick;
+		// messageDisplayPersistent means persistent/rating prompt with no tick dispatched yet)
+		if m.saveMessageTime <= 0 {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
 		return m, m.pollTrackHistory()
 
 	case playbackErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = playStateSavePrompt // Show prompt even on error
 		return m, nil
 
@@ -331,6 +373,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		// Show save prompt when going back from playing
@@ -451,6 +494,74 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessageTime = messageDisplayShort
 		return m, nil
 
+	case components.TagSubmittedMsg:
+		if m.state == playStateManageTags {
+			// TagInput inside ManageTags submitted
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
+		// Regular tag input
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			}
+			startTick := m.saveMessageTime == 0
+			m.saveMessageTime = messageDisplayShort
+			m.state = playStatePlaying
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.TagCancelledMsg:
+		if m.state == playStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else if len(msg.Tags) == 0 {
+				m.saveMessage = "✓ All tags removed"
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
+				m.refreshStationTagPills(m.selectedStation.StationUUID)
+			}
+			startTick := m.saveMessageTime == 0
+			m.saveMessageTime = messageDisplayShort
+			m.state = playStatePlaying
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.ManageTagsCancelledMsg:
+		m.state = playStatePlaying
+		return m, nil
+
+	case components.SleepTimerSelectedMsg:
+		// User confirmed a duration in the dialog
+		m.state = playStatePlaying
+		m.sleepTimerActive = true
+		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+
+	case components.SleepTimerCancelledMsg:
+		m.state = playStatePlaying
+		return m, nil
+
 	case listsLoadedMsg:
 		m.lists = msg.lists
 		m.listItems = make([]list.Item, len(msg.lists))
@@ -475,7 +586,13 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.blocklistManager != nil {
 				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
-			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked}
+			tagPills := ""
+			if m.tagsManager != nil {
+				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
+					tagPills = m.tagRenderer.RenderPills(tags)
+				}
+			}
+			m.stationItems[i] = stationListItem{station: station, isBlocked: isBlocked, tagPills: tagPills}
 		}
 
 		// Initialize now if we have dimensions, otherwise flag for later
@@ -519,12 +636,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// initializeListModel creates the list model with current dimensions
+// initializeListModel creates the list model with current dimensions.
+// The available height is calculated from the actual rendered header so that
+// tall ASCII art headers don't overflow the terminal.
 func (m *PlayModel) initializeListModel() {
-	listHeight := m.height - 14
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -538,12 +654,11 @@ func (m *PlayModel) initializeListModel() {
 	m.listModel.Styles.HelpStyle = helpStyle()
 }
 
-// initializeStationListModel creates the station list model with current dimensions
+// initializeStationListModel creates the station list model with current dimensions.
+// The available height is calculated from the actual rendered header so that
+// tall ASCII art headers don't overflow the terminal.
 func (m *PlayModel) initializeStationListModel() {
-	listHeight := m.height - 14
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -630,6 +745,11 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "?":
 		// Toggle help overlay
@@ -642,7 +762,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.player.IsPaused() {
 				// Paused - show persistent message
 				m.saveMessage = "⏸ Paused - Press Space to resume"
-				m.saveMessageTime = -1 // Persistent (negative means persistent)
+				m.saveMessageTime = messageDisplayPersistent
 			} else {
 				// Resumed - show temporary message
 				m.saveMessage = "▶ Resumed"
@@ -745,7 +865,145 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.undoLastBlock()
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = messageDisplayPersistent
+			return m, nil
+		}
+		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			w := m.width
+			if w < 24 {
+				w = 24
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
+			m.state = playStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			wt := m.width
+			if wt < 24 {
+				wt = 24
+			}
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, wt)
+			m.state = playStateManageTags
+			return m, nil
+		}
+		return m, nil
+	case "Z":
+		// If a sleep timer is already running, Z cancels it immediately.
+		// Otherwise, open the dialog to set a new duration.
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
+		}
+		last := 30
+		if m.dataPath != "" {
+			if cfg, err := storage.LoadSleepTimerConfig(m.dataPath); err == nil && cfg.LastDurationMinutes > 0 {
+				last = cfg.LastDurationMinutes
+			}
+		}
+		w := m.width
+		if w < 24 {
+			w = 24
+		}
+		m.sleepTimerDialog = components.NewSleepTimerDialog(last, w)
+		m.state = playStateSleepTimer
+		return m, nil
+	case "+":
+		// Extend active sleep timer by 15 minutes (no-op when timer is not running)
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		}
+		return m, nil
 	}
+	return m, nil
+}
+
+// updateSleepTimerDialog delegates key events to the SleepTimerDialog component.
+func (m PlayModel) updateSleepTimerDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.sleepTimerDialog, cmd = m.sleepTimerDialog.Update(msg)
+	return m, cmd
+}
+
+// updateTagInput delegates key events to the TagInput component.
+func (m PlayModel) updateTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tagInput, cmd = m.tagInput.Update(msg)
+	return m, cmd
+}
+
+// updateManageTags handles ManageTags dialog input.
+func (m PlayModel) updateManageTags(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.manageTags, cmd = m.manageTags.Update(msg)
+	return m, cmd
+}
+
+// handleRatingModeInput handles input when in rating mode
+func (m PlayModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+			startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
+			startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
+			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
+		}
+		return m, nil
+	}
+
+	// Handle remove rating (0 only)
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		startTick := m.saveMessageTime <= 0 // always -1 here (rating prompt); start tick if not running
+		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -884,6 +1142,27 @@ func (m PlayModel) blockStation() tea.Cmd {
 	}
 }
 
+// refreshStationTagPills updates tag pills for a single station in the station list.
+func (m *PlayModel) refreshStationTagPills(stationUUID string) {
+	if m.tagsManager == nil || m.stationListModel.Items() == nil {
+		return
+	}
+	tags := m.tagsManager.GetTags(stationUUID)
+	pills := ""
+	if len(tags) > 0 {
+		pills = m.tagRenderer.RenderPills(tags)
+	}
+	items := m.stationListModel.Items()
+	for i, item := range items {
+		if si, ok := item.(stationListItem); ok && si.station.StationUUID == stationUUID {
+			si.tagPills = pills
+			items[i] = si
+			break
+		}
+	}
+	m.stationListModel.SetItems(items)
+}
+
 // undoLastBlock undoes the last block operation
 func (m PlayModel) undoLastBlock() tea.Cmd {
 	return func() tea.Msg {
@@ -924,6 +1203,16 @@ func (m PlayModel) View() string {
 		return m.viewSavePrompt()
 	case playStateDeleteConfirm:
 		return m.viewDeleteConfirm()
+	case playStateTagInput:
+		return m.viewTagInput()
+	case playStateManageTags:
+		return m.viewManageTags()
+	case playStateSleepTimer:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "💤 Sleep Timer",
+			Content: m.sleepTimerDialog.View(),
+			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
+		}, m.height)
 	}
 
 	return "Unknown state"
@@ -956,13 +1245,13 @@ func (m PlayModel) viewListSelection() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Use the consistent page template
-	return RenderPage(PageLayout{
+	// Use the consistent page template with bottom-aligned help
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: "Select a Favorite List",
 		Content:  content.String(),
-		Help:     "↑↓/jk: Navigate • Enter: Select • Esc: Back • Ctrl+C: Quit",
-	})
+		Help:     "↑↓/jk: Navigate • g/G: Top/End • Enter: Select • Esc: Back • Ctrl+C: Quit",
+	}, m.height)
 }
 
 // viewPlaying renders the playback view
@@ -973,17 +1262,47 @@ func (m PlayModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info with voted status integrated
-	// Guard against nil votedStations
+	// Station info with voted status and metadata integrated
 	hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-	content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
+	// Get metadata for display
+	var metadata *storage.StationMetadata
+	if m.metadataManager != nil {
+		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+	}
+	// Get rating for display
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
+		}
+	}
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle().Render("▶ Playing..."))
+		// Use the cached track (kept fresh by monitorMetadata every 5 s) to
+		// avoid a blocking IPC socket call inside the render path.
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
+			content.WriteString(successStyle().Render("▶ Now Playing:"))
+			content.WriteString(" ")
+			content.WriteString(infoStyle().Render(track))
+		} else {
+			content.WriteString(successStyle().Render("▶ Playing..."))
+		}
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
+	}
+
+	// Tag display
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags — press t to add one"))
+		}
 	}
 
 	// Track history
@@ -1023,7 +1342,7 @@ func (m PlayModel) viewPlaying() string {
 			} else {
 				style = successStyle()
 			}
-		} else if strings.Contains(m.saveMessage, "Already") {
+		} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
 			style = infoStyle()
 		} else {
 			style = errorStyle()
@@ -1031,11 +1350,50 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
+	// Sleep timer countdown
+	if timerInfo := m.sleepTimerCountdown(); timerInfo != "" {
+		content.WriteString("\n")
+		content.WriteString(highlightStyle().Render(timerInfo))
+	}
+
 	// Use the consistent page template with bottom-aligned help
+	helpText := "Space: Pause • f: Fav • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "b: Block • u: Undo • f: Favorites • v: Vote • 0: Main Menu • ?: Help",
+		Help:    helpText,
+	}, m.height)
+}
+
+// sleepTimerCountdown returns a formatted countdown string when a sleep timer
+// is active, or an empty string. The App refreshes sleepCountdown on every tick.
+func (m PlayModel) sleepTimerCountdown() string {
+	return formatSleepCountdown(m.sleepCountdown)
+}
+
+// viewManageTags renders the manage tags dialog overlay.
+// The ManageTags component renders the station name in its own header,
+// so no prepend is needed here.
+func (m PlayModel) viewManageTags() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Manage Tags",
+		Content: m.manageTags.View(),
+		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+	}, m.height)
+}
+
+// viewTagInput renders the tag input overlay for the favorites playing view.
+func (m PlayModel) viewTagInput() string {
+	var content strings.Builder
+	if m.selectedStation != nil {
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: content.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
 	}, m.height)
 }
 
@@ -1066,12 +1424,12 @@ func (m PlayModel) viewStationSelection() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Use the consistent page template
-	return RenderPage(PageLayout{
+	// Use the consistent page template with bottom-aligned help
+	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
-	})
+		Help:    "↑↓/jk: Navigate • g/G: Top/End • /: Filter • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
 }
 
 // noStationsView renders the view when a list is empty

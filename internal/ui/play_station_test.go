@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/blocklist"
 )
 
 func TestStationListItem(t *testing.T) {

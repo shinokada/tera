@@ -5,262 +5,164 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.8.0] - 2026-03-10
+## [3.8.0] - unreleased
 
-### ✨ Added
+### Added (Phase 1 — Core Storage)
+- `storage.SyncPrefs` — per-category backup preferences persisted to `sync_prefs.json`; `LoadSyncPrefs()` / `SaveSyncPrefs()` with atomic write and defaults (search history off).
+- `storage.BackupManager` — zip-based export and restore using `archive/zip` (no new dependencies); `Export()`, `Restore()`, `ListArchiveCategories()`, `ConflictingFiles()`, `ResolveBackupPath()`.
+- `storage.RestoreConflictError` — typed error returned when a restore would overwrite existing files; carries the list of conflicting paths for the overwrite-warning UI.
+- `storage.GistSyncManager` — Gist-based push/pull of user data to a dedicated secret Gist (`tera-data-backup`); `Push()`, `Pull()`, `FindBackupGist()`, `AvailableCategories()`.
+- `gist.Client.UpdateGistFiles()` — new PATCH method to replace file contents of an existing Gist, needed by `GistSyncManager.Push()`.
 
-#### Sync & Backup (menu renamed from "Gist Management")
-- **Export backup (zip)** — save all selected data to a local zip file; no GitHub token required
-- **Restore from backup (zip)** — restore selected categories from a local zip with overwrite warning
-- **Sync all data to Gist** — push selected categories to a dedicated secret `tera-data-backup` Gist
-- **Restore all data from Gist** — pull selected categories from the `tera-data-backup` Gist
-- **Category checklist** — shared checklist UI for all four operations; selections persist in `sync_prefs.json`
-- **Overwrite warning** — lists conflicting files before any restore, with Enter to proceed or Esc to cancel
-- **`sync_prefs.json`** — new file in the config directory that persists checklist selections across runs
-- **`tera-manifest.json`** sentinel in every backup Gist prevents false-positive matches on unrelated Gists
+### Internal
+- `gist_filename` / `gistFilenameToRelPath` encode the config-relative path ↔ Gist filename mapping (e.g. `data/favorites/Jazz.json` ↔ `fav--Jazz.json`) since Gist filenames cannot contain `/`.
+- Unit tests: `sync_prefs_test.go`, `backup_test.go`, `gist_sync_test.go`.
 
-#### Sync categories
+### Added (Phase 2 — UI Components)
+- `ui/components.ChecklistModel` — reusable bubbletea checklist component with cursor navigation (`↑↓`/`jk`), Space toggle, `a` toggle-all, Enter confirm, Esc/q cancel.
+- `ChecklistConfirmedMsg` / `ChecklistCancelledMsg` — typed tea messages emitted on confirm and cancel.
+- Unit tests: `checklist_test.go` (navigation, toggle, toggle-all, confirm/cancel, helpers, View).
 
-| Category                | Default |
-| ----------------------- | ------- |
-| Favorites (playlists)   | ✅ on    |
-| Settings (config.yaml)  | ✅ on    |
-| Ratings & votes         | ✅ on    |
-| Blocklist               | ✅ on    |
-| Station metadata & tags | ✅ on    |
-| Search history          | ❌ off   |
+### Changed (Phase 3 — Gist Screen Integration)
+- `ui/gist.go`: Renamed screen title to `Sync & Backup`; added 8 new states for export/restore/sync flows; implemented export backup (checklist → path prompt → zip), restore from zip (path prompt → inspect → checklist → conflict check → overwrite warn/extract), sync to Gist (checklist → push), restore from Gist (fetch available categories → checklist → conflict check → overwrite warn/pull); overwrite warning prompt shared by zip and Gist flows; checklist selections persisted to `sync_prefs.json` on confirm.
+- `ui/app.go`: Menu label `Gist Management` → `Sync & Backup` via `syncBackupMenuLabel` constant.
 
-### 🔒 Security
-- Reject path-traversal filenames in Gist restores (`fav--../../config.yaml` style attacks)
-- `FindBackupGist` errors on duplicate backup Gists instead of silently using the first match
+---
 
-### 🐛 Fixed
-- Gist sync/restore actions now gate on `gistSyncMgr != nil` (previously showed misleading "token required" error when sync manager init failed)
-- `NewBackupManager` and `NewGistSyncManager` failures surfaced as startup warnings in the TUI
-- `SaveSyncPrefs` errors shown as non-blocking warnings instead of silently discarded
-- Empty checklist selection rejected before export/sync/restore flows begin
-- Removed redundant `GetGist` fetch in `Pull` (reuses the full Gist returned by `FindBackupGist`)
+## [3.7.1] - 2026-03-09
 
-## [3.1.0]
+### Fixed
+- Fixed a regression where appearance settings were still being read from and written to the obsolete `appearance_config.yaml` file instead of `config.yaml`. Changes made in Settings were saved to `config.yaml` correctly but the header reloaded stale values from the old file, causing the UI to not reflect updates until restart.
+- Fixed a regression where malformed appearance values in `config.yaml` (invalid mode, out-of-range width, unknown alignment) were not validated on load, allowing them to reach rendering directly.
 
-- OS keychain token storage with file-based fallback
-- Environment variable support (TERA_GITHUB_TOKEN)
-- Automatic token migration from file to keychain
-- migrate-token CLI subcommand
-- Token source detection (GetTokenSource)
+### Internal
+- `appearance_settings.go`: switched `LoadAppearanceConfig` → `LoadAppearanceConfigFromUnified` and `SaveAppearanceConfig` → `SaveAppearanceConfigToUnified`.
+- `header.go`: switched both `NewHeaderRenderer()` and `Reload()` to use `LoadAppearanceConfigFromUnified`; added `Validate()` call after load to preserve the bounds and normalisation that the old loader enforced.
+- `storage/appearance_config.go` is now dead code and will be removed in a future cleanup.
+
+## [3.7.0] - 2026-03-08
+
+### Added
+- **Recently Played** — Last N stations now appear in the main menu below Quick Play Favorites, with number shortcuts continuing from where Quick Play ends.
+  - Navigate and play with `↑↓` + `Enter` or number shortcuts
+  - Shows station name, country, and time since last played
+  - `▶` indicator marks the currently playing station
+  - Zero new storage — reuses `station_metadata.json` via `MetadataManager`
+- **Play History settings** (`Settings > History > Play History`)
+  - Toggle show/hide (`1`)
+  - Increase/decrease section size, 1–20 stations (`2`/`3`)
+  - Toggle Allow Duplicate (`4`)
+  - Clear all play history (`5`)
+- **History top-level menu** — `Settings > 5. History` now acts as a switcher between Search History and Play History sub-menus, with stats (search items count, tracked stations count).
+
+### Changed
+- Settings menu item `Search History` renamed to `History` to cover both search and play history.
+- `PlayHistoryConfig` added to unified `config.yaml` (`play_history` section).
+
+### Tests
+- Added `internal/ui/app_test.go`: `TestLoadRecentlyPlayed_*` and `TestPlayRecentStation_*` covering disabled state, nil manager, empty history, size clamping, valid/invalid indices.
+- `internal/config/config_test.go`: `TestPlayHistoryConfigDefaults` and `TestPlayHistoryConfigValidation` (added in Phase 1).
+
+## [3.5.1] - 2026-02-26
+
+* **Documentation**
+  * Updated shuffle shortcut from `t` to `Ctrl+T` across guides and help text.
+* **User Interface**
+  * In-app hints and messages now reference `Ctrl+T` for toggling shuffle.
+* **Bug Fixes**
+  * Number-key entry now only accumulates when not typing into the text input, improving input behavior.
+* **Tests**
+  * Updated and added tests to validate `Ctrl+T` behavior and non-toggle-while-typing cases.
+* **Chores**
+  * Build task now runs tests before compiling.
+
+## [3.5.0] - 2026-02-23
+
+* **New Features**
+  * Sleep Timer: presets or custom minutes, start/extend (+)/cancel, live in-play countdown, automatic stop and full session summary on expiry; remembers last-used duration; shortcuts: Z (open), + (extend), 0 (main menu), ? (help).
+  * Help Overlay: press ? for context-sensitive shortcuts across screens.
+  * Most Played: view and navigate frequently played stations.
+
+* **Documentation**
+  * README updated with Sleep Timer usage, session summary, shortcuts, and config examples.
+
+* **Tests**
+  * Added unit tests for sleep timer and session tracking.
+
+## [3.4.0] - 2026-02-20
+
+### Added
+- **Custom Tags** - Tag any station with personal labels (e.g., `late night coding`, `gym workout`, `chill vibes`)
+- **Tag input** - Press `t` while playing to add a tag; press `T` to open the full Manage Tags dialog
+- **Manage Tags dialog** - Toggle tags on/off with Space, add new tags inline, and save in one keystroke
+- **Browse by Tag** - New menu option (5) to view all your tags and the stations under each one
+  - Select a tag to see its stations; press `d` to delete a tag from all stations
+- **Tag Playlists** - New menu option (6) to create dynamic playlists driven by tag combinations
+  - Three-step creation wizard: name → select tags → choose match mode (any/all)
+  - Edit and delete playlists; play all matching stations in sequence
+- **Tag pills in station lists** - Tagged stations show `[tag]` pills inline in every list view (Favorites, Search, Most Played, Top Rated, Browse by Tag, Tag Playlists)
+- **Live pill refresh** - Tag pills update immediately when you add or remove tags without reloading the list
+- **Tag autocomplete** - The tag input field suggests matching tags as you type; Tab to accept, ↑↓ to navigate
+- **Keyboard shortcuts** across all playback screens: `t` add tag, `T` manage tags
+- All tags stored locally in `station_tags.json`; nothing is transmitted externally
+
+### Changed
+- Main menu items renumbered to accommodate Browse by Tag (5) and Tag Playlists (6)
+  - Manage Lists → 7, Block List → 8, I Feel Lucky → 9, Gist Management → 0, Settings → `-` (hyphen key)
+
+## [3.3.0] - 2026-02-18
+
+### Added
+- **Star Ratings** - Rate any station from 1-5 stars with `r` then `1-5` keys
+- **Top Rated** - New menu option (5) to browse your highest-rated stations
+- **Rating display** - Stars shown in search results, favorites, and playing screen
+- **Filter by rating** - Filter Top Rated list by minimum star rating
+- **Sort options** - Sort by rating (high/low), recently rated
+- **Quick rating** - Press `r` then `1-5` to rate while playing
+- **Remove rating** - Press `r` then `0` to clear a station's rating
+- Station caching for Top Rated and Most Played to display full station info
+
+### Changed
+- Main menu reordered: Top Rated is now option 5, I Feel Lucky moved to 6
+- Star rendering with spacing for better display in Warp terminal (`★ ★ ★ ★ ☆`)
+- Top Rated page uses bottom-aligned footer for consistent UI
+
+### Fixed
+- Most Played and Top Rated now properly display station names from cached data
+- Empty lines in Most Played list when station names were missing
+- Track metadata display filtering out URL-like strings
+
+## [3.0.1] - 2026-02-09
+
+### Fixed
+- Complete v2 to v3 data migration now properly moves user files to `data/` subdirectory
+- `voted_stations.json` and `blocklist.json` now correctly migrate to `data/` directory
+- `favorites/` directory now correctly migrates to `data/favorites/`
+- `search-history.json` now correctly migrates to `data/cache/` directory
+- Added `data/cache/` directory creation to ensure proper file organization
+- Old v2 config files (`appearance_config.yaml`, etc.) now properly removed after migration
+
+### Changed
+- Directory structure now strictly follows v3 specification:
+  - Config: `config.yaml` (root of tera directory)
+  - User data: `data/blocklist.json`, `data/voted_stations.json`
+  - Favorites: `data/favorites/*.json`
+  - Cache: `data/cache/search-history.json`
 
 ## [3.0.0] - 2026-02-09
 
-### 🎉 Major Changes
+### Added
+- Unified configuration system - all settings now in single `config.yaml` file
+- Automatic migration from v2 to v3 configuration on first run
+- New organized directory structure with `data/` subdirectory for user content
+- Cache directory for temporary data (`data/cache/`)
 
-#### Unified Configuration System
-The biggest change in v3 is the consolidation of all configuration into a single `config.yaml` file. This makes TERA easier to configure and maintain.
+### Changed
+- Merged `theme.yaml`, `appearance_config.yaml`, `connection_config.yaml`, and `shuffle.yaml` into single `config.yaml`
+- User data (favorites, blocklist, voted stations) moved to `data/` subdirectory
+- Configuration file located via `os.UserConfigDir()` for proper cross-platform support
 
-**Before (v2):**
-```text
-~/.config/tera/
-├── theme.yaml
-├── appearance_config.yaml
-├── connection_config.yaml
-├── shuffle.yaml
-└── ...
-```
-
-**After (v3):**
-```text
-~/.config/tera/
-├── config.yaml              # All settings in one file
-└── data/                    # User data separated
-    ├── blocklist.json
-    ├── voted_stations.json
-    └── favorites/
-```
-
-### ✨ Added
-
-#### Configuration Management
-- **Unified Config System**: All settings now in one `config.yaml` file
-  - Player settings (volume, buffer)
-  - UI settings (theme, appearance)
-  - Network settings (auto-reconnect, buffer)
-  - Shuffle settings (auto-advance, history)
-- **Automatic Migration**: v2 configs automatically converted on first run
-- **Config Validation**: Built-in validation with auto-correction for invalid values
-- **Config Backup**: Old v2 configs automatically backed up with timestamp
-
-#### New CLI Commands
-```sh
-# Config management
-tera config path       # Show config file location
-tera config reset      # Reset all settings to defaults
-tera config validate   # Check config for errors
-tera config migrate    # Check migration status / force migrate
-
-# Theme management
-tera theme reset       # Reset theme to defaults
-tera theme path        # Show config file location
-tera theme edit        # Show where to edit theme
-tera theme export      # Export theme as standalone file
-```
-
-#### Secure Credential Storage (Optional)
-- **OS Keychain Integration**: GitHub tokens can now be stored in OS keychain
-  - macOS: Keychain Access
-  - Linux: Secret Service (gnome-keyring, KWallet)
-  - Windows: Credential Manager
-- **Automatic Token Migration**: Old file-based tokens migrated on first run
-- **Environment Variable Fallback**: For CI/CD and headless environments
-- **Token Management UI**: New Settings → GitHub Token for easy management
-
-#### File Organization
-- **Clear Data Separation**: Config vs user data now clearly separated
-- **New Data Directory**: All user data organized under `data/` subdirectory
-  - `data/blocklist.json`
-  - `data/voted_stations.json`
-  - `data/favorites/`
-  - `data/cache/`
-- **Backwards Compatible**: Favorites and blocklist work exactly as before
-
-### 🔧 Changed
-
-#### Configuration Structure
-- **Theme Config**: Now under `ui.theme` in unified config
-- **Appearance Config**: Now under `ui.appearance` in unified config
-- **Network Config**: Now under `network` in unified config
-- **Shuffle Config**: Now under `shuffle` in unified config
-- **File Locations**: User data moved to `data/` subdirectory
-
-#### Storage Package
-- **Adapter Functions**: New helper functions for accessing unified config
-- **Backward Compatible**: Existing code continues to work during transition
-- **Migration Check**: Automatic v2 config detection and migration
-
-#### Theme System
-- **Unified Access**: Theme now reads from `config.yaml`
-- **Export Function**: Can still export standalone `theme.yaml` if needed
-- **No Behavior Changes**: All theme features work exactly as before
-
-### 🐛 Fixed
-
-- **Header Spacing**: Fixed missing blank line between TERA header and page title
-- **Type Safety**: Fixed HeaderMode type conversion in config adapter
-- **Migration Safety**: Robust error handling during v2 to v3 migration
-
-### 📝 Documentation
-
-- **Migration Guide**: Comprehensive guide for v2 → v3 upgrade
-- **Updated README**: Reflects v3 changes and new features
-- **API Changes**: Internal storage API updated for unified config
-- **File Locations**: Updated documentation for new file structure
-
-### 🔄 Migration Notes
-
-**For Users:**
-- Migration is **automatic** on first run of v3
-- Your favorites and user data are **never touched**
-- Old v2 configs are **backed up** with timestamp
-- If migration fails, you can **retry** with `tera config migrate`
-- You can **reset** to defaults with `tera config reset`
-
-**What Gets Migrated:**
-- ✅ Theme settings (colors, padding)
-- ✅ Appearance settings (header customization)
-- ✅ Connection settings (auto-reconnect, buffer)
-- ✅ Shuffle settings (auto-advance, history)
-- ✅ GitHub token (to keychain, optional)
-
-**What Stays The Same:**
-- ✅ Favorites lists (unchanged)
-- ✅ Blocklist (unchanged)
-- ✅ Voting history (unchanged)
-- ✅ All file locations (same OS-specific directories)
-
-**Rollback:**
-If you need to rollback to v2, your backed-up configs are in:
-```text
-~/.config/tera/.v2-backup-YYYYMMDD-HHMMSS/
-```
-
-### 🚀 Performance
-
-- **Lazy Config Loading**: Config only loaded when needed
-- **In-Memory Caching**: Parsed config cached for better performance
-- **Reduced File I/O**: One file instead of four reduces disk operations
-
-### 🔒 Security
-
-- **Secure Token Storage**: OS keychain integration for GitHub tokens
-- **Automatic Encryption**: OS handles encryption and security
-- **File-Based Fallback**: Still supports file-based tokens (deprecated)
-- **Environment Variables**: Headless environments can use `TERA_GITHUB_TOKEN`
-
-### ⚠️ Breaking Changes
-
-None! v3 is fully backward compatible:
-- Existing favorites work without changes
-- Blocklist works without changes
-- User data locations unchanged
-- Automatic migration handles all config changes
-- Old v2 configs backed up, not deleted
-
-### 📦 Dependencies
-
-No new required dependencies. Optional features:
-- `github.com/zalando/go-keyring` - For secure token storage (optional)
-
-### 🙏 Acknowledgments
-
-Thanks to all users who provided feedback on configuration management and helped shape v3!
-
----
-
-## [2.x.x] - Previous Releases
-
-For v2 release history, see the [v2 branch](https://github.com/shinokada/tera/tree/v2).
-
-### Key v2 Features
-- Multi-file configuration system
-- Theme customization via YAML
-- Appearance settings for header
-- Connection settings for unstable networks
-- Shuffle mode with auto-advance
-- Block list functionality
-- Gist sync for backup
-- Voting support
-- Quick play from main menu
-
----
-
-## Semantic Versioning
-
-TERA follows [Semantic Versioning](https://semver.org/):
-
-- **MAJOR** version for incompatible API changes
-- **MINOR** version for backwards-compatible functionality additions
-- **PATCH** version for backwards-compatible bug fixes
-
-### Version Number Format: MAJOR.MINOR.PATCH
-
-Examples:
-- `3.0.0` - Major release with configuration overhaul (fully backward compatible)
-- `3.1.0` - Minor release with new features
-- `3.0.1` - Patch release with bug fixes
-
----
-
-## Upgrade Paths
-
-### From v2 to v3
-- ✅ **Automatic migration** on first run
-- ✅ **Zero downtime** - just upgrade and run
-- ✅ **Rollback available** - old configs backed up
-
-### From v1 to v3
-- ⚠️ Must upgrade to v2 first, then to v3
-- See v2 migration guide for v1 → v2 upgrade
-- Then follow automatic v2 → v3 migration
-
----
-
-[3.0.0]: https://github.com/shinokada/tera/releases/tag/v3.0.0
-[3.8.0]: https://github.com/shinokada/tera/releases/tag/v3.8.0
+### Migration
+- V2 configs automatically backed up to `.v2-backup-TIMESTAMP/` directory
+- V2 config files removed after successful migration and backup
+- User data preserved during migration

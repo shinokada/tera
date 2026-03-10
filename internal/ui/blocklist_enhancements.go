@@ -10,7 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/v2/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/blocklist"
 )
 
 // ruleListItem wraps a BlockRule for list.Item interface
@@ -206,12 +206,13 @@ func createRulesListModel(rules []blocklist.BlockRule) list.Model {
 
 	delegate := createStyledDelegate()
 	l := list.New(items, delegate, 80, 20)
-	l.Title = "🚫 Active Block Rules"
+	// Title is suppressed: PageLayout.Title renders it to avoid a duplicate
+	// heading and the extra lines the list title bar would add.
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
 	l.SetShowPagination(true)
-	l.Styles.Title = listTitleStyle()
 	l.Styles.PaginationStyle = paginationStyle()
 
 	return l

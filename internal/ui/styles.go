@@ -2,14 +2,37 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/theme"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/theme"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
+
+// IsValidTrackMetadata returns true if the track string appears to be actual
+// stream metadata (song title/artist) rather than a URL path or filename.
+func IsValidTrackMetadata(track, stationName string) bool {
+	if track == "" || track == stationName {
+		return false
+	}
+	// Filter out URL-like tracks (no actual metadata from stream)
+	if strings.HasPrefix(track, "http") || strings.Contains(track, "://") {
+		return false
+	}
+	// Filter out common file extensions that indicate no metadata
+	lower := strings.ToLower(track)
+	if strings.HasSuffix(lower, ".mp3") ||
+		strings.HasSuffix(lower, ".aac") ||
+		strings.HasSuffix(lower, ".ogg") {
+		return false
+	}
+	return true
+}
 
 // Global header renderer instance (initialized in app.go)
 var (
@@ -81,6 +104,8 @@ func helpStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Foreground(colorGray())
 }
+
+func dimStyle() lipgloss.Style { return helpStyle() }
 
 func infoStyle() lipgloss.Style {
 	t := theme.Current()
@@ -155,6 +180,30 @@ func createStyledDelegate() list.DefaultDelegate {
 	return delegate
 }
 
+// availableListHeight returns the usable height for list models after
+// subtracting the rendered header lines and fixed UI chrome. Callers should
+// pass the current terminal height.
+//
+// Chrome breakdown (10 lines):
+//
+//	1 blank line (after header)
+//	1 title line
+//	1 subtitle line
+//	1 blank line (before content)
+//	1 status bar
+//	1 help bar
+//	2 vertical padding (docStyleNoTopPadding bottom padding)
+//	2 spare lines for breathing room
+func availableListHeight(totalHeight int) int {
+	const uiChrome = 10 // see breakdown above
+	headerLines := strings.Count(renderHeader(), "\n")
+	h := totalHeight - (headerLines + uiChrome)
+	if h < 5 {
+		h = 5
+	}
+	return h
+}
+
 // renderHeader renders the header with fallback (thread-safe)
 func renderHeader() string {
 	headerRendererMu.RLock()
@@ -162,7 +211,12 @@ func renderHeader() string {
 	headerRendererMu.RUnlock()
 
 	if renderer != nil {
-		return renderer.Render()
+		result := renderer.Render()
+		// Ensure header ends with newline for proper layout
+		if result != "" && !strings.HasSuffix(result, "\n") {
+			result += "\n"
+		}
+		return result
 	}
 	// Fallback to default if renderer not initialized
 	return lipgloss.NewStyle().
@@ -204,8 +258,8 @@ func RenderPage(layout PageLayout) string {
 func assemblePageContent(layout PageLayout) string {
 	var b strings.Builder
 
-	// Add consistent spacing after TERA header if needed
-	// (But we removed it to save vertical space for ASCII art)
+	// Add one blank line after TERA header for breathing room
+	b.WriteString("\n")
 
 	// Title section - always takes up one line (empty or not) for consistency
 	if layout.Title != "" {
@@ -236,6 +290,16 @@ func wrapWithHeaderAndStyle(content string) string {
 	return docStyleNoTopPadding().Render(fullContent.String())
 }
 
+// ansiEscapeRe matches ANSI CSI escape sequences (colours, cursor moves, etc.)
+// used to strip them before counting visible lines.
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// visibleLineCount returns the number of newlines in s after stripping ANSI
+// escape sequences, giving an accurate count of rendered terminal lines.
+func visibleLineCount(s string) int {
+	return strings.Count(ansiEscapeRe.ReplaceAllString(s, ""), "\n")
+}
+
 // RenderPageWithBottomHelp renders a page with help text at the bottom of the screen
 func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	// Assemble page content
@@ -243,10 +307,11 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 
 	// Get the rendered header for line counting
 	header := renderHeader()
-	teraHeaderLines := strings.Count(header, "\n")
+	teraHeaderLines := visibleLineCount(header)
 
-	// Count content lines
-	contentLines := strings.Count(content, "\n")
+	// Count visible content lines (strip ANSI so styled checklist output doesn't
+	// inflate the count and push the help text off-screen).
+	contentLines := visibleLineCount(content)
 	p := getPadding()
 	totalUsed := teraHeaderLines + contentLines + p.PageVertical // padding from docStyleNoTopPadding
 
@@ -312,6 +377,75 @@ func RenderStationDetailsWithVote(station api.Station, voted bool) string {
 		fmt.Fprintf(&s, "Codec:   %s", station.Codec)
 		if station.Bitrate > 0 {
 			fmt.Fprintf(&s, " @ %d kbps", station.Bitrate)
+		}
+		s.WriteString("\n")
+	}
+
+	return s.String()
+}
+
+// RenderStationDetailsWithMetadata renders station details with play statistics
+func RenderStationDetailsWithMetadata(station api.Station, voted bool, metadata *storage.StationMetadata) string {
+	// Delegate base formatting to avoid duplication
+	base := RenderStationDetailsWithVote(station, voted)
+
+	// Append play statistics only if data exists
+	if metadata == nil || metadata.PlayCount == 0 {
+		return base
+	}
+
+	var s strings.Builder
+	s.WriteString(base)
+	s.WriteString("\n")
+	ds := dimStyle()
+	if metadata.PlayCount == 1 {
+		s.WriteString(ds.Render("🎵 Played 1 time"))
+	} else {
+		s.WriteString(ds.Render(fmt.Sprintf("🎵 Played %d times", metadata.PlayCount)))
+	}
+	s.WriteString("\n")
+	if !metadata.LastPlayed.IsZero() {
+		s.WriteString(ds.Render(fmt.Sprintf("🕐 Last played: %s", storage.FormatLastPlayed(metadata.LastPlayed))))
+		s.WriteString("\n")
+	}
+	return s.String()
+}
+
+// renderSaveMessage appends a styled save/status message to sb.
+// Uses successStyle for ✓, errorStyle for ✗, and infoStyle for all other text.
+func renderSaveMessage(sb *strings.Builder, msg string) {
+	if msg == "" {
+		return
+	}
+	sb.WriteString("\n")
+	switch {
+	case strings.Contains(msg, "✓"):
+		sb.WriteString(successStyle().Render(msg))
+	case strings.Contains(msg, "✗"):
+		sb.WriteString(errorStyle().Render(msg))
+	default:
+		sb.WriteString(infoStyle().Render(msg))
+	}
+}
+
+// RenderStationDetailsWithRating renders station details with play statistics and star rating
+func RenderStationDetailsWithRating(station api.Station, voted bool, metadata *storage.StationMetadata, rating int, starRenderer *components.StarRenderer) string {
+	// Delegate base formatting (includes metadata) to avoid duplication
+	base := RenderStationDetailsWithMetadata(station, voted, metadata)
+
+	var s strings.Builder
+	s.WriteString(base)
+
+	// Show rating or hint to rate
+	if starRenderer != nil {
+		s.WriteString("\n")
+		if rating > 0 {
+			// Show current rating
+			accentStyle := lipgloss.NewStyle().Foreground(theme.Current().HighlightColor())
+			s.WriteString(accentStyle.Render(starRenderer.RenderCompactPlain(rating)))
+		} else {
+			// Show hint to rate (unrated)
+			s.WriteString(dimStyle().Render("☆ ☆ ☆ ☆ ☆ [r: Rate]"))
 		}
 		s.WriteString("\n")
 	}

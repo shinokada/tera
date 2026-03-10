@@ -3,7 +3,7 @@ package blocklist
 import (
 	"strings"
 
-	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v3/internal/api"
 )
 
 // BlockRule represents a rule for blocking stations

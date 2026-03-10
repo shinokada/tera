@@ -3,7 +3,7 @@ package player
 import (
 	"testing"
 
-	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v3/internal/api"
 )
 
 func TestNewMPVPlayer(t *testing.T) {
