@@ -1,4 +1,5 @@
 # Tera: Terminal Radio
+[REPO](https://github.com/shinokada/tera)
 
 A terminal-based internet radio player powered by [Radio Browser](https://www.radio-browser.info/).
 
@@ -271,10 +272,10 @@ Set a timer to automatically stop playback — useful for falling asleep to radi
 
 **Keyboard Shortcuts:**
 
-| Screen  | Key | Action                          |
-| ------- | --- | ------------------------------- |
-| Playing | `Z` | Open sleep timer dialog         |
-| Playing | `+` | Extend running timer by 15 min  |
+| Screen  | Key | Action                         |
+| ------- | --- | ------------------------------ |
+| Playing | `Z` | Open sleep timer dialog        |
+| Playing | `+` | Extend running timer by 15 min |
 
 ### I Feel Lucky
 
@@ -495,21 +496,21 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### Shuffle Keyboard Shortcuts
 
-| Key      | Action                                    |
-| -------- | ----------------------------------------- |
-| `Ctrl+T` | Toggle shuffle mode (in input screen)     |
+| Key      | Action                                         |
+| -------- | ---------------------------------------------- |
+| `Ctrl+T` | Toggle shuffle mode (in input screen)          |
 | `Tab`    | Switch focus: Genre/keyword ↔ Choose an option |
-| `n`      | Next shuffle station (manual skip)        |
-| `[`      | Previous station (from history)           |
-| `b`      | Block current station                     |
-| `u`      | Undo block (5 sec window)                 |
-| `p`      | Pause/resume auto-advance timer           |
-| `h`      | Stop shuffle, keep playing current        |
-| `f`      | Save to My-favorites                      |
-| `s`      | Save to another list                      |
-| `v`      | Vote for station                          |
-| `r`      | Rate station (then 1-5 / 0)               |
-| `Esc`    | Stop shuffle and return to input          |
+| `n`      | Next shuffle station (manual skip)             |
+| `[`      | Previous station (from history)                |
+| `b`      | Block current station                          |
+| `u`      | Undo block (5 sec window)                      |
+| `p`      | Pause/resume auto-advance timer                |
+| `h`      | Stop shuffle, keep playing current             |
+| `f`      | Save to My-favorites                           |
+| `s`      | Save to another list                           |
+| `v`      | Vote for station                               |
+| `r`      | Rate station (then 1-5 / 0)                    |
+| `Esc`    | Stop shuffle and return to input               |
 
 ### Shuffle Settings
 
@@ -590,12 +591,12 @@ You can edit this file directly or use the Settings menu.
 
 ### Main Menu
 
-| Key      | Action                       |
-| -------- | ---------------------------- |
-| `0`      | Sync & Backup                |
-| `1-9`    | Quick select menu item       |
+| Key      | Action                                         |
+| -------- | ---------------------------------------------- |
+| `0`      | Sync & Backup                                  |
+| `1-9`    | Quick select menu item                         |
 | `10-99+` | Quick play from My-favorites / Recently Played |
-| `-`      | Settings                     |
+| `-`      | Settings                                       |
 
 ### Playback Controls
 

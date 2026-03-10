@@ -1,4 +1,5 @@
 # Tera: Terminal Radio
+[REPO](https://github.com/shinokada/tera)
 
 A terminal-based internet radio player powered by [Radio Browser](https://www.radio-browser.info/).
 
@@ -583,20 +584,20 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### Shuffle Keyboard Shortcuts
 
-| Key      | Action                                    |
-| -------- | ----------------------------------------- |
-| `Ctrl+T` | Toggle shuffle mode (in input screen)     |
+| Key      | Action                                         |
+| -------- | ---------------------------------------------- |
+| `Ctrl+T` | Toggle shuffle mode (in input screen)          |
 | `Tab`    | Switch focus: Genre/keyword ↔ Choose an option |
-| `n`      | Next shuffle station (manual skip)        |
-| `[`      | Previous station (from history)           |
-| `b`      | Block current station                     |
-| `u`      | Undo block (5 sec window)                 |
-| `p`      | Pause/resume auto-advance timer           |
-| `h`      | Stop shuffle, keep playing current        |
-| `f`      | Save to My-favorites                      |
-| `s`      | Save to another list                      |
-| `v`      | Vote for station                          |
-| `Esc`    | Stop shuffle and return to input          |
+| `n`      | Next shuffle station (manual skip)             |
+| `[`      | Previous station (from history)                |
+| `b`      | Block current station                          |
+| `u`      | Undo block (5 sec window)                      |
+| `p`      | Pause/resume auto-advance timer                |
+| `h`      | Stop shuffle, keep playing current             |
+| `f`      | Save to My-favorites                           |
+| `s`      | Save to another list                           |
+| `v`      | Vote for station                               |
+| `Esc`    | Stop shuffle and return to input               |
 
 ### Shuffle Settings
 
