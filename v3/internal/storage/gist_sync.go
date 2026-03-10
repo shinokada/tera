@@ -294,6 +294,8 @@ func (m *GistSyncManager) ConflictingGistFiles(g *gist.Gist, prefs SyncPrefs) ([
 // When force is false and files already exist, it returns RestoreConflictError.
 // Pass force=true to overwrite without checking.
 func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
+	// FindBackupGist already fetches the full Gist (including file contents and
+	// raw URLs) to verify the marker file, so reuse it directly.
 	g, err := m.FindBackupGist()
 	if err != nil {
 		return err
@@ -302,14 +304,8 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 		return fmt.Errorf("no backup Gist found (description: %q); push first to create one", BackupGistDescription)
 	}
 
-	// Re-fetch full Gist to get file contents and raw URLs
-	full, err := m.client.GetGist(g.ID)
-	if err != nil {
-		return fmt.Errorf("failed to fetch backup gist: %w", err)
-	}
-
 	if !force {
-		conflicts, err := m.ConflictingGistFiles(full, prefs)
+		conflicts, err := m.ConflictingGistFiles(g, prefs)
 		if err != nil {
 			return err
 		}
@@ -321,7 +317,7 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 	// Drive wanted from the Gist's own file list so restores work on a fresh
 	// machine where categoryFiles would return nothing for missing favorites.
 	wanted := make(map[string]string) // gist filename → rel path
-	for name := range full.Files {
+	for name := range g.Files {
 		relPath := gistFilenameToRelPath(name)
 		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
 			continue
@@ -334,7 +330,7 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 	// Fetch all content first; only write to disk once everything is ready
 	// so a mid-restore failure doesn't leave a partially updated config.
 	staged := make(map[string][]byte, len(wanted))
-	for name, gistFile := range full.Files {
+	for name, gistFile := range g.Files {
 		relPath, ok := wanted[name]
 		if !ok {
 			continue
