@@ -1243,7 +1243,7 @@ func (m *GistModel) initCreateGist() (tea.Model, tea.Cmd) {
 }
 
 func (m *GistModel) createGistCmd() tea.Msg {
-	files := make(map[string]string)
+	files := make(map[string]*string)
 	entries, err := os.ReadDir(m.favoritePath)
 	if err != nil {
 		return errMsg{err}
@@ -1251,7 +1251,8 @@ func (m *GistModel) createGistCmd() tea.Msg {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
 			if content, err := os.ReadFile(filepath.Join(m.favoritePath, entry.Name())); err == nil {
-				files[entry.Name()] = string(content)
+				s := string(content)
+				files[entry.Name()] = &s
 			}
 		}
 	}
