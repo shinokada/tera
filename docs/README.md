@@ -1,4 +1,5 @@
 # Tera: Terminal Radio
+[REPO](https://github.com/shinokada/tera)
 
 A terminal-based internet radio player powered by [Radio Browser](https://www.radio-browser.info/).
 
@@ -583,20 +584,20 @@ Shuffle mode is an enhanced version of "I Feel Lucky" that lets you explore mult
 
 ### Shuffle Keyboard Shortcuts
 
-| Key      | Action                                    |
-| -------- | ----------------------------------------- |
-| `Ctrl+T` | Toggle shuffle mode (in input screen)     |
+| Key      | Action                                         |
+| -------- | ---------------------------------------------- |
+| `Ctrl+T` | Toggle shuffle mode (in input screen)          |
 | `Tab`    | Switch focus: Genre/keyword ↔ Choose an option |
-| `n`      | Next shuffle station (manual skip)        |
-| `[`      | Previous station (from history)           |
-| `b`      | Block current station                     |
-| `u`      | Undo block (5 sec window)                 |
-| `p`      | Pause/resume auto-advance timer           |
-| `h`      | Stop shuffle, keep playing current        |
-| `f`      | Save to My-favorites                      |
-| `s`      | Save to another list                      |
-| `v`      | Vote for station                          |
-| `Esc`    | Stop shuffle and return to input          |
+| `n`      | Next shuffle station (manual skip)             |
+| `[`      | Previous station (from history)                |
+| `b`      | Block current station                          |
+| `u`      | Undo block (5 sec window)                      |
+| `p`      | Pause/resume auto-advance timer                |
+| `h`      | Stop shuffle, keep playing current             |
+| `f`      | Save to My-favorites                           |
+| `s`      | Save to another list                           |
+| `v`      | Vote for station                               |
+| `Esc`    | Stop shuffle and return to input               |
 
 ### Shuffle Settings
 
@@ -914,7 +915,7 @@ Your favorites and user data are never touched during migration.
 ### Run from source
 ```sh
 git clone https://github.com/shinokada/tera.git
-cd tera/v3
+cd tera
 go run cmd/tera/main.go
 ```
 
@@ -925,7 +926,6 @@ go test ./... -v
 
 ### Build
 ```sh
-cd v3
 go build -o tera cmd/tera/main.go
 ```
 
@@ -946,5 +946,5 @@ Contributions are welcome! Please:
 - [GitHub Repository](https://github.com/shinokada/tera)
 - [Issue Tracker](https://github.com/shinokada/tera/issues)
 - [Radio Browser](https://www.radio-browser.info/) - Station database
-- [Migration Guide](v3/docs/MIGRATION.md) - Upgrading from v2 to v3
+- [Migration Guide](/docs/MIGRATION.md) - Upgrading from v2 to v3
 - [Changelog](CHANGELOG.md) - Version history

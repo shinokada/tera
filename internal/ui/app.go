@@ -6,14 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/blocklist"
-	"github.com/shinokada/tera/v2/internal/player"
-	"github.com/shinokada/tera/v2/internal/storage"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
+	"github.com/shinokada/tera/v3/internal/player"
+	"github.com/shinokada/tera/v3/internal/storage"
+	internaltimer "github.com/shinokada/tera/v3/internal/timer"
+	"time"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
 type Screen int
@@ -30,10 +35,18 @@ const (
 	screenConnectionSettings
 	screenAppearanceSettings
 	screenBlocklist
+	screenMostPlayed
+	screenTopRated
+	screenBrowseTags
+	screenTagPlaylists
+	screenSleepSummary
 )
 
 // Main menu configuration
-const mainMenuItemCount = 7
+const mainMenuItemCount = 11
+
+// syncBackupMenuLabel is the label shown in the main menu for the Sync & Backup screen.
+const syncBackupMenuLabel = "Sync & Backup"
 
 type App struct {
 	screen                   Screen
@@ -44,6 +57,10 @@ type App struct {
 	searchScreen             SearchModel
 	listManagementScreen     ListManagementModel
 	luckyScreen              LuckyModel
+	mostPlayedScreen         MostPlayedModel
+	topRatedScreen           TopRatedModel
+	browseTagsScreen         BrowseTagsModel
+	tagPlaylistsScreen       TagPlaylistsModel
 	gistScreen               GistModel
 	settingsScreen           SettingsModel
 	shuffleSettingsScreen    ShuffleSettingsModel
@@ -52,11 +69,17 @@ type App struct {
 	blocklistScreen          BlocklistModel
 	apiClient                *api.Client
 	blocklistManager         *blocklist.Manager
+	metadataManager          *storage.MetadataManager // Track play statistics
+	ratingsManager           *storage.RatingsManager  // Track station ratings
+	tagsManager              *storage.TagsManager     // Custom station tags
+	starRenderer             *components.StarRenderer // Render star ratings
 	favoritePath             string
 	quickFavorites           []api.Station
 	quickFavPlayer           *player.MPVPlayer
 	playingFromMain          bool
 	playingStation           *api.Station
+	playHistoryCfg           config.PlayHistoryConfig    // cached play history settings
+	recentlyPlayed           []storage.StationWithMetadata // refreshed on each return to main menu
 	numberBuffer             string               // Buffer for multi-digit number input
 	unifiedMenuIndex         int                  // Unified index for navigating both menu and favorites
 	helpModel                components.HelpModel // Help overlay
@@ -66,6 +89,20 @@ type App struct {
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
 	updateChecked   bool   // True if version check completed
+	// Sleep timer (owned here; activated from player screens)
+	sleepTimer    *internaltimer.SleepTimer
+	sleepSession  *internaltimer.SleepSession
+	sleepDuration time.Duration // duration the user set (for the summary)
+	dataPath      string        // path for persisting sleep timer config
+	sleepSummary  SleepSummaryModel
+	// Recently Played viewport
+	rpViewOffset    int // first RP entry index visible on screen
+	rpVisibleWindow int // last-known number of RP rows that fit on screen
+	// Cleanup guard
+	cleanupOnce sync.Once // Ensures Cleanup is only called once
+	// Bubbletea program handle (set by main) for sending async messages.
+	// Uses atomic.Pointer so the timer goroutine can read it race-free.
+	program atomic.Pointer[tea.Program]
 }
 
 // navigateMsg is sent when changing screens
@@ -73,12 +110,26 @@ type navigateMsg struct {
 	screen Screen
 }
 
-func NewApp() App {
+// SetProgram gives the App a reference to the running Bubbletea program so
+// background goroutines (e.g. the sleep timer) can send messages back to it.
+// It must be called before any sleep timer can be activated; in practice this
+// is guaranteed because timer activation requires user interaction.
+func (a *App) SetProgram(p *tea.Program) {
+	a.program.Store(p)
+}
+
+func NewApp() *App {
+	// Get config directory once
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to determine config directory: %v\n", err)
+		configDir = "." // Fallback to current directory
+	}
+
 	// Get favorite path from environment or use default
 	favPath := os.Getenv("TERA_FAVORITE_PATH")
 	if favPath == "" {
-		configDir, _ := os.UserConfigDir()
-		favPath = filepath.Join(configDir, "tera", "favorites")
+		favPath = filepath.Join(configDir, "tera", "data", "favorites")
 	}
 
 	// Ensure favorites directory exists
@@ -86,21 +137,70 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create favorites directory: %v\n", err)
 	}
 
+	// Get cache path from environment or use default
+	cachePath := os.Getenv("TERA_CACHE_PATH")
+	if cachePath == "" {
+		cachePath = filepath.Join(configDir, "tera", "data", "cache")
+	}
+
+	// Ensure cache directory exists
+	if err := os.MkdirAll(cachePath, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create cache directory: %v\n", err)
+	}
+
 	// Initialize blocklist manager
-	configDir, _ := os.UserConfigDir()
-	blocklistPath := filepath.Join(configDir, "tera", "blocklist.json")
+	blocklistPath := filepath.Join(configDir, "tera", "data", "blocklist.json")
 	blocklistMgr := blocklist.NewManager(blocklistPath)
 	if err := blocklistMgr.Load(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist: %v\n", err)
 	}
 
-	app := App{
+	// Initialize metadata manager for play statistics
+	dataPath := filepath.Join(configDir, "tera", "data")
+	metadataMgr, err := storage.NewMetadataManager(dataPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize metadata manager: %v\n", err)
+	}
+
+	// Initialize ratings manager for star ratings
+	ratingsMgr, err := storage.NewRatingsManager(dataPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize ratings manager: %v\n", err)
+	}
+
+	// Initialize star renderer
+	starRenderer := components.NewStarRenderer(true) // Use unicode by default
+
+	// Initialize tags manager for custom station tags
+	tagsMgr, err := storage.NewTagsManager(dataPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize tags manager: %v\n", err)
+	}
+
+	app := &App{
 		screen:           screenMainMenu,
 		favoritePath:     favPath,
 		apiClient:        api.NewClient(),
 		quickFavPlayer:   player.NewMPVPlayer(),
 		helpModel:        components.NewHelpModel(components.CreateMainMenuHelp()),
 		blocklistManager: blocklistMgr,
+		metadataManager:  metadataMgr,
+		ratingsManager:   ratingsMgr,
+		tagsManager:      tagsMgr,
+		starRenderer:     starRenderer,
+		dataPath:         dataPath,
+	}
+
+	// Set metadata manager on players for play tracking
+	if metadataMgr != nil {
+		app.quickFavPlayer.SetMetadataManager(metadataMgr)
+	}
+
+	// Load play history config
+	if ph, err := storage.LoadPlayHistoryConfigFromUnified(); err == nil {
+		app.playHistoryCfg = ph
+	} else {
+		app.playHistoryCfg = config.DefaultPlayHistoryConfig()
 	}
 
 	// Initialize header renderer
@@ -115,6 +215,9 @@ func NewApp() App {
 	// Load quick favorites
 	app.loadQuickFavorites()
 
+	// Load recently played history
+	app.loadRecentlyPlayed()
+
 	return app
 }
 
@@ -122,11 +225,15 @@ func (a *App) initMainMenu() {
 	items := []components.MenuItem{
 		components.NewMenuItem("Play from Favorites", "", "1"),
 		components.NewMenuItem("Search Stations", "", "2"),
-		components.NewMenuItem("Manage Lists", "", "3"),
-		components.NewMenuItem("Block List", "", "4"),
-		components.NewMenuItem("I Feel Lucky", "", "5"),
-		components.NewMenuItem("Gist Management", "", "6"),
-		components.NewMenuItem("Settings", "", "7"),
+		components.NewMenuItem("Most Played", "", "3"),
+		components.NewMenuItem("Top Rated", "", "4"),
+		components.NewMenuItem("Browse by Tag", "", "5"),
+		components.NewMenuItem("Tag Playlists", "", "6"),
+		components.NewMenuItem("Manage Lists", "", "7"),
+		components.NewMenuItem("Block List", "", "8"),
+		components.NewMenuItem("I Feel Lucky", "", "9"),
+		components.NewMenuItem(syncBackupMenuLabel, "", "0"),
+		components.NewMenuItem("Settings", "", "-"),
 	}
 
 	// Height will be auto-adjusted by CreateMenu to fit all items
@@ -166,12 +273,59 @@ func (a *App) loadQuickFavorites() {
 	a.quickFavorites = list.Stations
 }
 
-func (a App) Init() tea.Cmd {
+func (a *App) Init() tea.Cmd {
 	// Check for updates in the background on startup
 	return checkForUpdates()
 }
 
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Cleanup stops all players and releases resources for graceful shutdown.
+// This function is idempotent and safe to call multiple times.
+func (a *App) Cleanup() {
+	a.cleanupOnce.Do(func() {
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
+		if a.quickFavPlayer != nil {
+			_ = a.quickFavPlayer.Stop()
+		}
+		if a.playScreen.player != nil {
+			_ = a.playScreen.player.Stop()
+		}
+		if a.searchScreen.player != nil {
+			_ = a.searchScreen.player.Stop()
+		}
+		if a.luckyScreen.player != nil {
+			_ = a.luckyScreen.player.Stop()
+		}
+		if a.mostPlayedScreen.player != nil {
+			_ = a.mostPlayedScreen.player.Stop()
+		}
+		if a.topRatedScreen.player != nil {
+			_ = a.topRatedScreen.player.Stop()
+		}
+		if a.tagPlaylistsScreen.player != nil {
+			_ = a.tagPlaylistsScreen.player.Stop()
+		}
+		if a.browseTagsScreen.player != nil {
+			_ = a.browseTagsScreen.player.Stop()
+		}
+		// Close metadata manager to save pending changes
+		if a.metadataManager != nil {
+			_ = a.metadataManager.Close()
+		}
+		// Close ratings manager to save pending changes
+		if a.ratingsManager != nil {
+			_ = a.ratingsManager.Close()
+		}
+		// Close tags manager to stop background goroutine and flush pending changes
+		if a.tagsManager != nil {
+			_ = a.tagsManager.Close()
+		}
+	})
+}
+
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case versionCheckMsg:
 		// Handle version check result (from startup or settings)
@@ -187,16 +341,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			// Stop any playing stations before quitting
-			if a.quickFavPlayer != nil {
-				_ = a.quickFavPlayer.Stop()
-			}
-			if a.screen == screenPlay && a.playScreen.player != nil {
-				_ = a.playScreen.player.Stop()
-			} else if a.screen == screenSearch && a.searchScreen.player != nil {
-				_ = a.searchScreen.player.Stop()
-			} else if a.screen == screenLucky && a.luckyScreen.player != nil {
-				_ = a.luckyScreen.player.Stop()
-			}
+			a.Cleanup()
 			return a, tea.Quit
 		}
 
@@ -228,6 +373,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.screen {
 		case screenPlay:
 			a.playScreen = NewPlayModel(a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking and metadata display
+			if a.metadataManager != nil {
+				a.playScreen.metadataManager = a.metadataManager
+				if a.playScreen.player != nil {
+					a.playScreen.player.SetMetadataManager(a.metadataManager)
+				}
+			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.playScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.playScreen.starRenderer = a.starRenderer
+			}
+			// Set tags manager and renderer
+			if a.tagsManager != nil {
+				a.playScreen.tagsManager = a.tagsManager
+				a.playScreen.tagRenderer = components.NewTagRenderer()
+			}
+			// Pass data path for sleep timer config
+			a.playScreen.dataPath = a.dataPath
+			// Sync running timer state so Z cancels rather than reopens the dialog.
+			a.playScreen.sleepTimerActive = a.sleepTimer != nil
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.playScreen.width = a.width
@@ -235,7 +403,34 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.playScreen.Init()
 		case screenSearch:
-			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.dataPath, a.blocklistManager)
+			// Apply search visibility setting
+			if cfg, err := storage.LoadBlocklistConfigFromUnified(); err == nil {
+				a.searchScreen.showBlockedInSearch = cfg.ShowBlockedInSearch
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: failed to load blocklist visibility setting: %v\n", err)
+			}
+			// Set metadata manager for play tracking and metadata display
+			if a.metadataManager != nil {
+				a.searchScreen.metadataManager = a.metadataManager
+				if a.searchScreen.player != nil {
+					a.searchScreen.player.SetMetadataManager(a.metadataManager)
+				}
+			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.searchScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.searchScreen.starRenderer = a.starRenderer
+			}
+			// Set tags manager and renderer
+			if a.tagsManager != nil {
+				a.searchScreen.tagsManager = a.tagsManager
+				a.searchScreen.tagRenderer = components.NewTagRenderer()
+			}
+			// Sync running timer state so Z cancels rather than reopens the dialog.
+			a.searchScreen.sleepTimerActive = a.sleepTimer != nil
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -252,12 +447,102 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.listManagementScreen.Init()
 		case screenLucky:
 			a.luckyScreen = NewLuckyModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking and metadata display
+			if a.metadataManager != nil {
+				a.luckyScreen.metadataManager = a.metadataManager
+				if a.luckyScreen.player != nil {
+					a.luckyScreen.player.SetMetadataManager(a.metadataManager)
+				}
+			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.luckyScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.luckyScreen.starRenderer = a.starRenderer
+			}
+			// Set tags manager and renderer
+			if a.tagsManager != nil {
+				a.luckyScreen.tagsManager = a.tagsManager
+				a.luckyScreen.tagRenderer = components.NewTagRenderer()
+			}
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.luckyScreen.width = a.width
 				a.luckyScreen.height = a.height
 			}
 			return a, a.luckyScreen.Init()
+		case screenMostPlayed:
+			a.mostPlayedScreen = NewMostPlayedModel(a.metadataManager, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking
+			if a.metadataManager != nil && a.mostPlayedScreen.player != nil {
+				a.mostPlayedScreen.player.SetMetadataManager(a.metadataManager)
+			}
+			// Set ratings manager and star renderer for star rating feature
+			if a.ratingsManager != nil {
+				a.mostPlayedScreen.ratingsManager = a.ratingsManager
+			}
+			if a.starRenderer != nil {
+				a.mostPlayedScreen.starRenderer = a.starRenderer
+			}
+			// Set tags manager for tag pill display
+			if a.tagsManager != nil {
+				a.mostPlayedScreen.tagsManager = a.tagsManager
+				a.mostPlayedScreen.tagRenderer = components.NewTagRenderer()
+			}
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.mostPlayedScreen.width = a.width
+				a.mostPlayedScreen.height = a.height
+			}
+			return a, a.mostPlayedScreen.Init()
+		case screenTopRated:
+			a.topRatedScreen = NewTopRatedModel(a.ratingsManager, a.metadataManager, a.starRenderer, a.favoritePath, a.blocklistManager)
+			// Set metadata manager for play tracking
+			if a.metadataManager != nil && a.topRatedScreen.player != nil {
+				a.topRatedScreen.player.SetMetadataManager(a.metadataManager)
+			}
+			// Set tags manager for tag pill display
+			if a.tagsManager != nil {
+				a.topRatedScreen.tagsManager = a.tagsManager
+				a.topRatedScreen.tagRenderer = components.NewTagRenderer()
+			}
+			// Set dimensions immediately if we have them
+			if a.width > 0 && a.height > 0 {
+				a.topRatedScreen.width = a.width
+				a.topRatedScreen.height = a.height
+			}
+			return a, a.topRatedScreen.Init()
+		case screenBrowseTags:
+			if a.tagsManager != nil {
+				a.browseTagsScreen = NewBrowseTagsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				// Set metadata manager for play tracking
+				if a.metadataManager != nil && a.browseTagsScreen.player != nil {
+					a.browseTagsScreen.player.SetMetadataManager(a.metadataManager)
+				}
+				if a.width > 0 && a.height > 0 {
+					a.browseTagsScreen.width = a.width
+					a.browseTagsScreen.height = a.height
+				}
+				return a, a.browseTagsScreen.Init()
+			}
+			a.screen = screenMainMenu
+			return a, func() tea.Msg { return backToMainMsg{} }
+		case screenTagPlaylists:
+			if a.tagsManager != nil {
+				a.tagPlaylistsScreen = NewTagPlaylistsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				// Set metadata manager for play tracking
+				if a.metadataManager != nil && a.tagPlaylistsScreen.player != nil {
+					a.tagPlaylistsScreen.player.SetMetadataManager(a.metadataManager)
+				}
+				if a.width > 0 && a.height > 0 {
+					a.tagPlaylistsScreen.width = a.width
+					a.tagPlaylistsScreen.height = a.height
+				}
+				return a, a.tagPlaylistsScreen.Init()
+			}
+			a.screen = screenMainMenu
+			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
 			// Set dimensions immediately if we have them
@@ -268,6 +553,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.gistScreen.Init()
 		case screenSettings:
 			a.settingsScreen = NewSettingsModel(a.favoritePath)
+			// Pass metadata manager for play history clear action
+			a.settingsScreen.metadataManager = a.metadataManager
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.settingsScreen.width = a.width
@@ -313,21 +600,107 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.blocklistScreen.Init()
 		case screenMainMenu:
-			// Return to main menu and reload favorites
+			// Return to main menu and reload favorites and play history
 			a.loadQuickFavorites()
+			a.refreshPlayHistoryConfig()
+			a.loadRecentlyPlayed()
 			a.unifiedMenuIndex = 0
 			a.numberBuffer = ""
+			a.rpViewOffset = 0
 			return a, nil
 		}
+		return a, nil
+
+	case sleepTimerActivateMsg:
+		// A player screen confirmed a duration — start the timer.
+		d := time.Duration(msg.Minutes) * time.Minute
+		a.sleepDuration = d
+		a.sleepSession = internaltimer.NewSleepSession()
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+		}
+		a.sleepTimer = internaltimer.NewSleepTimer(func() {
+			if p := a.program.Load(); p != nil {
+				p.Send(sleepExpiredMsg{})
+			}
+		})
+		a.sleepTimer.Start(d)
+		// Persist the chosen duration off the UI goroutine to avoid blocking on slow filesystems.
+		dataPath, mins := a.dataPath, msg.Minutes
+		return a, func() tea.Msg {
+			_ = storage.SaveSleepTimerConfig(dataPath, &storage.SleepTimerConfig{
+				LastDurationMinutes: mins,
+			})
+			return nil
+		}
+
+	case sleepTimerCancelMsg:
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
+		a.sleepSession = nil
+		a.playScreen.sleepTimerActive = false
+		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepTimerActive = false
+		a.searchScreen.sleepCountdown = ""
+		return a, nil
+
+	case sleepTimerExtendMsg:
+		if a.sleepTimer != nil {
+			a.sleepTimer.Extend(time.Duration(msg.Minutes) * time.Minute)
+		}
+		return a, nil
+
+	case tickMsg:
+		// Refresh sleep timer countdown on all player screens
+		countdown := ""
+		if a.sleepTimer != nil {
+			if rem, active := a.sleepTimer.Remaining(); active {
+				countdown = fmt.Sprintf("Stops in %d:%02d", int(rem.Minutes()), int(rem.Seconds())%60)
+			}
+		}
+		a.playScreen.sleepCountdown = countdown
+		a.searchScreen.sleepCountdown = countdown
+		// fall through — don't return; let the screen-routing below forward it
+
+	case sleepExpiredMsg:
+		// Sleep timer fired — stop playback on all screens and show summary
+		a.stopAllPlayback()
+		if a.sleepTimer != nil {
+			a.sleepTimer.Cancel()
+			a.sleepTimer = nil
+		}
+		if a.sleepSession != nil {
+			a.sleepSummary = NewSleepSummaryModel(a.sleepSession, a.sleepDuration, a.width, a.height)
+			a.sleepSession = nil
+		} else {
+			// Session data unavailable (unexpected); fall back to main menu
+			a.screen = screenMainMenu
+			a.loadQuickFavorites()
+			a.playScreen.sleepTimerActive = false
+			a.playScreen.sleepCountdown = ""
+			a.searchScreen.sleepTimerActive = false
+			a.searchScreen.sleepCountdown = ""
+			return a, nil
+		}
+		a.screen = screenSleepSummary
+		a.playScreen.sleepTimerActive = false
+		a.playScreen.sleepCountdown = ""
+		a.searchScreen.sleepTimerActive = false
+		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
-		// Reload quick favorites in case they were updated
+		// Reload quick favorites and play history in case they were updated
 		a.loadQuickFavorites()
+		a.refreshPlayHistoryConfig()
+		a.loadRecentlyPlayed()
 		a.unifiedMenuIndex = 0
 		a.numberBuffer = ""
+		a.rpViewOffset = 0
 		return a, nil
 	}
 
@@ -452,12 +825,38 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.screen = screenMainMenu
 		}
 		return a, cmd
+	case screenMostPlayed:
+		a.mostPlayedScreen, cmd = a.mostPlayedScreen.Update(msg)
+		return a, cmd
+	case screenTopRated:
+		a.topRatedScreen, cmd = a.topRatedScreen.Update(msg)
+		return a, cmd
+	case screenBrowseTags:
+		a.browseTagsScreen, cmd = a.browseTagsScreen.Update(msg)
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenTagPlaylists:
+		a.tagPlaylistsScreen, cmd = a.tagPlaylistsScreen.Update(msg)
+		if _, ok := msg.(backToMainMsg); ok {
+			a.screen = screenMainMenu
+		}
+		return a, cmd
+	case screenSleepSummary:
+		var m tea.Model
+		m, cmd = a.sleepSummary.Update(msg)
+		a.sleepSummary = m.(SleepSummaryModel)
+		// navigateMsg from the summary (e.g. 0 → Main Menu) is handled by the
+		// top-level navigateMsg case above on the next Update cycle, so just
+		// return the cmd here and let it propagate normally.
+		return a, cmd
 	}
 
 	return a, nil
 }
 
-func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
 		// Handle volume display countdown (only for positive values, not persistent -1)
@@ -509,7 +908,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Decrease volume
 				newVol := a.quickFavPlayer.DecreaseVolume(5)
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
-				startTick := a.volumeDisplayFrames == 0
+				startTick := a.volumeDisplayFrames <= 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil && newVol >= 0 {
@@ -525,7 +924,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Increase volume
 				newVol := a.quickFavPlayer.IncreaseVolume(5)
 				a.volumeDisplay = fmt.Sprintf("Volume: %d%%", newVol)
-				startTick := a.volumeDisplayFrames == 0
+				startTick := a.volumeDisplayFrames <= 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil {
@@ -545,7 +944,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					a.volumeDisplay = fmt.Sprintf("Volume: %d%%", vol)
 				}
-				startTick := a.volumeDisplayFrames == 0
+				startTick := a.volumeDisplayFrames <= 0
 				a.volumeDisplayFrames = 2 // Show for 2 seconds
 				// Update station volume if we have one
 				if a.playingStation != nil && !muted && vol >= 0 {
@@ -571,36 +970,71 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
+		// Handle '-' shortcut for Settings (immediate, never a QF prefix)
+		if msg.String() == "-" {
+			a.numberBuffer = ""
+			a.unifiedMenuIndex = mainMenuItemCount - 1 // Settings is last menu item
+			return a.executeMenuAction(mainMenuItemCount - 1)
+		}
+
 		// Handle number input for menu and quick favorites
 		key := msg.String()
 		if len(key) == 1 && key >= "0" && key <= "9" {
 			a.numberBuffer += key
 
-			// For numbers >= 10, we need at least 2 digits
-			// Allow up to 3 digits for larger lists (e.g., 100+)
+			// maxFavNum is the highest valid shortcut number (QF start at 10, RP follow)
+			maxFavNum := 9 + len(a.quickFavorites) + len(a.recentlyPlayed)
+
+			// For 2+ digit buffers, check for QF matches
 			if len(a.numberBuffer) >= 2 {
-				// Check if this could be a valid selection
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
 
-				// Calculate max valid number
-				maxFavNum := 9 + len(a.quickFavorites) // 10-based indexing
-
-				// If the number is valid for favorites, play it
+				// Valid QF or RP number — play it immediately
 				if num >= 10 && num <= maxFavNum {
 					idx := num - 10
-					a.numberBuffer = "" // Clear buffer
-					return a.playQuickFavorite(idx)
+					a.numberBuffer = ""
+					if idx < len(a.quickFavorites) {
+						return a.playQuickFavorite(idx)
+					}
+					rpIdx := idx - len(a.quickFavorites)
+					if rpIdx < len(a.recentlyPlayed) {
+						return a.playRecentStation(rpIdx)
+					}
+					return a, nil
 				}
 
-				// If number is too large or we have 3+ digits, clear and ignore
+				// Out of range or 3+ digits — clear and ignore
 				if num > maxFavNum || len(a.numberBuffer) >= 3 {
 					a.numberBuffer = ""
 					return a, nil
 				}
 			}
 
-			// Single digit - could be menu shortcut (1-6) or start of larger number
+			// Single digit: execute immediately if it cannot start a valid QF number.
+			// A digit d can start a QF number only if d*10..d*10+9 overlaps [10, maxFavNum],
+			// i.e. d >= 1 && d*10 <= maxFavNum.
+			// '0' never starts a QF (00-09 < 10), so always execute immediately.
+			if len(a.numberBuffer) == 1 {
+				digit := 0
+				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &digit)
+				canStartQF := digit >= 1 && digit*10 <= maxFavNum
+				if !canStartQF {
+					a.numberBuffer = ""
+					if digit == 0 {
+						// '0' → Gist Management
+						a.unifiedMenuIndex = 9
+						return a.executeMenuAction(9)
+					}
+					if digit >= 1 && digit <= mainMenuItemCount {
+						a.unifiedMenuIndex = digit - 1
+						return a.executeMenuAction(digit - 1)
+					}
+					return a, nil
+				}
+			}
+
+			// Ambiguous single digit (could start a QF number) — buffer and wait
 			return a, nil
 		}
 
@@ -610,19 +1044,30 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.numberBuffer != "" {
 				num := 0
 				_, _ = fmt.Sscanf(a.numberBuffer, "%d", &num)
-				a.numberBuffer = "" // Clear buffer
+				a.numberBuffer = ""
 
-				// Numbers 1-6 are for menu items
-				if num >= 1 && num <= mainMenuItemCount {
-					a.unifiedMenuIndex = num - 1
-					return a.executeMenuAction(num - 1)
-				}
-				// Numbers 10+ are for quick favorites
+				// QF and RP shortcuts (10+) must be checked before the menu-item
+				// range, which also covers 10 and 11 (mainMenuItemCount == 11).
 				if num >= 10 {
 					idx := num - 10
 					if idx < len(a.quickFavorites) {
 						return a.playQuickFavorite(idx)
 					}
+					rpIdx := idx - len(a.quickFavorites)
+					if rpIdx < len(a.recentlyPlayed) {
+						return a.playRecentStation(rpIdx)
+					}
+					return a, nil
+				}
+				// '0' shortcut → Gist Management
+				if num == 0 {
+					a.unifiedMenuIndex = 9
+					return a.executeMenuAction(9)
+				}
+				// Menu items 1–9
+				if num >= 1 && num <= mainMenuItemCount {
+					a.unifiedMenuIndex = num - 1
+					return a.executeMenuAction(num - 1)
 				}
 				return a, nil
 			}
@@ -630,12 +1075,15 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			menuItemCount := mainMenuItemCount
 			if a.unifiedMenuIndex < menuItemCount {
 				return a.executeMenuAction(a.unifiedMenuIndex)
-			} else {
-				// It's a quick favorite
-				favIndex := a.unifiedMenuIndex - menuItemCount
-				if favIndex < len(a.quickFavorites) {
-					return a.playQuickFavorite(favIndex)
-				}
+			}
+			// It's a quick favorite or recently played
+			offset := a.unifiedMenuIndex - menuItemCount
+			if offset < len(a.quickFavorites) {
+				return a.playQuickFavorite(offset)
+			}
+			rpIdx := offset - len(a.quickFavorites)
+			if rpIdx < len(a.recentlyPlayed) {
+				return a.playRecentStation(rpIdx)
 			}
 			return a, nil
 		}
@@ -643,19 +1091,21 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle arrow keys for unified menu navigation
 		menuItemCount := mainMenuItemCount
 		favCount := len(a.quickFavorites)
-		totalItems := menuItemCount + favCount
+		totalItems := menuItemCount + favCount + len(a.recentlyPlayed)
 
 		switch msg.String() {
 		case "up", "k":
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex > 0 {
 				a.unifiedMenuIndex--
+				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
 		case "down", "j":
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex < totalItems-1 {
 				a.unifiedMenuIndex++
+				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
 		}
@@ -669,7 +1119,7 @@ func (a App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
+func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	// Stop any currently playing quick favorite before navigating
 	if a.playingFromMain && a.quickFavPlayer != nil {
 		_ = a.quickFavPlayer.Stop()
@@ -686,23 +1136,39 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSearch}
 		}
-	case 2: // Manage Lists
+	case 2: // Most Played
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenMostPlayed}
+		}
+	case 3: // Top Rated
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenTopRated}
+		}
+	case 4: // Browse by Tag
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenBrowseTags}
+		}
+	case 5: // Tag Playlists
+		return a, func() tea.Msg {
+			return navigateMsg{screen: screenTagPlaylists}
+		}
+	case 6: // Manage Lists
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenList}
 		}
-	case 3: // Block List
+	case 7: // Block List
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenBlocklist}
 		}
-	case 4: // I Feel Lucky
+	case 8: // I Feel Lucky
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 5: // Gist Management
+	case 9: // Sync & Backup
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
-	case 6: // Settings
+	case 10: // Settings
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenSettings}
 		}
@@ -710,8 +1176,28 @@ func (a App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// refreshPlayHistoryConfig reloads the play history config from disk so that
+// changes made in Settings (e.g. decreasing the size) are reflected immediately.
+func (a *App) refreshPlayHistoryConfig() {
+	if ph, err := storage.LoadPlayHistoryConfigFromUnified(); err == nil {
+		a.playHistoryCfg = ph
+	}
+}
+
+// loadRecentlyPlayed loads recently played stations from metadata, respecting
+// the play history config (enabled flag and size limit).
+// Callers that need a fresh config from disk should call refreshPlayHistoryConfig
+// first (e.g. when returning to the main menu from Settings).
+func (a *App) loadRecentlyPlayed() {
+	if !a.playHistoryCfg.Enabled || a.metadataManager == nil {
+		a.recentlyPlayed = nil
+		return
+	}
+	a.recentlyPlayed = a.metadataManager.GetRecentlyPlayed(a.playHistoryCfg.Size)
+}
+
 // playQuickFavorite plays a station from the quick favorites list
-func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
+func (a *App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	if index >= len(a.quickFavorites) {
 		return a, nil
 	}
@@ -736,7 +1222,33 @@ func (a App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (a App) View() string {
+// playRecentStation plays a station from the recently played list
+func (a *App) playRecentStation(index int) (tea.Model, tea.Cmd) {
+	if index >= len(a.recentlyPlayed) {
+		return a, nil
+	}
+
+	station := a.recentlyPlayed[index].Station
+	a.playingStation = &station
+	a.playingFromMain = true
+
+	// Stop any currently playing station
+	if a.quickFavPlayer != nil {
+		_ = a.quickFavPlayer.Stop()
+	}
+
+	// Start playback
+	return a, func() tea.Msg {
+		if a.quickFavPlayer != nil {
+			if err := a.quickFavPlayer.Play(&station); err != nil {
+				return playbackErrorMsg{err}
+			}
+		}
+		return playbackStartedMsg{}
+	}
+}
+
+func (a *App) View() string {
 	switch a.screen {
 	case screenMainMenu:
 		return a.viewMainMenu()
@@ -760,8 +1272,38 @@ func (a App) View() string {
 		return a.appearanceSettingsScreen.View()
 	case screenBlocklist:
 		return a.blocklistScreen.View()
+	case screenMostPlayed:
+		return a.mostPlayedScreen.View()
+	case screenTopRated:
+		return a.topRatedScreen.View()
+	case screenBrowseTags:
+		return a.browseTagsScreen.View()
+	case screenTagPlaylists:
+		return a.tagPlaylistsScreen.View()
+	case screenSleepSummary:
+		return a.sleepSummary.View()
 	}
 	return "Unknown screen"
+}
+
+// stopAllPlayback stops mpv on every screen that may be playing.
+func (a *App) stopAllPlayback() {
+	for _, p := range []*player.MPVPlayer{
+		a.quickFavPlayer,
+		a.playScreen.player,
+		a.searchScreen.player,
+		a.luckyScreen.player,
+		a.mostPlayedScreen.player,
+		a.topRatedScreen.player,
+		a.tagPlaylistsScreen.player,
+		a.browseTagsScreen.player,
+	} {
+		if p != nil {
+			_ = p.Stop()
+		}
+	}
+	a.playingFromMain = false
+	a.playingStation = nil
 }
 
 // saveStationVolume saves the updated volume for a station in the favorites list
@@ -791,7 +1333,55 @@ func (a *App) saveStationVolume(station *api.Station) {
 	a.loadQuickFavorites()
 }
 
-func (a App) viewMainMenu() string {
+// updateRPViewOffset adjusts rpViewOffset so the currently selected RP entry
+// is always visible in the clipped window. Call this after changing unifiedMenuIndex.
+func (a *App) updateRPViewOffset(visibleCount ...int) {
+	rpStart := mainMenuItemCount + len(a.quickFavorites)
+	rpCount := len(a.recentlyPlayed)
+	if rpCount == 0 {
+		a.rpViewOffset = 0
+		return
+	}
+
+	// Determine how many RP rows are currently visible. The caller may supply
+	// this value; otherwise fall back to the full list (conservative / safe).
+	win := rpCount
+	if len(visibleCount) > 0 && visibleCount[0] > 0 {
+		win = visibleCount[0]
+	}
+
+	// Cursor position inside the RP list (may be negative = not in RP section)
+	rpCursor := a.unifiedMenuIndex - rpStart
+	if rpCursor < 0 {
+		// Cursor is above the RP section — scroll to top
+		a.rpViewOffset = 0
+		return
+	}
+	if rpCursor >= rpCount {
+		rpCursor = rpCount - 1
+	}
+
+	// Scroll down: keep cursor within window
+	if rpCursor >= a.rpViewOffset+win {
+		a.rpViewOffset = rpCursor - win + 1
+	}
+	// Scroll up
+	if rpCursor < a.rpViewOffset {
+		a.rpViewOffset = rpCursor
+	}
+	// Clamp
+	if a.rpViewOffset < 0 {
+		a.rpViewOffset = 0
+	}
+	if a.rpViewOffset > rpCount-win {
+		a.rpViewOffset = rpCount - win
+		if a.rpViewOffset < 0 {
+			a.rpViewOffset = 0
+		}
+	}
+}
+
+func (a *App) viewMainMenu() string {
 	var content strings.Builder
 
 	// Add "Choose an option:" with number buffer display
@@ -809,11 +1399,15 @@ func (a App) viewMainMenu() string {
 	}{
 		{"1", "Play from Favorites"},
 		{"2", "Search Stations"},
-		{"3", "Manage Lists"},
-		{"4", "Block List"},
-		{"5", "I Feel Lucky"},
-		{"6", "Gist Management"},
-		{"7", "Settings"},
+		{"3", "Most Played"},
+		{"4", "Top Rated"},
+		{"5", "Browse by Tag"},
+		{"6", "Tag Playlists"},
+		{"7", "Manage Lists"},
+		{"8", "Block List"},
+		{"9", "I Feel Lucky"},
+		{"0", syncBackupMenuLabel},
+		{"-", "Settings"},
 	}
 
 	for i, item := range menuItems {
@@ -832,6 +1426,13 @@ func (a App) viewMainMenu() string {
 		content.WriteString("\n")
 		content.WriteString(successStyle().Render("♫ Now Playing: "))
 		content.WriteString(stationNameStyle().Render(a.playingStation.TrimName()))
+		// Show star rating if rated
+		if a.ratingsManager != nil {
+			if r := a.ratingsManager.GetRating(a.playingStation.StationUUID); r != nil && a.starRenderer != nil {
+				content.WriteString(" ")
+				content.WriteString(a.starRenderer.RenderCompactPlain(r.Rating))
+			}
+		}
 		content.WriteString("\n")
 	}
 
@@ -892,6 +1493,131 @@ func (a App) viewMainMenu() string {
 		}
 	}
 
+	// Add recently played section if available, clipped to available screen space.
+	if len(a.recentlyPlayed) > 0 {
+		// ── viewport calculation ────────────────────────────────────────────
+		// Lines already committed: header + chrome (title/subtitle/blank) +
+		// menu items + blank + QF header + QF items + blank + RP header + 1 margin + footer.
+		headerLines := visibleLineCount(renderHeader())
+		p := getPadding()
+		const (
+			// assemblePageContent always emits 3 lines before Content:
+			//   \n (blank-after-header) + title\n + \n (empty subtitle line)
+			// Content itself starts with "Choose an option:\n\n" = 2 more lines.
+			chromeLines   = 5  // 3 (assemblePageContent) + 2 ("Choose an option:\n\n")
+			footerLines   = 2  // 1 margin + 1 help bar
+			rpHeaderLines = 2  // blank + "─── Recently Played ───"
+		)
+		menuLines := mainMenuItemCount // one line per menu item
+		if a.playingFromMain && a.playingStation != nil {
+			menuLines += 2 // now-playing block: blank + station line
+		}
+		qfLines := 0
+		if len(a.quickFavorites) > 0 {
+			qfLines = 2 + len(a.quickFavorites) // blank + header + items
+		}
+		volumeLines := 0
+		if a.volumeDisplay != "" {
+			// blank line before the banner + banner line itself.
+			// The final blank line before the help bar is already covered by footerLines.
+			volumeLines = 2
+		}
+		// p.PageVertical is the bottom padding added by docStyleNoTopPadding;
+		// RenderPageWithBottomHelp subtracts it, so we must account for it here
+		// to avoid inflating visibleRP and overflowing the terminal height.
+		fixed := headerLines + chromeLines + menuLines + qfLines + volumeLines + rpHeaderLines + footerLines + p.PageVertical
+		visibleRP := a.height - fixed
+		// Reserve lines for scroll indicators conservatively (both can appear).
+		// We check before clamping whether the list could ever need scrolling.
+		// Checking rpViewOffset > 0 here would be premature: updateRPViewOffset
+		// is called below and may change rpViewOffset from 0 to a positive value
+		// (e.g. after a resize), causing the up-indicator space to be missed.
+		if len(a.recentlyPlayed) > visibleRP {
+			// List is scrollable — reserve space for both indicators.
+			const maxIndicatorLines = 2
+			visibleRP -= maxIndicatorLines
+		}
+		if visibleRP < 1 {
+			visibleRP = 1
+		}
+		// If the user has set a display row cap, honour it.
+		if a.playHistoryCfg.DisplayRows > 0 && visibleRP > a.playHistoryCfg.DisplayRows {
+			visibleRP = a.playHistoryCfg.DisplayRows
+		}
+		if visibleRP > len(a.recentlyPlayed) {
+			visibleRP = len(a.recentlyPlayed)
+		}
+
+		// NOTE: We mutate state here (unusual in View) because the accurate
+		// visible window size is only known at render time and must be cached
+		// for key-event handlers to use during navigation.
+		a.rpVisibleWindow = visibleRP
+		// Keep viewport in sync with cursor now that we know the window size.
+		a.updateRPViewOffset(visibleRP)
+
+		content.WriteString("\n")
+		content.WriteString(quickFavoritesStyle().Render("─── Recently Played ───"))
+		content.WriteString("\n")
+
+		// Scroll indicator: show how many entries are hidden above.
+		if a.rpViewOffset > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↑ %d more (↑/k to scroll)", a.rpViewOffset)))
+			content.WriteString("\n")
+		}
+
+		rpShortcutStart := 10 + len(a.quickFavorites)
+		end := a.rpViewOffset + visibleRP
+		if end > len(a.recentlyPlayed) {
+			end = len(a.recentlyPlayed)
+		}
+		for i := a.rpViewOffset; i < end; i++ {
+			entry := a.recentlyPlayed[i]
+			shortcut := fmt.Sprintf("%d", rpShortcutStart+i)
+
+			var stationInfo strings.Builder
+			stationInfo.WriteString(entry.Station.TrimName())
+			if entry.Station.Country != "" {
+				stationInfo.WriteString(" • ")
+				stationInfo.WriteString(entry.Station.Country)
+			}
+			if entry.Metadata != nil {
+				stationInfo.WriteString(" • ")
+				stationInfo.WriteString(storage.FormatLastPlayed(entry.Metadata.LastPlayed))
+			}
+
+			unifiedIdx := mainMenuItemCount + len(a.quickFavorites) + i
+			prefix := "  "
+			if unifiedIdx == a.unifiedMenuIndex {
+				prefix = "> "
+			}
+
+			if a.playingFromMain && a.playingStation != nil &&
+				a.playingStation.StationUUID == entry.Station.StationUUID {
+				playingLine := fmt.Sprintf("%s%s. ▶ %s", prefix, shortcut, stationInfo.String())
+				if unifiedIdx == a.unifiedMenuIndex {
+					content.WriteString(selectedItemStyle().Render(playingLine))
+				} else {
+					content.WriteString(normalItemStyle().Render(playingLine))
+				}
+			} else {
+				lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
+				if unifiedIdx == a.unifiedMenuIndex {
+					content.WriteString(selectedItemStyle().Render(lineContent))
+				} else {
+					content.WriteString(normalItemStyle().Render(lineContent))
+				}
+			}
+			content.WriteString("\n")
+		}
+
+		// Scroll indicator: show how many entries are hidden below.
+		hiddenBelow := len(a.recentlyPlayed) - end
+		if hiddenBelow > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↓ %d more (↓/j to scroll)", hiddenBelow)))
+			content.WriteString("\n")
+		}
+	}
+
 	// Add volume display if visible
 	if a.volumeDisplay != "" {
 		content.WriteString("\n")
@@ -899,12 +1625,15 @@ func (a App) viewMainMenu() string {
 		content.WriteString("\n")
 	}
 
+	// Guaranteed blank line margin before the footer help bar.
+	content.WriteString("\n")
+
 	// Build help text based on playing state
 	var helpText string
 	if a.playingFromMain {
 		helpText = "↑↓/jk: Navigate • Enter: Select • /*: Volume • m: Mute • Esc: Stop • ?: Help"
 	} else {
-		helpText = "↑↓/jk: Navigate • Enter: Select • 1-7: Menu • 10+: Quick Play • ?: Help"
+		helpText = "↑↓/jk: Navigate • Enter: Select • 1-0/-: Menu shortcuts • 10+: QF/RP • ?: Help"
 	}
 
 	// Add update indicator if available (yellow)

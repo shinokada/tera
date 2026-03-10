@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shinokada/tera/v2/internal/api"
+	"github.com/shinokada/tera/v3/internal/api"
 )
 
 func TestNewManager(t *testing.T) {

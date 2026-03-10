@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/storage"
+	"github.com/shinokada/tera/v3/internal/storage"
 )
 
 // HeaderRenderer handles rendering the app header based on configuration
@@ -14,8 +14,10 @@ type HeaderRenderer struct {
 
 // NewHeaderRenderer creates a new header renderer with current config
 func NewHeaderRenderer() *HeaderRenderer {
-	config, err := storage.LoadAppearanceConfig()
+	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
+		config = storage.DefaultAppearanceConfig()
+	} else if err := config.Validate(); err != nil {
 		config = storage.DefaultAppearanceConfig()
 	}
 
@@ -147,8 +149,11 @@ func (h *HeaderRenderer) styleASCII(art string) string {
 
 // Reload reloads the configuration (call after config changes)
 func (h *HeaderRenderer) Reload() error {
-	config, err := storage.LoadAppearanceConfig()
+	config, err := storage.LoadAppearanceConfigFromUnified()
 	if err != nil {
+		return err
+	}
+	if err := config.Validate(); err != nil {
 		return err
 	}
 	h.config = config

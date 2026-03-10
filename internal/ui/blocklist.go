@@ -8,8 +8,10 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/shinokada/tera/v2/internal/blocklist"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
 // blocklistState represents the current state in the blocklist screen
@@ -27,28 +29,30 @@ const (
 	blocklistImportExport
 	blocklistConfirmDeleteRule
 	blocklistConfirmAddRule
+	blocklistSearchVisibility
 )
 
 // BlocklistModel represents the blocklist screen
 type BlocklistModel struct {
-	state             blocklistState
-	manager           *blocklist.Manager
-	mainMenu          list.Model
-	rulesMenu         list.Model
-	listModel         list.Model
-	rulesListModel    list.Model
-	stations          []blocklist.BlockedStation
-	rules             []blocklist.BlockRule
-	selectedRuleIndex int
-	pendingRuleType   blocklist.BlockRuleType
-	pendingRuleValue  string
-	previousState     blocklistState
-	textInput         textinput.Model
-	message           string
-	messageTime       int
-	err               error
-	width             int
-	height            int
+	state                blocklistState
+	manager              *blocklist.Manager
+	mainMenu             list.Model
+	rulesMenu            list.Model
+	listModel            list.Model
+	rulesListModel       list.Model
+	stations             []blocklist.BlockedStation
+	rules                []blocklist.BlockRule
+	selectedRuleIndex    int
+	pendingRuleType      blocklist.BlockRuleType
+	pendingRuleValue     string
+	previousState        blocklistState
+	textInput            textinput.Model
+	message              string
+	messageTime          int
+	err                  error
+	width                int
+	height               int
+	showBlockedInSearch  bool // current setting value
 }
 
 // blocklistItem wraps a BlockedStation for list.Item interface
@@ -84,13 +88,28 @@ func (b blocklistItem) FilterValue() string {
 	return b.station.Name
 }
 
+// searchVisibilityLabel returns the menu subtitle for the Search Visibility item.
+func searchVisibilityLabel(show bool) string {
+	if show {
+		return "On (shown in search)"
+	}
+	return "Off (hidden from search)"
+}
+
 // NewBlocklistModel creates a new blocklist model
 func NewBlocklistModel(manager *blocklist.Manager) BlocklistModel {
+	// Load search visibility setting
+	showBlocked := false
+	if cfg, err := storage.LoadBlocklistConfigFromUnified(); err == nil {
+		showBlocked = cfg.ShowBlockedInSearch
+	}
+
 	// Create main menu
 	mainMenuItems := []components.MenuItem{
 		components.NewMenuItem("View Blocked Stations", "Manage individually blocked stations", "1"),
 		components.NewMenuItem("Manage Block Rules", "Block by country/language/tag", "2"),
 		components.NewMenuItem("Import/Export Blocklist", "Backup and restore blocklist", "3"),
+		components.NewMenuItem("Search Visibility", searchVisibilityLabel(showBlocked), "4"),
 	}
 	mainMenu := components.CreateMenu(mainMenuItems, "📋 Block List Management", 80, 10)
 
@@ -121,12 +140,13 @@ func NewBlocklistModel(manager *blocklist.Manager) BlocklistModel {
 	ti.Width = 50
 
 	return BlocklistModel{
-		state:     blocklistMainMenu,
-		manager:   manager,
-		mainMenu:  mainMenu,
-		rulesMenu: rulesMenu,
-		listModel: l,
-		textInput: ti,
+		state:               blocklistMainMenu,
+		manager:             manager,
+		mainMenu:            mainMenu,
+		rulesMenu:           rulesMenu,
+		listModel:           l,
+		textInput:           ti,
+		showBlockedInSearch: showBlocked,
 	}
 }
 
@@ -160,15 +180,18 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		h := msg.Height - 8
-		if h < 10 {
-			h = 10
+		// listHeight accounts for: ASCII header (~8 lines) + page chrome
+		// (blank line + title + subtitle + help = ~4 lines) + bottom padding (~2)
+		// Use 14 to match the same overhead used in play.go.
+		listHeight := msg.Height - 14
+		if listHeight < 5 {
+			listHeight = 5
 		}
 		// Update all list sizes
-		m.mainMenu.SetSize(msg.Width-4, h)
-		m.rulesMenu.SetSize(msg.Width-4, h)
-		m.listModel.SetSize(msg.Width-4, h)
-		m.rulesListModel.SetSize(msg.Width-4, h)
+		m.mainMenu.SetSize(msg.Width-4, listHeight)
+		m.rulesMenu.SetSize(msg.Width-4, listHeight)
+		m.listModel.SetSize(msg.Width-4, listHeight)
+		m.rulesListModel.SetSize(msg.Width-4, listHeight)
 		return m, nil
 
 	case blocklistLoadedMsg:
@@ -209,11 +232,11 @@ func (m BlocklistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rules = msg.rules
 		m.rulesListModel = createRulesListModel(msg.rules)
 		if m.width > 0 && m.height > 0 {
-			h := m.height - 8
-			if h < 10 {
-				h = 10
+			listHeight := m.height - 14
+			if listHeight < 5 {
+				listHeight = 5
 			}
-			m.rulesListModel.SetSize(m.width-4, h)
+			m.rulesListModel.SetSize(m.width-4, listHeight)
 		}
 		if len(msg.rules) > 0 {
 			m.rulesListModel.Select(0)
@@ -290,6 +313,9 @@ func (m BlocklistModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, nil
+
+	case blocklistSearchVisibility:
+		return m.handleSearchVisibilityInput(msg)
 	}
 
 	return m, nil
@@ -315,6 +341,8 @@ func (m BlocklistModel) handleMainMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 		return m.executeMainMenuAction(1)
 	case "3":
 		return m.executeMainMenuAction(2)
+	case "4":
+		return m.executeMainMenuAction(3)
 	}
 
 	var cmd tea.Cmd
@@ -333,6 +361,9 @@ func (m BlocklistModel) executeMainMenuAction(index int) (tea.Model, tea.Cmd) {
 		return m, nil
 	case 2: // Import/Export
 		m.state = blocklistImportExport
+		return m, nil
+	case 3: // Search Visibility
+		m.state = blocklistSearchVisibility
 		return m, nil
 	}
 	return m, nil
@@ -518,6 +549,8 @@ func (m BlocklistModel) View() string {
 
 	case blocklistImportExport:
 		return m.viewPlaceholder("Import/Export Blocklist")
+	case blocklistSearchVisibility:
+		return m.viewSearchVisibility()
 	}
 
 	return ""
@@ -540,7 +573,80 @@ func (m BlocklistModel) viewMainMenu() string {
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Quick select • Esc: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
+	}, m.height)
+}
+
+// handleSearchVisibilityInput handles input on the search visibility screen
+func (m BlocklistModel) handleSearchVisibilityInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.state = blocklistMainMenu
+		return m, nil
+	case "y", "1":
+		return m.setSearchVisibility(true)
+	case "n", "2":
+		return m.setSearchVisibility(false)
+	}
+	return m, nil
+}
+
+// setSearchVisibility saves the setting and refreshes the menu label
+func (m BlocklistModel) setSearchVisibility(show bool) (tea.Model, tea.Cmd) {
+	if err := storage.SaveBlocklistConfigToUnified(config.BlocklistConfig{
+		ShowBlockedInSearch: show,
+	}); err != nil {
+		m.message = fmt.Sprintf("✗ Failed to save: %v", err)
+		m.messageTime = 180
+		m.state = blocklistMainMenu
+		return m, nil
+	} else {
+		m.showBlockedInSearch = show
+		if show {
+			m.message = "✓ Blocked stations will appear in search (marked 🚫)"
+		} else {
+			m.message = "✓ Blocked stations will be hidden from search"
+		}
+	}
+	m.messageTime = 180
+	// Refresh the menu item description to reflect new value
+	items := m.mainMenu.Items()
+	if len(items) >= 4 {
+		items[3] = components.NewMenuItem("Search Visibility", searchVisibilityLabel(show), "4")
+		m.mainMenu.SetItems(items)
+	}
+	m.state = blocklistMainMenu
+	return m, nil
+}
+
+// viewSearchVisibility renders the search visibility toggle screen
+func (m BlocklistModel) viewSearchVisibility() string {
+	var content strings.Builder
+
+	content.WriteString("Control whether blocked stations appear in search results.\n\n")
+
+	current := "Hidden from search results (default)"
+	if m.showBlockedInSearch {
+		current = "Shown in search results (marked 🚫)"
+	}
+	content.WriteString(stationFieldStyle().Render("Current setting: "))
+	content.WriteString(highlightStyle().Render(current))
+	content.WriteString("\n\n")
+	content.WriteString(helpStyle().Render("─────────────────────────────────────────"))
+	content.WriteString("\n\n")
+
+	if m.showBlockedInSearch {
+		content.WriteString("  1) y — Keep showing blocked stations (🚫 prefix)\n")
+		content.WriteString("  2) n — Hide blocked stations from search\n")
+	} else {
+		content.WriteString("  1) y — Show blocked stations in search (🚫 prefix)\n")
+		content.WriteString("  2) n — Keep hiding blocked stations from search\n")
+	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🔍 Search Visibility",
+		Content: content.String(),
+		Help:    "y/1: Yes • n/2: No • Esc: Back",
 	}, m.height)
 }
 
@@ -812,29 +918,31 @@ func (m BlocklistModel) viewBlockByTag() string {
 
 // viewActiveRules renders the active rules list
 func (m BlocklistModel) viewActiveRules() string {
-	var content strings.Builder
-
+	// Use Subtitle slot for transient messages so the list starts at a
+	// consistent vertical position and the header is never clipped.
+	subtitle := ""
 	if m.message != "" {
-		style := successStyle()
 		if strings.Contains(m.message, "✗") {
-			style = errorStyle()
+			subtitle = errorStyle().Render(m.message)
+		} else {
+			subtitle = successStyle().Render(m.message)
 		}
-		content.WriteString(style.Render(m.message))
-		content.WriteString("\n\n")
 	}
 
+	var content strings.Builder
 	if len(m.rules) == 0 {
 		content.WriteString(infoStyle().Render("No block rules defined yet.\n\n"))
 		content.WriteString("Use the Block Rules menu to add rules.")
 	} else {
-		// Use the interactive list
+		// Use the interactive list (title is rendered by PageLayout.Title)
 		content.WriteString(m.rulesListModel.View())
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
-		Title:   "Active Block Rules",
-		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • d: Delete rule • Esc: Back",
+		Title:    "🚫 Active Block Rules",
+		Subtitle: subtitle,
+		Content:  content.String(),
+		Help:     "↑↓/jk: Navigate • d: Delete rule • Esc: Back",
 	}, m.height)
 }
 

@@ -14,12 +14,12 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/blocklist"
-	"github.com/shinokada/tera/v2/internal/player"
-	"github.com/shinokada/tera/v2/internal/storage"
-	"github.com/shinokada/tera/v2/internal/theme"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/player"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/theme"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -38,6 +38,9 @@ const (
 	searchStateSelectList
 	searchStateNewListInput
 	searchStateAdvancedForm
+	searchStateTagInput
+	searchStateManageTags
+	searchStateSleepTimer
 )
 
 // SearchModel represents the search screen
@@ -70,12 +73,28 @@ type SearchModel struct {
 	helpModel        components.HelpModel
 	votedStations    *storage.VotedStations // Track voted stations
 	blocklistManager *blocklist.Manager
+	metadataManager  *storage.MetadataManager // Track play statistics
 	lastBlockTime    time.Time
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
 	// Advanced search form fields
 	advancedInputs      [5]textinput.Model // tag, language, country, state, name
 	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
 	advancedBitrate     string             // "1", "2", "3", or ""
 	advancedSortByVotes bool               // true = votes, false = relevance
+	// Tag fields
+	tagsManager *storage.TagsManager
+	tagRenderer *components.TagRenderer
+	tagInput    components.TagInput
+	manageTags  components.ManageTags
+	// Sleep timer fields
+	sleepTimerDialog    components.SleepTimerDialog
+	dataPath            string // for loading last-used duration preference
+	sleepCountdown      string // refreshed by App on each tick
+	sleepTimerActive    bool   // true once a timer is running; cleared on cancel/expiry
+	showBlockedInSearch bool   // when false, blocked stations are filtered out of results
 }
 
 // Messages for search screen
@@ -105,7 +124,7 @@ type checkSignalMsg struct {
 }
 
 // NewSearchModel creates a new search screen model
-func NewSearchModel(apiClient *api.Client, favoritePath string, blocklistManager *blocklist.Manager) SearchModel {
+func NewSearchModel(apiClient *api.Client, favoritePath string, dataPath string, blocklistManager *blocklist.Manager) SearchModel {
 	ti := textinput.New()
 	ti.Placeholder = "Enter search query..."
 	ti.CharLimit = 100
@@ -182,6 +201,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath string, blocklistManager
 		newListInput:        nli,
 		spinner:             sp,
 		favoritePath:        favoritePath,
+		dataPath:            dataPath,
 		player:              player.NewMPVPlayer(),
 		quickFavorites:      []api.Station{},
 		searchHistory:       history,
@@ -235,11 +255,8 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate usable height
-		listHeight := msg.Height - 14
-		if listHeight < 5 {
-			listHeight = 5 // Minimum height
-		}
+		// Calculate usable height based on actual header size
+		listHeight := availableListHeight(msg.Height)
 
 		// Update list sizes based on current state
 		switch m.state {
@@ -278,6 +295,12 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleStationInfoInput(msg)
 		case searchStatePlaying:
 			return m.handlePlayerUpdate(msg)
+		case searchStateTagInput:
+			return m.handleTagInputKey(msg)
+		case searchStateManageTags:
+			return m.handleManageTagsKey(msg)
+		case searchStateSleepTimer:
+			return m.handleSleepTimerDialogKey(msg)
 		case searchStateSavePrompt:
 			return m.handleSavePrompt(msg)
 		case searchStateSelectList:
@@ -295,26 +318,30 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.results = msg.results
 		m.state = searchStateResults
 		m.resultsItems = make([]list.Item, 0, len(m.results))
+		tr := components.NewTagRenderer()
 		for _, station := range m.results {
 			isBlocked := false
 			if m.blocklistManager != nil {
 				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
 			}
-			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked})
-		}
-
-		// Calculate proper list height
-		// Header needs enough space, so use same buffer as search menu
-		listHeight := m.height - 14
-		if listHeight < 5 {
-			listHeight = 5
+			// Skip blocked stations unless the user has opted to show them
+			if isBlocked && !m.showBlockedInSearch {
+				continue
+			}
+			tagPills := ""
+			if m.tagsManager != nil {
+				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
+					tagPills = tr.RenderPills(tags)
+				}
+			}
+			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked, tagPills: tagPills})
 		}
 
 		// Create results list
 		delegate := createStyledDelegate()
 
-		m.resultsList = list.New(m.resultsItems, delegate, m.width, listHeight)
-		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.results))
+		m.resultsList = list.New(m.resultsItems, delegate, m.width, availableListHeight(m.height))
+		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.resultsItems))
 		m.resultsList.SetShowHelp(false)     // We use custom footer instead
 		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
 		m.resultsList.SetFilteringEnabled(true)
@@ -340,6 +367,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playerErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = searchStateResults
 		return m, nil
 
@@ -348,6 +376,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		m.state = searchStateResults
@@ -410,6 +439,12 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.width > 0 && m.height > 0 {
 			m.initializeListModel()
 		}
+		return m, nil
+
+	case saveToListSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to '%s'", msg.stationName, msg.listName)
+		m.saveMessageTime = messageDisplayShort
+		m.state = searchStatePlaying
 		return m, nil
 
 	case saveToListFailedMsg:
@@ -481,6 +516,61 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
 		m.saveMessageTime = messageDisplayShort
+		return m, nil
+
+	case components.TagSubmittedMsg:
+		if m.state == searchStateManageTags {
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+				m.refreshResultsTagPills(m.selectedStation.StationUUID)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.TagCancelledMsg:
+		if m.state == searchStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else if len(msg.Tags) == 0 {
+				m.saveMessage = "✓ All tags removed"
+				m.refreshResultsTagPills(m.selectedStation.StationUUID)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
+				m.refreshResultsTagPills(m.selectedStation.StationUUID)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.ManageTagsCancelledMsg:
+		m.state = searchStatePlaying
+		return m, nil
+
+	case components.SleepTimerSelectedMsg:
+		m.state = searchStatePlaying
+		m.sleepTimerActive = true
+		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+
+	case components.SleepTimerCancelledMsg:
+		m.state = searchStatePlaying
 		return m, nil
 	}
 
@@ -656,12 +746,11 @@ func (m SearchModel) loadAvailableLists() tea.Cmd {
 	}
 }
 
-// initializeListModel creates the list model with current dimensions
+// initializeListModel creates the list model with current dimensions.
+// It uses availableListHeight to account for the actual rendered header so that
+// tall ASCII art headers don't cause the page to overflow the terminal.
 func (m *SearchModel) initializeListModel() {
-	listHeight := m.height - 14
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := availableListHeight(m.height)
 
 	delegate := createStyledDelegate()
 
@@ -956,14 +1045,27 @@ func (m SearchModel) checkPlaybackSignal(station api.Station, attempt int) tea.C
 			return nil
 		}
 
+		// Check for audio bitrate
 		bitrate, err := m.player.GetAudioBitrate()
 		if err == nil && bitrate > 0 {
-			// Signal detected!
+			// Signal detected via bitrate!
+			return playbackStartedMsg{}
+		}
+
+		// Also check for media-title as fallback (some streams don't report bitrate)
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" {
+			// Signal detected via media title!
 			return playbackStartedMsg{}
 		}
 
 		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
-			return playbackStalledMsg{station: station}
+			// Only report stalled if the process actually died.
+			// IPC checks can fail while audio is playing (slow socket,
+			// buffering, missing metadata), so trust IsPlaying() here.
+			if !m.player.IsPlaying() {
+				return playbackStalledMsg{station: station}
+			}
+			return playbackStartedMsg{}
 		}
 
 		return checkSignalMsg{station: station, attempt: attempt + 1}
@@ -1024,6 +1126,11 @@ func (m SearchModel) handleSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handlePlayerUpdate handles player-related updates during playback
 func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "q":
 		// Quit application
@@ -1144,7 +1251,132 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			w := m.width
+			if w < 24 {
+				w = 24
+			}
+			m.tagInput = components.NewTagInput(allTags, w)
+			m.state = searchStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			w := m.width
+			if w < 24 {
+				w = 24
+			}
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, w)
+			m.state = searchStateManageTags
+			return m, nil
+		}
+		return m, nil
+	case "Z":
+		// If a sleep timer is already running, Z cancels it immediately.
+		// Otherwise, open the dialog to set a new duration.
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
+		}
+		last := 30
+		if m.dataPath != "" {
+			if cfg, err := storage.LoadSleepTimerConfig(m.dataPath); err == nil && cfg.LastDurationMinutes > 0 {
+				last = cfg.LastDurationMinutes
+			}
+		}
+		w := m.width
+		if w < 24 {
+			w = 24
+		}
+		m.sleepTimerDialog = components.NewSleepTimerDialog(last, w)
+		m.state = searchStateSleepTimer
+		return m, nil
+	case "+":
+		// Extend active sleep timer by 15 minutes (no-op when timer is not running)
+		if m.sleepTimerActive {
+			return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
+		}
+		return m, nil
 	}
+	return m, nil
+}
+
+// handleSleepTimerDialogKey delegates key events to the SleepTimerDialog component.
+func (m SearchModel) handleSleepTimerDialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.sleepTimerDialog, cmd = m.sleepTimerDialog.Update(msg)
+	return m, cmd
+}
+
+// handleTagInputKey delegates key events to the TagInput component.
+func (m SearchModel) handleTagInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tagInput, cmd = m.tagInput.Update(msg)
+	return m, cmd
+}
+
+// handleManageTagsKey delegates key events to the ManageTags component.
+func (m SearchModel) handleManageTagsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.manageTags, cmd = m.manageTags.Update(msg)
+	return m, cmd
+}
+
+// handleRatingModeInput handles input when in rating mode
+func (m SearchModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Handle remove rating (0 only); r is treated as cancel to match play.go
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -1306,10 +1538,10 @@ func (m SearchModel) View() string {
 			}
 		}
 
-		return RenderPage(PageLayout{
+		return RenderPageWithBottomHelp(PageLayout{
 			Content: content.String(),
 			Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
-		})
+		}, m.height)
 
 	case searchStateStationInfo:
 		return m.renderStationInfo()
@@ -1322,13 +1554,43 @@ func (m SearchModel) View() string {
 		if m.selectedStation != nil {
 			// Check if user has voted for this station
 			hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-			content.WriteString(RenderStationDetailsWithVote(*m.selectedStation, hasVoted))
+			// Get metadata for display
+			var metadata *storage.StationMetadata
+			if m.metadataManager != nil {
+				metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+			}
+			// Get rating for display
+			var rating int
+			if m.ratingsManager != nil {
+				if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+					rating = r.Rating
+				}
+			}
+			content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 			// Playback status with proper spacing
 			content.WriteString("\n")
 			if m.player.IsPlaying() {
-				content.WriteString(successStyle().Render("▶ Playing..."))
+				// Use the cached track (kept fresh by monitorMetadata every 5 s) to
+				// avoid a blocking IPC socket call inside the render path.
+				if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
+					content.WriteString(successStyle().Render("▶ Now Playing:"))
+					content.WriteString(" ")
+					content.WriteString(infoStyle().Render(track))
+				} else {
+					content.WriteString(successStyle().Render("▶ Playing..."))
+				}
 			} else {
 				content.WriteString(infoStyle().Render("⏸ Stopped"))
+			}
+			// Tag display
+			if m.tagsManager != nil && m.tagRenderer != nil {
+				tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+				content.WriteString("\n")
+				if len(tags) > 0 {
+					fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+				} else {
+					content.WriteString(helpStyle().Render("No tags — press t to add one"))
+				}
 			}
 		}
 		if m.saveMessage != "" {
@@ -1339,16 +1601,22 @@ func (m SearchModel) View() string {
 				} else {
 					content.WriteString(successStyle().Render(m.saveMessage))
 				}
-			} else if strings.Contains(m.saveMessage, "Already") {
+			} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
 				content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
 				content.WriteString(errorStyle().Render(m.saveMessage))
 			}
 		}
+		// Sleep timer countdown
+		if timerInfo := m.sleepTimerCountdown(); timerInfo != "" {
+			content.WriteString("\n")
+			content.WriteString(highlightStyle().Render(timerInfo))
+		}
+		helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
 		return RenderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
-			Help:    "b: Block • u: Undo • f: Favorites • s: Save to list • v: Vote • ?: Help",
+			Help:    helpText,
 		}, m.height)
 
 	case searchStateSelectList:
@@ -1359,12 +1627,48 @@ func (m SearchModel) View() string {
 
 	case searchStateAdvancedForm:
 		return m.viewAdvancedForm()
+
+	case searchStateTagInput:
+		return m.viewTagInput()
+	case searchStateManageTags:
+		var sb strings.Builder
+		if m.selectedStation != nil {
+			sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString(m.manageTags.View())
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "🏷 Manage Tags",
+			Content: sb.String(),
+			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+		}, m.height)
+	case searchStateSleepTimer:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "💤 Sleep Timer",
+			Content: m.sleepTimerDialog.View(),
+			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
+		}, m.height)
 	}
 
 	return RenderPage(PageLayout{
 		Content: "Unknown state",
 		Help:    "",
 	})
+}
+
+// viewTagInput renders the tag input overlay.
+func (m SearchModel) viewTagInput() string {
+	var content strings.Builder
+	if m.selectedStation != nil {
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: content.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
+	}, m.height)
 }
 
 // getSearchTypeLabel returns a label for the current search type
@@ -1412,7 +1716,14 @@ func (m SearchModel) renderStationInfo() string {
 	var content strings.Builder
 
 	if m.selectedStation != nil {
-		content.WriteString(RenderStationDetails(*m.selectedStation))
+		// Get metadata for display
+		var metadata *storage.StationMetadata
+		if m.metadataManager != nil {
+			metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+		}
+		hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+		// Station info view does not handle interactive rating; use metadata-only rendering.
+		content.WriteString(RenderStationDetailsWithMetadata(*m.selectedStation, hasVoted, metadata))
 		content.WriteString("\n\n")
 	}
 
@@ -1967,6 +2278,34 @@ func (m SearchModel) blockStation() tea.Cmd {
 			success:     true,
 		}
 	}
+}
+
+// refreshResultsTagPills updates tag pills for a single station in the results list.
+func (m *SearchModel) refreshResultsTagPills(stationUUID string) {
+	if m.tagsManager == nil || m.resultsList.Items() == nil {
+		return
+	}
+	tr := components.NewTagRenderer()
+	tags := m.tagsManager.GetTags(stationUUID)
+	pills := ""
+	if len(tags) > 0 {
+		pills = tr.RenderPills(tags)
+	}
+	items := m.resultsList.Items()
+	for i, item := range items {
+		if si, ok := item.(stationListItem); ok && si.station.StationUUID == stationUUID {
+			si.tagPills = pills
+			items[i] = si
+			break
+		}
+	}
+	m.resultsList.SetItems(items)
+}
+
+// sleepTimerCountdown returns a formatted countdown string when a sleep timer
+// is active, or an empty string. The App refreshes sleepCountdown on every tick.
+func (m SearchModel) sleepTimerCountdown() string {
+	return formatSleepCountdown(m.sleepCountdown)
 }
 
 // undoLastBlock undoes the last block operation

@@ -34,7 +34,7 @@ type VersionChecker struct {
 func NewVersionChecker() *VersionChecker {
 	return &VersionChecker{
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 3 * time.Second,
 		},
 	}
 }

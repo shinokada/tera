@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/storage"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/storage"
 )
 
 // Manager handles shuffle mode logic

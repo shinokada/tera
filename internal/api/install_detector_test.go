@@ -159,7 +159,7 @@ func TestInstallMethodStrings(t *testing.T) {
 				info.UpdateCommand = "brew upgrade shinokada/tera/tera"
 				info.Description = "Homebrew"
 			case InstallMethodGo:
-				info.UpdateCommand = "go install github.com/shinokada/tera/v2/cmd/tera@latest"
+				info.UpdateCommand = "go install github.com/shinokada/tera/v3/cmd/tera@latest"
 				info.Description = "Go Install"
 			case InstallMethodScoop:
 				info.UpdateCommand = "scoop update tera"
@@ -215,7 +215,7 @@ func TestDetectInstallMethodRealistic(t *testing.T) {
 			t.Errorf("Unexpected Homebrew command: %s", info.UpdateCommand)
 		}
 	case InstallMethodGo:
-		if info.UpdateCommand != "go install github.com/shinokada/tera/v2/cmd/tera@latest" {
+		if info.UpdateCommand != "go install github.com/shinokada/tera/v3/cmd/tera@latest" {
 			t.Errorf("Unexpected Go command: %s", info.UpdateCommand)
 		}
 	}

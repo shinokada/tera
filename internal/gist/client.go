@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -47,20 +48,37 @@ type GistFile struct {
 	RawURL   string `json:"raw_url,omitempty"`
 }
 
-// CreateGist creates a new gist with the provided files
-// If public is true, the gist will be publicly visible; otherwise it will be secret
-func (c *Client) CreateGist(description string, files map[string]string, public bool) (*Gist, error) {
-	gistFiles := make(map[string]GistFile)
+// GistFileUpdate wraps the content field for PATCH requests.
+// Deletion is represented by a nil file entry in the parent files map;
+// a non-nil GistFileUpdate sets or replaces the file content.
+type GistFileUpdate struct {
+	Content *string `json:"content"`
+}
+
+// gistFileCreate is the per-file payload for POST /gists.
+// Content is a plain string without omitempty so that empty files are
+// serialised as {"content":""} rather than being silently dropped.
+type gistFileCreate struct {
+	Content string `json:"content"`
+}
+
+// CreateGist creates a new gist with the provided files.
+// If public is true, the gist will be publicly visible; otherwise it will be
+// secret. Each map value is a pointer: nil entries are skipped (deletion has
+// no meaning on create), non-nil pointers set the file content.
+func (c *Client) CreateGist(description string, files map[string]*string, public bool) (*Gist, error) {
+	gistFiles := make(map[string]gistFileCreate)
 	for filename, content := range files {
-		gistFiles[filename] = GistFile{
-			Content: content,
+		if content == nil {
+			continue // nothing to create for a nil entry
 		}
+		gistFiles[filename] = gistFileCreate{Content: *content}
 	}
 
 	payload := struct {
-		Description string              `json:"description"`
-		Public      bool                `json:"public"`
-		Files       map[string]GistFile `json:"files"`
+		Description string                     `json:"description"`
+		Public      bool                       `json:"public"`
+		Files       map[string]gistFileCreate  `json:"files"`
 	}{
 		Description: description,
 		Public:      public,
@@ -85,19 +103,28 @@ func (c *Client) CreateGist(description string, files map[string]string, public 
 	return &gist, nil
 }
 
-// ListGists lists all gists for the authenticated user
+// ListGists lists all gists for the authenticated user, paginating through
+// all pages so callers see the complete set regardless of account size.
 func (c *Client) ListGists() ([]*Gist, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/gists", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	var all []*Gist
+	page := 1
+	for {
+		url := fmt.Sprintf("%s/gists?per_page=100&page=%d", c.baseURL, page)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		var pageGists []*Gist
+		if err := c.do(req, &pageGists); err != nil {
+			return nil, err
+		}
+		all = append(all, pageGists...)
+		if len(pageGists) < 100 {
+			break // last page
+		}
+		page++
 	}
-
-	var gists []*Gist
-	if err := c.do(req, &gists); err != nil {
-		return nil, err
-	}
-
-	return gists, nil
+	return all, nil
 }
 
 // UpdateGist updates the description of an existing gist
@@ -106,6 +133,39 @@ func (c *Client) UpdateGist(gistID, description string) error {
 		Description string `json:"description"`
 	}{
 		Description: description,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update payload: %w", err)
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/gists/%s", c.baseURL, gistID), bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	return c.do(req, nil)
+}
+
+// UpdateGistFiles updates or replaces the files of an existing gist.
+// Each key in files is the filename; the value controls the operation:
+//   - nil pointer → delete the file (sends null per the GitHub API)
+//   - non-nil pointer → set or replace content, including empty string
+func (c *Client) UpdateGistFiles(gistID string, files map[string]*string) error {
+	gistFiles := make(map[string]*GistFileUpdate)
+	for filename, content := range files {
+		if content == nil {
+			gistFiles[filename] = nil // marshals to null → deletes the file
+		} else {
+			gistFiles[filename] = &GistFileUpdate{Content: content}
+		}
+	}
+
+	payload := struct {
+		Files map[string]*GistFileUpdate `json:"files"`
+	}{
+		Files: gistFiles,
 	}
 
 	body, err := json.Marshal(payload)
@@ -163,9 +223,100 @@ func (c *Client) ValidateToken() (string, error) {
 	return user.Login, nil
 }
 
-// do plays the request and decodes the response
+// GetGistPublic fetches a public gist without requiring authentication
+// This is useful for importing gists shared by other users
+func GetGistPublic(gistID string) (*Gist, error) {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/gists/%s", defaultBaseURL, gistID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "tera-radio-player")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("gist not found (may be private or invalid ID)")
+	}
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
+		return nil, fmt.Errorf("API error: %s (status: %d, body: %s)", resp.Status, resp.StatusCode, string(body))
+	}
+
+	var gist Gist
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&gist); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &gist, nil
+}
+
+// ParseGistURL extracts the gist ID from various URL formats
+// Supported formats:
+// - https://gist.github.com/username/gist_id
+// - https://gist.githubusercontent.com/username/gist_id/...
+// - gist_id (raw ID)
+func ParseGistURL(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("empty input")
+	}
+
+	// Check if it's a URL
+	if strings.HasPrefix(input, "https://gist.github.com/") ||
+		strings.HasPrefix(input, "http://gist.github.com/") ||
+		strings.HasPrefix(input, "https://gist.githubusercontent.com/") {
+		// Parse the URL to extract path
+		parts := strings.Split(input, "/")
+		// URL format: https://gist.github.com/username/gist_id[/...]
+		// We need at least 5 parts: https:, "", gist.github.com, username, gist_id
+		if len(parts) >= 5 {
+			gistID := parts[4]
+			// Remove any query parameters or fragments
+			if idx := strings.Index(gistID, "?"); idx != -1 {
+				gistID = gistID[:idx]
+			}
+			if idx := strings.Index(gistID, "#"); idx != -1 {
+				gistID = gistID[:idx]
+			}
+			if gistID != "" {
+				return gistID, nil
+			}
+		}
+		return "", fmt.Errorf("invalid gist URL format")
+	}
+
+	// Assume it's a raw gist ID - validate it looks like a hex string
+	// GitHub gist IDs are 32-character hex strings
+	if len(input) >= 20 && len(input) <= 40 {
+		for _, c := range input {
+			isDigit := c >= '0' && c <= '9'
+			isLowerHex := c >= 'a' && c <= 'f'
+			isUpperHex := c >= 'A' && c <= 'F'
+			if !isDigit && !isLowerHex && !isUpperHex {
+				return "", fmt.Errorf("invalid gist ID format")
+			}
+		}
+		return input, nil
+	}
+
+	return "", fmt.Errorf("invalid gist URL or ID")
+}
+
+// do executes the request and decodes the response.
 func (c *Client) do(req *http.Request, v interface{}) error {
 	req.Header.Set("Authorization", "token "+c.token)
+	req.Header.Set("User-Agent", "tera-radio-player")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -176,12 +327,15 @@ func (c *Client) do(req *http.Request, v interface{}) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		// Limit error body to 1 KB — enough for diagnostics without risking
+		// memory exhaustion or inadvertently logging token material from proxies.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
 		return fmt.Errorf("API error: %s (status: %d, body: %s)", resp.Status, resp.StatusCode, string(body))
 	}
 
 	if v != nil {
-		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		// Limit response to 10 MB to prevent memory exhaustion.
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(v); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}

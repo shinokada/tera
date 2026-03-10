@@ -12,13 +12,13 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/shinokada/tera/v2/internal/api"
-	"github.com/shinokada/tera/v2/internal/blocklist"
-	"github.com/shinokada/tera/v2/internal/player"
-	"github.com/shinokada/tera/v2/internal/shuffle"
-	"github.com/shinokada/tera/v2/internal/storage"
-	"github.com/shinokada/tera/v2/internal/theme"
-	"github.com/shinokada/tera/v2/internal/ui/components"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/player"
+	"github.com/shinokada/tera/v3/internal/shuffle"
+	"github.com/shinokada/tera/v3/internal/storage"
+	"github.com/shinokada/tera/v3/internal/theme"
+	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
 // luckyState represents the current state in the lucky screen
@@ -32,6 +32,15 @@ const (
 	luckyStateSavePrompt
 	luckyStateSelectList
 	luckyStateNewListInput
+	luckyStateTagInput
+	luckyStateManageTags
+)
+
+// Footer help text constants for the I Feel Lucky screen
+const (
+	luckyHelpInputFooter   = "Tab: Switch focus • Enter: Search • ctrl+t: Shuffle • Esc: Back • ?: Help"
+	luckyHelpPlayingFooter = "Space: Pause • f: Fav • s: List • 0: Main Menu • ?: Help"
+	luckyHelpShuffleFooter = "Space: Pause • n: Next • [: Prev • f: Fav • h: Stop shuffle • 0: Main Menu • ?: Help"
 )
 
 // LuckyModel represents the I Feel Lucky screen
@@ -63,7 +72,19 @@ type LuckyModel struct {
 	allStations       []api.Station // All stations from search for shuffle
 	lastSearchKeyword string        // Keyword used for current shuffle session
 	blocklistManager  *blocklist.Manager
+	metadataManager   *storage.MetadataManager // Track play statistics
 	lastBlockTime     time.Time
+	// Star rating fields
+	ratingsManager *storage.RatingsManager
+	starRenderer   *components.StarRenderer
+	ratingMode     bool // true when waiting for 1-5 input after pressing R
+	// Tag fields
+	tagsManager *storage.TagsManager
+	tagRenderer *components.TagRenderer
+	tagInput    components.TagInput
+	manageTags  components.ManageTags
+	// Input focus mode: true = typing in Genre/keyword, false = history navigation
+	inputMode bool
 }
 
 // Messages for lucky screen
@@ -139,6 +160,7 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string, blocklistManager 
 
 	m := LuckyModel{
 		state:            luckyStateInput,
+		inputMode:        true,
 		apiClient:        apiClient,
 		textInput:        ti,
 		newListInput:     nli,
@@ -147,11 +169,12 @@ func NewLuckyModel(apiClient *api.Client, favoritePath string, blocklistManager 
 		searchHistory:    history,
 		width:            80,
 		height:           24,
-		helpModel:        components.NewHelpModel(components.CreatePlayingHelp()),
+		helpModel:        components.NewHelpModel(components.CreateLuckyHelp()),
 		votedStations:    votedStations,
 		shuffleEnabled:   false,
 		shuffleConfig:    shuffleConfig,
 		blocklistManager: blocklistManager,
+		tagRenderer:      components.NewTagRenderer(),
 	}
 
 	// Build menu with history items
@@ -188,6 +211,10 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSelectList(msg)
 		case luckyStateNewListInput:
 			return m.updateNewListInput(msg)
+		case luckyStateTagInput:
+			return m.updateTagInput(msg)
+		case luckyStateManageTags:
+			return m.updateManageTags(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -195,6 +222,13 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		m.helpModel.SetSize(msg.Width, msg.Height)
+
+		// Rebuild the history menu with real terminal dimensions so the
+		// list viewport is properly initialised before the first keypress.
+		// Without this, CursorDown() is a no-op until the first resize.
+		if m.state == luckyStateInput {
+			m.rebuildMenuWithHistory()
+		}
 
 		return m, nil
 
@@ -256,6 +290,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackErrorMsg:
 		m.err = msg.err
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.state = luckyStateSavePrompt
 		return m, nil
 
@@ -264,6 +299,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
+		m.ratingMode = false // Clear rating mode on async state transition
 		m.saveMessage = "✗ No signal detected"
 		m.saveMessageTime = messageDisplayShort
 		m.state = luckyStateInput
@@ -359,6 +395,11 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.selectedStation = nextStation
+			m.ratingMode = false // Clear rating mode on auto-advance station change
+			if m.saveMessageTime == -1 {
+				m.saveMessage = ""
+				m.saveMessageTime = 0
+			}
 			// Stop current playback and start new station
 			_ = m.player.Stop() // Ignore error, we're starting new playback anyway
 
@@ -387,6 +428,7 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.player != nil {
 				_ = m.player.Stop()
 			}
+			m.ratingMode = false // Clear rating mode on async state transition
 
 			// Show message
 			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
@@ -421,6 +463,73 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveMessage = "No recent block to undo"
 		m.saveMessageTime = messageDisplayMedium
 		return m, nil
+
+	case components.TagSubmittedMsg:
+		if m.state == luckyStateManageTags {
+			var cmd tea.Cmd
+			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
+			return m, cmd
+		}
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
+
+	case components.TagCancelledMsg:
+		if m.state == luckyStateManageTags {
+			m.manageTags = m.manageTags.HandleTagCancelled()
+			return m, nil
+		}
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
+
+	case components.ManageTagsDoneMsg:
+		if m.selectedStation != nil && m.tagsManager != nil {
+			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ %v", err)
+			} else if len(msg.Tags) == 0 {
+				m.saveMessage = "✓ All tags removed"
+			} else {
+				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
+			}
+			m.saveMessageTime = messageDisplayShort
+		}
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
+
+	case components.ManageTagsCancelledMsg:
+		nextState := luckyStatePlaying
+		var tagCmd tea.Cmd
+		if m.shuffleManager != nil {
+			nextState = luckyStateShufflePlaying
+			tagCmd = m.shuffleTimerTick()
+		}
+		m.state = nextState
+		return m, tagCmd
 	}
 
 	var cmd tea.Cmd
@@ -430,9 +539,18 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// updateInput handles input during the input state
+// updateInput handles input during the input state.
+// inputMode=true means the user is typing in the Genre/keyword field.
+// Tab toggles between inputMode (Genre/keyword) and history navigation mode.
 func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+
+	// Handle '?' for help overlay
+	if key == "?" {
+		m.helpModel.SetSize(m.width, m.height)
+		m.helpModel.Toggle()
+		return m, nil
+	}
 
 	// Handle escape - return to main menu
 	if key == "esc" {
@@ -453,33 +571,57 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Check if text input is focused (has content being typed)
-	inputFocused := m.textInput.Focused() && m.textInput.Value() != ""
-
-	// If text input has content, handle normally
-	if inputFocused {
-		if key == "enter" {
-			keyword := strings.TrimSpace(m.textInput.Value())
-			if keyword == "" {
-				m.err = fmt.Errorf("please enter a keyword")
-				return m, nil
-			}
-			m.err = nil
-			m.state = luckyStateSearching
-
-			// Use shuffle search if enabled
-			if m.shuffleEnabled {
-				return m, m.searchForShuffle(keyword)
-			}
-			return m, m.searchAndPickRandom(keyword)
+	// Tab toggles between Genre/keyword input and history navigation
+	if key == "tab" {
+		m.inputMode = !m.inputMode
+		m.numberBuffer = ""
+		if m.inputMode {
+			m.textInput.Focus()
+		} else {
+			m.textInput.Blur()
 		}
-		var cmd tea.Cmd
-		m.textInput, cmd = m.textInput.Update(msg)
-		return m, cmd
+		return m, nil
 	}
 
-	// Handle number input for multi-digit selection when user is not actively typing a keyword
-	if !inputFocused && key >= "0" && key <= "9" {
+	// inputMode: all keystrokes go to the Genre/keyword text input,
+	// except navigation keys which switch to nav mode automatically.
+	if m.inputMode {
+		// Arrow keys (but NOT j/k) switch to nav mode.
+		// j and k are printable letters — they must stay in the text input
+		// so the user can type words like "jazz" or "rock" without accidentally
+		// switching focus to the history list.
+		if key == "down" || key == "up" {
+			if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
+				m.inputMode = false
+				m.textInput.Blur()
+				m.numberBuffer = ""
+				// Let the nav path handle the key below
+			} else {
+				// No history — ignore nav keys in input mode
+				return m, nil
+			}
+		} else {
+			if key == "enter" {
+				keyword := strings.TrimSpace(m.textInput.Value())
+				if keyword == "" {
+					m.err = fmt.Errorf("please enter a keyword")
+					return m, nil
+				}
+				m.err = nil
+				m.state = luckyStateSearching
+				if m.shuffleEnabled {
+					return m, m.searchForShuffle(keyword)
+				}
+				return m, m.searchAndPickRandom(keyword)
+			}
+			var cmd tea.Cmd
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
+		}
+	}
+
+	// History navigation mode: digit shortcuts and menu navigation
+	if key >= "0" && key <= "9" {
 		m.numberBuffer += key
 
 		// Check if we should auto-select
@@ -511,7 +653,7 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle Enter to submit buffered number or search
+	// Handle Enter in history navigation mode
 	if key == "enter" {
 		if m.numberBuffer != "" {
 			var num int
@@ -532,18 +674,9 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.searchAndPickRandom(query)
 		}
 
-		// Search with text input value
-		keyword := strings.TrimSpace(m.textInput.Value())
-		if keyword == "" {
-			m.err = fmt.Errorf("please enter a keyword")
-			return m, nil
-		}
-		m.err = nil
-		m.state = luckyStateSearching
-		if m.shuffleEnabled {
-			return m, m.searchForShuffle(keyword)
-		}
-		return m, m.searchAndPickRandom(keyword)
+		// In nav mode with no selection, prompt the user to switch modes
+		m.err = fmt.Errorf("press Tab to switch to Genre/keyword input")
+		return m, nil
 	}
 
 	// Clear buffer on navigation keys
@@ -566,14 +699,7 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update text input
-	// Clear number buffer when user types into text input (non-navigation, non-number)
-	if m.numberBuffer != "" {
-		m.numberBuffer = ""
-	}
-	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 // handleVolumeControl handles volume-related key presses
@@ -633,6 +759,11 @@ func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 
 // updatePlaying handles input during playback
 func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "b":
 		// Block current station
@@ -654,6 +785,8 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state = luckyStateInput
+		m.inputMode = true
+		m.textInput.Focus()
 		m.selectedStation = nil
 		// Reload history from disk so recent search appears
 		m.reloadSearchHistory()
@@ -695,6 +828,34 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width)
+			m.state = luckyStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = luckyStateManageTags
+			return m, nil
+		}
+		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
@@ -706,6 +867,63 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.helpModel.Toggle()
 		return m, nil
 	}
+	return m, nil
+}
+
+// updateTagInput delegates key events to the TagInput component.
+func (m LuckyModel) updateTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tagInput, cmd = m.tagInput.Update(msg)
+	return m, cmd
+}
+
+// updateManageTags delegates key events to the ManageTags component.
+func (m LuckyModel) updateManageTags(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.manageTags, cmd = m.manageTags.Update(msg)
+	return m, cmd
+}
+
+// handleRatingModeInput handles input when in rating mode for lucky screen
+func (m LuckyModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.ratingMode = false // Exit rating mode regardless of key
+
+	if m.selectedStation == nil || m.ratingsManager == nil {
+		return m, nil
+	}
+
+	key := msg.String()
+
+	// Handle rating keys 1-5
+	if len(key) == 1 && key[0] >= '1' && key[0] <= '5' {
+		rating := int(key[0] - '0')
+		if err := m.ratingsManager.SetRating(m.selectedStation, rating); err == nil {
+			stars := ""
+			if m.starRenderer != nil {
+				stars = m.starRenderer.RenderCompactPlain(rating) + " "
+			}
+			m.saveMessage = fmt.Sprintf("✓ %sRated!", stars)
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Handle remove rating (0 only); r is treated as cancel to match play.go
+	if key == "0" {
+		if err := m.ratingsManager.RemoveRating(m.selectedStation.StationUUID); err != nil {
+			m.saveMessage = fmt.Sprintf("✗ Remove failed: %v", err)
+		} else {
+			m.saveMessage = "✓ Rating removed"
+		}
+		m.saveMessageTime = messageDisplayShort
+		return m, nil
+	}
+
+	// Any other key (including r, esc) - cancel rating mode, clear the message
+	m.saveMessage = ""
+	m.saveMessageTime = 0
 	return m, nil
 }
 
@@ -898,14 +1116,27 @@ func (m LuckyModel) checkPlaybackSignal(station api.Station, attempt int) tea.Cm
 			return nil
 		}
 
+		// Check for audio bitrate
 		bitrate, err := m.player.GetAudioBitrate()
 		if err == nil && bitrate > 0 {
-			// Signal detected!
+			// Signal detected via bitrate!
+			return playbackStartedMsg{}
+		}
+
+		// Also check for media-title as fallback (some streams don't report bitrate)
+		if track, err := m.player.GetCurrentTrack(); err == nil && track != "" {
+			// Signal detected via media title!
 			return playbackStartedMsg{}
 		}
 
 		if attempt >= 4 { // 4 attempts * 2 seconds = 8 seconds
-			return luckyPlaybackStalledMsg{station: station}
+			// Only report stalled if the process actually died.
+			// IPC checks can fail while audio is playing (slow socket,
+			// buffering, missing metadata), so trust IsPlaying() here.
+			if !m.player.IsPlaying() {
+				return luckyPlaybackStalledMsg{station: station}
+			}
+			return playbackStartedMsg{}
 		}
 
 		return luckyCheckSignalMsg{station: station, attempt: attempt + 1}
@@ -981,6 +1212,20 @@ func (m LuckyModel) View() string {
 		return m.viewSelectList()
 	case luckyStateNewListInput:
 		return m.viewNewListInput()
+	case luckyStateTagInput:
+		return m.viewTagInput()
+	case luckyStateManageTags:
+		var sb strings.Builder
+		if m.selectedStation != nil {
+			sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString(m.manageTags.View())
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:   "🏷 Manage Tags",
+			Content: sb.String(),
+			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
+		}, m.height)
 	}
 	return "Unknown state"
 }
@@ -999,22 +1244,18 @@ func (m LuckyModel) viewInput() string {
 	content.WriteString(titleStyle.Render("🎲 I Feel Lucky"))
 	content.WriteString("\n\n")
 
-	// "Choose an option:" with number buffer
-	content.WriteString(subtitleStyle().Render("Choose an option:"))
-	if m.numberBuffer != "" {
-		content.WriteString(" ")
-		content.WriteString(highlightStyle().Render(m.numberBuffer + "_"))
-	}
-	content.WriteString("\n\n")
-
 	// Instructions
 	content.WriteString("Type a genre of music: rock, classical, jazz, pop, country, hip, heavy, blues, soul.\n")
 	content.WriteString("Or type a keyword like: meditation, relax, mozart, Beatles, etc.\n\n")
 	content.WriteString(infoStyle().Render("Use only one word."))
 	content.WriteString("\n\n")
 
-	// Input field
-	content.WriteString("Genre/keyword: ")
+	// Genre/keyword — highlighted when in input mode
+	if m.inputMode {
+		content.WriteString(highlightStyle().Render("▶ Genre/keyword: "))
+	} else {
+		content.WriteString(dimStyle().Render("  Genre/keyword: "))
+	}
 	content.WriteString(m.textInput.View())
 	content.WriteString("\n\n")
 
@@ -1033,9 +1274,19 @@ func (m LuckyModel) viewInput() string {
 		content.WriteString(" (press ctrl+t to enable)")
 	}
 
-	// Show history menu if available
+	// "Choose an option:" — sits directly above the history menu
 	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
 		content.WriteString("\n\n")
+		if !m.inputMode {
+			content.WriteString(highlightStyle().Render("▶ Choose an option:"))
+		} else {
+			content.WriteString(dimStyle().Render("  Choose an option:"))
+		}
+		if m.numberBuffer != "" {
+			content.WriteString(" ")
+			content.WriteString(highlightStyle().Render(m.numberBuffer + "_"))
+		}
+		content.WriteString("\n")
 		content.WriteString(m.menuList.View())
 	}
 
@@ -1057,15 +1308,7 @@ func (m LuckyModel) viewInput() string {
 		}
 	}
 
-	helpText := "↑↓/jk: Navigate • Enter: Search • ctrl+t: Toggle shuffle"
-	if m.searchHistory != nil && len(m.searchHistory.LuckyQueries) > 0 {
-		maxItems := len(m.searchHistory.LuckyQueries)
-		if maxItems > m.searchHistory.MaxSize {
-			maxItems = m.searchHistory.MaxSize
-		}
-		helpText += fmt.Sprintf(" • 1-%d: Quick search", maxItems)
-	}
-	helpText += " • Esc: Back"
+	helpText := luckyHelpInputFooter
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
@@ -1108,15 +1351,46 @@ func (m LuckyModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info (same format as Now Playing in search)
-	content.WriteString(RenderStationDetails(*m.selectedStation))
+	// Station info with rating
+	// Get rating for display
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
+		}
+	}
+	// Get metadata for display
+	var metadata *storage.StationMetadata
+	if m.metadataManager != nil {
+		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+	}
+	voted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle().Render("▶ Playing..."))
+		// Use the cached track to avoid a blocking IPC socket call in the render path.
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
+			content.WriteString(successStyle().Render("▶ Now Playing:"))
+			content.WriteString(" ")
+			content.WriteString(infoStyle().Render(track))
+		} else {
+			content.WriteString(successStyle().Render("▶ Playing..."))
+		}
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
+	}
+
+	// Tag display
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags — press t to add one"))
+		}
 	}
 
 	// Save message (if any)
@@ -1131,7 +1405,8 @@ func (m LuckyModel) viewPlaying() string {
 			}
 		} else if strings.Contains(m.saveMessage, "Already") ||
 			strings.Contains(m.saveMessage, "Paused") ||
-			strings.Contains(m.saveMessage, "Resumed") {
+			strings.Contains(m.saveMessage, "Resumed") ||
+			strings.HasPrefix(m.saveMessage, "Press") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -1139,10 +1414,11 @@ func (m LuckyModel) viewPlaying() string {
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
 
+	helpText := luckyHelpPlayingFooter
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
-		Help:    "b: Block • u: Undo • Space: Pause/Play • f: Save to Favorites • s: Save to list • v: Vote • ?: Help",
+		Help:    helpText,
 	}, m.height)
 }
 
@@ -1245,6 +1521,21 @@ func (m LuckyModel) viewNewListInput() string {
 	})
 }
 
+// viewTagInput renders the tag input overlay for the lucky playing view.
+func (m LuckyModel) viewTagInput() string {
+	var content strings.Builder
+	if m.selectedStation != nil {
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString(m.tagInput.View())
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🏷 Add Tag",
+		Content: content.String(),
+		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
+	}, m.height)
+}
+
 // rebuildMenuWithHistory rebuilds the menu list with history items
 func (m *LuckyModel) rebuildMenuWithHistory() {
 	if m.searchHistory == nil || len(m.searchHistory.LuckyQueries) == 0 {
@@ -1274,12 +1565,22 @@ func (m *LuckyModel) rebuildMenuWithHistory() {
 		height = 15
 	}
 
-	// Use empty title - we render the title manually
-	m.menuList = components.CreateMenu(menuItems, "", 50, height)
+	// Use empty title - we render the title manually.
+	// Use m.width if known, fall back to 50 for initial build before WindowSizeMsg.
+	width := m.width
+	if width == 0 {
+		width = 50
+	}
+	m.menuList = components.CreateMenu(menuItems, "", width, height)
 }
 
 // updateShufflePlaying handles input during shuffle playback
 func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle rating mode input first
+	if m.ratingMode {
+		return m.handleRatingModeInput(msg)
+	}
+
 	switch msg.String() {
 	case "esc":
 		// Stop shuffle and playback, return to I Feel Lucky input
@@ -1292,6 +1593,8 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state = luckyStateInput
+		m.inputMode = true
+		m.textInput.Focus()
 		m.selectedStation = nil
 		m.shuffleEnabled = false
 		m.shuffleManager = nil
@@ -1417,6 +1720,34 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveMessageTime = messageDisplayShort
 		}
 		return m, nil
+	case "r":
+		// Enter rating mode
+		if m.selectedStation != nil && m.ratingsManager != nil {
+			m.ratingMode = true
+			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
+			m.saveMessageTime = -1 // Persistent until action
+			return m, nil
+		}
+		return m, nil
+	case "t":
+		// Enter tag input mode
+		if m.selectedStation != nil && m.tagsManager != nil {
+			allTags := m.tagsManager.GetAllTags()
+			m.tagInput = components.NewTagInput(allTags, m.width)
+			m.state = luckyStateTagInput
+			return m, nil
+		}
+		return m, nil
+	case "T":
+		// Enter manage tags dialog
+		if m.selectedStation != nil && m.tagsManager != nil {
+			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+			allTags := m.tagsManager.GetAllTags()
+			m.manageTags = components.NewManageTags(m.selectedStation.TrimName(), currentTags, allTags, m.width)
+			m.state = luckyStateManageTags
+			return m, nil
+		}
+		return m, nil
 	case "/", "*", "m":
 		if handled, msg := m.handleVolumeControl(msg.String()); handled {
 			m.saveMessage = msg
@@ -1487,15 +1818,44 @@ func (m LuckyModel) viewShufflePlaying() string {
 
 	var content strings.Builder
 
-	// Station info
-	content.WriteString(RenderStationDetails(*m.selectedStation))
+	// Station info with rating
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
+		}
+	}
+	var metadata *storage.StationMetadata
+	if m.metadataManager != nil {
+		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+	}
+	voted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
 
 	// Playback status
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		content.WriteString(successStyle().Render("▶ Playing..."))
+		// Use the cached track to avoid a blocking IPC socket call in the render path.
+		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
+			content.WriteString(successStyle().Render("▶ Now Playing:"))
+			content.WriteString(" ")
+			content.WriteString(infoStyle().Render(track))
+		} else {
+			content.WriteString(successStyle().Render("▶ Playing..."))
+		}
 	} else {
 		content.WriteString(infoStyle().Render("⏸ Stopped"))
+	}
+
+	// Tag display (mirrors viewPlaying)
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags — press t to add one"))
+		}
 	}
 
 	// Shuffle info
@@ -1531,10 +1891,14 @@ func (m LuckyModel) viewShufflePlaying() string {
 		content.WriteString(subtitleStyle().Render("─── Shuffle History ───"))
 		content.WriteString("\n")
 
-		// Show up to 3 most recent stations
+		// Show up to MaxHistory most recent stations
+		maxDisplay := m.shuffleConfig.MaxHistory
+		if maxDisplay <= 0 {
+			maxDisplay = 3
+		}
 		startIdx := 0
-		if len(history) > 3 {
-			startIdx = len(history) - 3
+		if len(history) > maxDisplay {
+			startIdx = len(history) - maxDisplay
 		}
 
 		for i := startIdx; i < len(history); i++ {
@@ -1577,7 +1941,8 @@ func (m LuckyModel) viewShufflePlaying() string {
 			strings.Contains(m.saveMessage, "Resumed") ||
 			strings.Contains(m.saveMessage, "paused") ||
 			strings.Contains(m.saveMessage, "resumed") ||
-			strings.Contains(m.saveMessage, "stopped") {
+			strings.Contains(m.saveMessage, "stopped") ||
+			strings.HasPrefix(m.saveMessage, "Press") {
 			msgStyle = infoStyle()
 		} else {
 			msgStyle = errorStyle()
@@ -1586,7 +1951,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	}
 
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
-	help := "Space: Pause/Play • b: Block • u: Undo • f: Fav • s: List • v: Vote • n: Next • [: Prev • p: Pause timer • h: Stop shuffle • ?: Help"
+	help := luckyHelpShuffleFooter
 
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   title,

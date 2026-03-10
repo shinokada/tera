@@ -184,7 +184,7 @@ func CreateMainMenuHelp() []HelpSection {
 	}
 }
 
-// CreateFavoritesHelp creates help sections for playing playing from favorites (no save to list)
+// CreateFavoritesHelp creates help sections for playing from favorites (no save to list)
 func CreateFavoritesHelp() []HelpSection {
 	return []HelpSection{
 		{
@@ -207,9 +207,14 @@ func CreateFavoritesHelp() []HelpSection {
 			Title: "Actions",
 			Items: []HelpItem{
 				{"f", "Save to Favorites"},
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
 				{"v", "Vote"},
 				{"b", "Block station"},
 				{"u", "Undo block"},
+				{"Z", "Sleep timer"},
+				{"+", "Extend sleep timer"},
 			},
 		},
 	}
@@ -239,9 +244,94 @@ func CreatePlayingHelp() []HelpSection {
 			Items: []HelpItem{
 				{"f", "Save to Favorites"},
 				{"s", "Save to List"},
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
 				{"v", "Vote"},
 				{"b", "Block station"},
 				{"u", "Undo block"},
+				{"Z", "Sleep timer"},
+				{"+", "Extend sleep timer"},
+			},
+		},
+	}
+}
+
+// CreateTagsPlayingHelp creates help sections for tag-based playing screens
+// (Browse by Tag, Tag Playlists) which have no voting, block, or sleep timer.
+func CreateTagsPlayingHelp() []HelpSection {
+	return []HelpSection{
+		{
+			Title: "Navigation",
+			Items: []HelpItem{
+				{"Esc", "Stop & Back"},
+				{"0", "Main Menu"},
+			},
+		},
+		{
+			Title: "Playback Controls",
+			Items: []HelpItem{
+				{"Space", "Pause/Resume"},
+				{"/*", "Adjust volume"},
+				{"m", "Toggle mute"},
+			},
+		},
+		{
+			Title: "Actions",
+			Items: []HelpItem{
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
+			},
+		},
+	}
+}
+
+// CreateLuckyHelp creates help sections for the I Feel Lucky screen
+func CreateLuckyHelp() []HelpSection {
+	return []HelpSection{
+		{
+			Title: "Input",
+			Items: []HelpItem{
+				{"Tab", "Switch focus (keyword ↔ history)"},
+				{"Enter", "Search / select history"},
+				{"ctrl+t", "Toggle shuffle mode"},
+				{"↑↓/jk", "Navigate history (nav mode)"},
+				{"1-N", "Quick pick history (nav mode)"},
+				{"Esc", "Back to main menu"},
+			},
+		},
+		{
+			Title: "Playback",
+			Items: []HelpItem{
+				{"Space", "Pause / Resume"},
+				{"*", "Volume up (+5%)"},
+				{"/", "Volume down (-5%)"},
+				{"m", "Toggle mute"},
+				{"Esc", "Stop & back to input"},
+				{"0", "Main menu"},
+			},
+		},
+		{
+			Title: "Actions",
+			Items: []HelpItem{
+				{"f", "Save to Quick Favorites"},
+				{"s", "Save to another list"},
+				{"v", "Vote for station"},
+				{"r", "Rate station (1-5)"},
+				{"t", "Add tag"},
+				{"T", "Manage tags"},
+				{"b", "Block station"},
+				{"u", "Undo block (5s)"},
+			},
+		},
+		{
+			Title: "Shuffle",
+			Items: []HelpItem{
+				{"n", "Next station"},
+				{"[", "Previous station"},
+				{"p", "Pause / resume timer"},
+				{"h", "Stop shuffle, keep playing"},
 			},
 		},
 	}
