@@ -180,10 +180,7 @@ func NewGistModel(favoritePath string) GistModel {
 	token, tokenErr := gist.LoadToken()
 	syncPrefs, _ := storage.LoadSyncPrefs()
 
-	var backupMgr *storage.BackupManager
-	if bm, err := storage.NewBackupManager(); err == nil {
-		backupMgr = bm
-	}
+	backupMgr, backupErr := storage.NewBackupManager()
 
 	m := GistModel{
 		state:          gistStateMenu,
@@ -198,7 +195,10 @@ func NewGistModel(favoritePath string) GistModel {
 		backupManager:  backupMgr,
 	}
 
-	if tokenErr != nil {
+	if backupErr != nil {
+		m.message = fmt.Sprintf("Warning: backup features unavailable: %v", backupErr)
+		m.messageIsError = true
+	} else if tokenErr != nil {
 		m.message = fmt.Sprintf("Warning: could not load token: %v", tokenErr)
 		m.messageIsError = true
 	}
@@ -940,7 +940,7 @@ func (m GistModel) doFetchAvailableGistCategoriesCmd() tea.Cmd {
 			return errMsg{fmt.Errorf("failed to inspect backup Gist: %w", err)}
 		}
 		if available == (storage.SyncPrefs{}) {
-			return errMsg{fmt.Errorf("no backup Gist found (description \"tera-data-backup\"); sync all data to Gist first")}
+			return errMsg{fmt.Errorf("no backup Gist found (description %q); sync all data to Gist first", storage.BackupGistDescription)}
 		}
 		return gistRestoreAvailableMsg{available: available}
 	}
@@ -955,7 +955,7 @@ func (m GistModel) doSyncToGistCmd(prefs storage.SyncPrefs) tea.Cmd {
 		if err := mgr.Push(prefs); err != nil {
 			return errMsg{fmt.Errorf("gist sync failed: %w", err)}
 		}
-		return successMsg{"✓ Data synced to Gist (tera-data-backup)."}
+		return successMsg{fmt.Sprintf("✓ Data synced to Gist (%s).", storage.BackupGistDescription)}
 	}
 }
 

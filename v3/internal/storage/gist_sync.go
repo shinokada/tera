@@ -14,7 +14,9 @@ import (
 )
 
 const (
-	backupGistDescription = "tera-data-backup"
+	// BackupGistDescription is the fixed description used to identify the
+	// dedicated backup Gist across push, pull, and restore operations.
+	BackupGistDescription = "tera-data-backup"
 	backupGistHTTPTimeout = 30 * time.Second
 )
 
@@ -113,7 +115,7 @@ func (m *GistSyncManager) FindBackupGist() (*gist.Gist, error) {
 		return nil, fmt.Errorf("failed to list gists: %w", err)
 	}
 	for _, g := range gists {
-		if g.Description == backupGistDescription {
+		if g.Description == BackupGistDescription {
 			return g, nil
 		}
 	}
@@ -203,7 +205,7 @@ func (m *GistSyncManager) Push(prefs SyncPrefs) error {
 		if len(present) == 0 {
 			return fmt.Errorf("no files found to push for the selected categories")
 		}
-		_, err = m.client.CreateGist(backupGistDescription, present, false)
+		_, err = m.client.CreateGist(BackupGistDescription, present, false)
 		return err
 	}
 
@@ -266,7 +268,7 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 		return err
 	}
 	if g == nil {
-		return fmt.Errorf("no backup Gist found (description: %q); push first to create one", backupGistDescription)
+		return fmt.Errorf("no backup Gist found (description: %q); push first to create one", BackupGistDescription)
 	}
 
 	// Re-fetch full Gist to get file contents and raw URLs
