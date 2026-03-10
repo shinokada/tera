@@ -1521,6 +1521,15 @@ func (a *App) viewMainMenu() string {
 		// to avoid inflating visibleRP and overflowing the terminal height.
 		fixed := headerLines + chromeLines + menuLines + qfLines + rpHeaderLines + footerLines + p.PageVertical
 		visibleRP := a.height - fixed
+		// Reserve lines for scroll indicators: up indicator shown when rpViewOffset > 0,
+		// down indicator shown when list is longer than the visible window.
+		// Subtract conservatively: both can appear simultaneously.
+		if a.rpViewOffset > 0 {
+			visibleRP-- // up indicator will be rendered
+		}
+		if len(a.recentlyPlayed) > visibleRP {
+			visibleRP-- // down indicator will be rendered
+		}
 		if visibleRP < 1 {
 			visibleRP = 1
 		}
