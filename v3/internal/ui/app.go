@@ -1516,10 +1516,16 @@ func (a *App) viewMainMenu() string {
 		if len(a.quickFavorites) > 0 {
 			qfLines = 2 + len(a.quickFavorites) // blank + header + items
 		}
+		volumeLines := 0
+		if a.volumeDisplay != "" {
+			// blank line before the banner + banner line itself.
+			// The final blank line before the help bar is already covered by footerLines.
+			volumeLines = 2
+		}
 		// p.PageVertical is the bottom padding added by docStyleNoTopPadding;
 		// RenderPageWithBottomHelp subtracts it, so we must account for it here
 		// to avoid inflating visibleRP and overflowing the terminal height.
-		fixed := headerLines + chromeLines + menuLines + qfLines + rpHeaderLines + footerLines + p.PageVertical
+		fixed := headerLines + chromeLines + menuLines + qfLines + volumeLines + rpHeaderLines + footerLines + p.PageVertical
 		visibleRP := a.height - fixed
 		// Reserve lines for scroll indicators conservatively (both can appear).
 		// We check before clamping whether the list could ever need scrolling.
