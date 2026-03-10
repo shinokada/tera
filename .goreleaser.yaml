@@ -105,7 +105,7 @@ scoops:
       owner: shinokada
       name: scoop-bucket
       token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
-    folder: bucket
+    directory: bucket
     homepage: https://tera.codewithshin.com/
     description: Terminal-based internet radio player
     license: MIT
