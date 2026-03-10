@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tera-manifest.json`** sentinel in every backup Gist prevents false-positive matches on unrelated Gists
 
 #### Sync categories
+
 | Category                | Default |
 | ----------------------- | ------- |
 | Favorites (playlists)   | ✅ on    |
@@ -262,3 +263,4 @@ Examples:
 ---
 
 [3.0.0]: https://github.com/shinokada/tera/releases/tag/v3.0.0
+[3.8.0]: https://github.com/shinokada/tera/releases/tag/v3.8.0
