@@ -388,7 +388,7 @@ Access app configuration from the main menu (option `-`):
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
 - **Connection Settings** - Auto-reconnect and buffering for unstable networks (4G/GPRS)
 - **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
-- **Search History** - View and clear your search history
+- **History** - Search history and Recently Played display settings (size, display rows, reset)
 - **Check for Updates** - View current version and check for new releases
 - **About TERA** - See version, installation method, and update command
 
@@ -426,9 +426,9 @@ For users on unstable networks (mobile data, GPRS, 4G), configure automatic reco
 
 Settings stored in unified `config.yaml` (see [File Locations](#file-locations-v3)).
 
-### Quick Play from Main Menu
+### Quick Play & Recently Played
 
-The main menu shows your "My-favorites" list with shortcuts 10-99+. Type the number to play instantly:
+The main menu shows two instant-access sections below the regular menu:
 
 ```
 Main Menu & Quick Play
@@ -436,30 +436,38 @@ Main Menu & Quick Play
 Choose an option:
 
   1. Play from Favorites
-  2. Search Stations
-  3. Most Played
-  4. Top Rated
-  5. Browse by Tag
-  6. Tag Playlists
-  7. Manage Lists
-  8. Block List
-  9. I Feel Lucky
-  0. Gist Management
+  ...
   -. Settings
 
 ─── Quick Play Favorites ───
   10. Jazz FM • UK • MP3 192kbps
   11. BBC Radio 6 Music • UK • AAC 128kbps
-  12. KEXP 90.3 FM • US • AAC 128kbps
 
-Type 10-12 to play instantly!
+─── Recently Played ───
+  12. WBGO Jazz 88.3 • United States • 3 minutes ago
+  13. FIP • France • 1 hour ago
+
+Type 10-13 to play instantly!
 ```
 
+**Quick Play Favorites:** Stations from "My-favorites.json" with shortcuts starting at 10.
+
+**Recently Played:** Your last N stations (default 5), shown in most-recently-played order. Shortcuts continue from where Quick Play Favorites end.
+
 **How it works:**
-- Stations from "My-favorites.json" appear with shortcuts 10+
-- Type the number (e.g., `11`) and press Enter
-- Station plays immediately
+- Type the shortcut number and press Enter, or navigate with `↑↓` and press Enter
+- Station plays immediately via the shared player
 - Press `Esc` to stop playback
+- The `▶` indicator marks the currently playing station in both sections
+
+**Configure Recently Played:**
+1. Press `-` from the main menu → Settings
+2. Select **5. History → 2. Play History**
+3. Available options:
+   - **Toggle Show** — enable or disable the section entirely
+   - **History Size** — how many stations to track (1–20, default 5)
+   - **Display Rows** — cap the number of rows shown at once (1–10; `0` = fill available space)
+   - **Reset All Play Stats** — clears play counts, Most Played, and Recently Played
 
 ## Theme Configuration
 

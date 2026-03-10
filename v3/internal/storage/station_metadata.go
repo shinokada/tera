@@ -372,6 +372,20 @@ func (m *MetadataManager) GetTotalStations() int {
 	return len(m.store.Stations)
 }
 
+// GetRecentlyPlayedCount returns how many stations would appear in
+// GetRecentlyPlayed(limit), i.e. min(limit, total tracked stations).
+// This lets the Settings screen show the user how many entries are
+// currently in the recently-played history without allocating the full list.
+func (m *MetadataManager) GetRecentlyPlayedCount(limit int) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := len(m.store.Stations)
+	if limit > 0 && n > limit {
+		return limit
+	}
+	return n
+}
+
 // ClearAll removes all metadata (for testing or user request)
 func (m *MetadataManager) ClearAll() error {
 	m.mu.Lock()

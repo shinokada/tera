@@ -301,7 +301,7 @@ Access app configuration from the main menu (Settings: `-`):
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
 - **Connection Settings** - Auto-reconnect and buffering for unstable networks (4G/GPRS)
 - **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
-- **History** - Search history and Recently Played display settings
+- **History** - Search history and Recently Played display settings (size, display rows, reset)
 - **Check for Updates** - View current version and check for new releases
 - **About TERA** - See version, installation method, and update command
 
@@ -377,7 +377,11 @@ Type 10-14 to play instantly!
 **Configure Recently Played:**
 1. Press `-` from the main menu → Settings
 2. Select **5. History → 2. Play History**
-3. Toggle show/hide, adjust size (1-20), toggle allow duplicate, or clear history
+3. Available options:
+   - **Toggle Show** — enable or disable the section entirely
+   - **History Size** — how many stations to track (1–20, default 5)
+   - **Display Rows** — cap the number of rows shown at once (1–10; `0` = fill available space)
+   - **Reset All Play Stats** — clears play counts, Most Played, and Recently Played
 
 ## Theme Configuration
 

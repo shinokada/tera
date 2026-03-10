@@ -170,3 +170,65 @@ func TestPlayRecentStation_LastStation(t *testing.T) {
 		t.Errorf("expected 'C', got '%s'", app.playingStation.Name)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// updateRPViewOffset
+// ---------------------------------------------------------------------------
+
+func TestUpdateRPViewOffset_NoRP(t *testing.T) {
+	app := newTestApp()
+	app.recentlyPlayed = nil
+	app.rpViewOffset = 3 // stale value
+	app.updateRPViewOffset(5)
+	if app.rpViewOffset != 0 {
+		t.Errorf("expected 0 when no RP entries, got %d", app.rpViewOffset)
+	}
+}
+
+func TestUpdateRPViewOffset_CursorAboveRP(t *testing.T) {
+	app := newTestApp()
+	app.recentlyPlayed = makeRecentlyPlayed("A", "B", "C", "D", "E")
+	app.rpViewOffset = 3
+	app.unifiedMenuIndex = 0 // cursor in menu, not RP
+	app.updateRPViewOffset(3)
+	if app.rpViewOffset != 0 {
+		t.Errorf("expected offset reset to 0 when cursor above RP, got %d", app.rpViewOffset)
+	}
+}
+
+func TestUpdateRPViewOffset_ScrollsDown(t *testing.T) {
+	app := newTestApp()
+	app.recentlyPlayed = makeRecentlyPlayed("A", "B", "C", "D", "E")
+	// Cursor at RP entry 4 (index 3 in RP, unifiedIdx = 11+3 = 14)
+	rpStart := mainMenuItemCount + len(app.quickFavorites)
+	app.unifiedMenuIndex = rpStart + 3
+	app.updateRPViewOffset(3) // window of 3
+	// entry 3 must be visible: offset should be 1 (shows entries 1,2,3)
+	if app.rpViewOffset != 1 {
+		t.Errorf("expected offset 1, got %d", app.rpViewOffset)
+	}
+}
+
+func TestUpdateRPViewOffset_ScrollsUp(t *testing.T) {
+	app := newTestApp()
+	app.recentlyPlayed = makeRecentlyPlayed("A", "B", "C", "D", "E")
+	app.rpViewOffset = 4 // pushed far down
+	rpStart := mainMenuItemCount + len(app.quickFavorites)
+	app.unifiedMenuIndex = rpStart + 0 // cursor at first RP entry
+	app.updateRPViewOffset(3)
+	if app.rpViewOffset != 0 {
+		t.Errorf("expected offset scrolled back to 0, got %d", app.rpViewOffset)
+	}
+}
+
+func TestUpdateRPViewOffset_LargeWindowCoversAllEntries(t *testing.T) {
+	app := newTestApp()
+	app.recentlyPlayed = makeRecentlyPlayed("A", "B", "C")
+	// Window larger than list — all items fit, offset stays 0 regardless of cursor position
+	rpStart := mainMenuItemCount + len(app.quickFavorites)
+	app.unifiedMenuIndex = rpStart + 1
+	app.updateRPViewOffset(10)
+	if app.rpViewOffset != 0 {
+		t.Errorf("expected offset 0 when window covers all entries, got %d", app.rpViewOffset)
+	}
+}
