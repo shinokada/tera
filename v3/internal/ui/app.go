@@ -96,7 +96,8 @@ type App struct {
 	dataPath      string        // path for persisting sleep timer config
 	sleepSummary  SleepSummaryModel
 	// Recently Played viewport
-	rpViewOffset int // first RP entry index visible on screen
+	rpViewOffset    int // first RP entry index visible on screen
+	rpVisibleWindow int // last-known number of RP rows that fit on screen
 	// Cleanup guard
 	cleanupOnce sync.Once // Ensures Cleanup is only called once
 	// Bubbletea program handle (set by main) for sending async messages.
@@ -1097,14 +1098,14 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex > 0 {
 				a.unifiedMenuIndex--
-				a.updateRPViewOffset()
+				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
 		case "down", "j":
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex < totalItems-1 {
 				a.unifiedMenuIndex++
-				a.updateRPViewOffset()
+				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
 		}
@@ -1520,6 +1521,10 @@ func (a *App) viewMainMenu() string {
 			visibleRP = len(a.recentlyPlayed)
 		}
 
+		// Cache the visible window size so key-event handlers can pass it to
+		// updateRPViewOffset, keeping navigation consistent with the actual
+		// on-screen layout without waiting for the next View() call.
+		a.rpVisibleWindow = visibleRP
 		// Keep viewport in sync with cursor now that we know the window size.
 		a.updateRPViewOffset(visibleRP)
 

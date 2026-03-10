@@ -221,10 +221,10 @@ func TestUpdateRPViewOffset_ScrollsUp(t *testing.T) {
 	}
 }
 
-func TestUpdateRPViewOffset_NoCursorInRP_LargeWindow(t *testing.T) {
+func TestUpdateRPViewOffset_LargeWindowCoversAllEntries(t *testing.T) {
 	app := newTestApp()
 	app.recentlyPlayed = makeRecentlyPlayed("A", "B", "C")
-	// Window larger than list — all items fit, offset stays 0
+	// Window larger than list — all items fit, offset stays 0 regardless of cursor position
 	rpStart := mainMenuItemCount + len(app.quickFavorites)
 	app.unifiedMenuIndex = rpStart + 1
 	app.updateRPViewOffset(10)
