@@ -95,6 +95,8 @@ type App struct {
 	sleepDuration time.Duration // duration the user set (for the summary)
 	dataPath      string        // path for persisting sleep timer config
 	sleepSummary  SleepSummaryModel
+	// Recently Played viewport
+	rpViewOffset int // first RP entry index visible on screen
 	// Cleanup guard
 	cleanupOnce sync.Once // Ensures Cleanup is only called once
 	// Bubbletea program handle (set by main) for sending async messages.
@@ -603,6 +605,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.loadRecentlyPlayed()
 			a.unifiedMenuIndex = 0
 			a.numberBuffer = ""
+			a.rpViewOffset = 0
 			return a, nil
 		}
 		return a, nil
@@ -696,6 +699,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.loadRecentlyPlayed()
 		a.unifiedMenuIndex = 0
 		a.numberBuffer = ""
+		a.rpViewOffset = 0
 		return a, nil
 	}
 
@@ -1093,12 +1097,14 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex > 0 {
 				a.unifiedMenuIndex--
+				a.updateRPViewOffset()
 			}
 			return a, nil
 		case "down", "j":
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex < totalItems-1 {
 				a.unifiedMenuIndex++
+				a.updateRPViewOffset()
 			}
 			return a, nil
 		}
@@ -1326,6 +1332,54 @@ func (a *App) saveStationVolume(station *api.Station) {
 	a.loadQuickFavorites()
 }
 
+// updateRPViewOffset adjusts rpViewOffset so the currently selected RP entry
+// is always visible in the clipped window. Call this after changing unifiedMenuIndex.
+func (a *App) updateRPViewOffset(visibleCount ...int) {
+	rpStart := mainMenuItemCount + len(a.quickFavorites)
+	rpCount := len(a.recentlyPlayed)
+	if rpCount == 0 {
+		a.rpViewOffset = 0
+		return
+	}
+
+	// Determine how many RP rows are currently visible. The caller may supply
+	// this value; otherwise fall back to the full list (conservative / safe).
+	win := rpCount
+	if len(visibleCount) > 0 && visibleCount[0] > 0 {
+		win = visibleCount[0]
+	}
+
+	// Cursor position inside the RP list (may be negative = not in RP section)
+	rpCursor := a.unifiedMenuIndex - rpStart
+	if rpCursor < 0 {
+		// Cursor is above the RP section — scroll to top
+		a.rpViewOffset = 0
+		return
+	}
+	if rpCursor >= rpCount {
+		rpCursor = rpCount - 1
+	}
+
+	// Scroll down: keep cursor within window
+	if rpCursor >= a.rpViewOffset+win {
+		a.rpViewOffset = rpCursor - win + 1
+	}
+	// Scroll up
+	if rpCursor < a.rpViewOffset {
+		a.rpViewOffset = rpCursor
+	}
+	// Clamp
+	if a.rpViewOffset < 0 {
+		a.rpViewOffset = 0
+	}
+	if a.rpViewOffset > rpCount-win {
+		a.rpViewOffset = rpCount - win
+		if a.rpViewOffset < 0 {
+			a.rpViewOffset = 0
+		}
+	}
+}
+
 func (a *App) viewMainMenu() string {
 	var content strings.Builder
 
@@ -1438,14 +1492,48 @@ func (a *App) viewMainMenu() string {
 		}
 	}
 
-	// Add recently played section if available
+	// Add recently played section if available, clipped to available screen space.
 	if len(a.recentlyPlayed) > 0 {
+		// ── viewport calculation ────────────────────────────────────────────
+		// Lines already committed: header + chrome (title/subtitle/blank) +
+		// menu items + blank + QF header + QF items + blank + RP header + 1 margin + footer.
+		headerLines := visibleLineCount(renderHeader())
+		const (
+			chromeLines   = 4  // blank-after-header + title + subtitle + blank
+			footerLines   = 2  // 1 margin + 1 help bar
+			rpHeaderLines = 2  // blank + "─── Recently Played ───"
+		)
+		menuLines := mainMenuItemCount // one line per menu item
+		if a.playingFromMain && a.playingStation != nil {
+			menuLines += 2 // now-playing block: blank + station line
+		}
+		qfLines := 0
+		if len(a.quickFavorites) > 0 {
+			qfLines = 2 + len(a.quickFavorites) // blank + header + items
+		}
+		fixed := headerLines + chromeLines + menuLines + qfLines + rpHeaderLines + footerLines
+		visibleRP := a.height - fixed
+		if visibleRP < 1 {
+			visibleRP = 1
+		}
+		if visibleRP > len(a.recentlyPlayed) {
+			visibleRP = len(a.recentlyPlayed)
+		}
+
+		// Keep viewport in sync with cursor now that we know the window size.
+		a.updateRPViewOffset(visibleRP)
+
 		content.WriteString("\n")
 		content.WriteString(quickFavoritesStyle().Render("─── Recently Played ───"))
 		content.WriteString("\n")
 
 		rpShortcutStart := 10 + len(a.quickFavorites)
-		for i, entry := range a.recentlyPlayed {
+		end := a.rpViewOffset + visibleRP
+		if end > len(a.recentlyPlayed) {
+			end = len(a.recentlyPlayed)
+		}
+		for i := a.rpViewOffset; i < end; i++ {
+			entry := a.recentlyPlayed[i]
 			shortcut := fmt.Sprintf("%d", rpShortcutStart+i)
 
 			var stationInfo strings.Builder
@@ -1483,6 +1571,13 @@ func (a *App) viewMainMenu() string {
 			}
 			content.WriteString("\n")
 		}
+
+		// Scroll indicator: show how many entries are hidden below.
+		hiddenBelow := len(a.recentlyPlayed) - end
+		if hiddenBelow > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↓ %d more (↓/j to scroll)", hiddenBelow)))
+			content.WriteString("\n")
+		}
 	}
 
 	// Add volume display if visible
@@ -1491,6 +1586,9 @@ func (a *App) viewMainMenu() string {
 		content.WriteString(highlightStyle().Render(a.volumeDisplay))
 		content.WriteString("\n")
 	}
+
+	// Guaranteed blank line margin before the footer help bar.
+	content.WriteString("\n")
 
 	// Build help text based on playing state
 	var helpText string
