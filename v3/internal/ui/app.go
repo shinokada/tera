@@ -45,6 +45,9 @@ const (
 // Main menu configuration
 const mainMenuItemCount = 11
 
+// syncBackupMenuLabel is the label shown in the main menu for the Sync & Backup screen.
+const syncBackupMenuLabel = "Sync & Backup"
+
 type App struct {
 	screen                   Screen
 	width                    int
@@ -226,7 +229,7 @@ func (a *App) initMainMenu() {
 		components.NewMenuItem("Manage Lists", "", "7"),
 		components.NewMenuItem("Block List", "", "8"),
 		components.NewMenuItem("I Feel Lucky", "", "9"),
-		components.NewMenuItem("Gist Management", "", "0"),
+		components.NewMenuItem(syncBackupMenuLabel, "", "0"),
 		components.NewMenuItem("Settings", "", "-"),
 	}
 
@@ -1154,7 +1157,7 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenLucky}
 		}
-	case 9: // Gist Management
+	case 9: // Sync & Backup
 		return a, func() tea.Msg {
 			return navigateMsg{screen: screenGist}
 		}
@@ -1348,7 +1351,7 @@ func (a *App) viewMainMenu() string {
 		{"7", "Manage Lists"},
 		{"8", "Block List"},
 		{"9", "I Feel Lucky"},
-		{"0", "Gist Management"},
+		{"0", syncBackupMenuLabel},
 		{"-", "Settings"},
 	}
 

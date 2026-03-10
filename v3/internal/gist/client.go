@@ -48,20 +48,37 @@ type GistFile struct {
 	RawURL   string `json:"raw_url,omitempty"`
 }
 
-// CreateGist creates a new gist with the provided files
-// If public is true, the gist will be publicly visible; otherwise it will be secret
-func (c *Client) CreateGist(description string, files map[string]string, public bool) (*Gist, error) {
-	gistFiles := make(map[string]GistFile)
+// GistFileUpdate wraps the content field for PATCH requests.
+// Deletion is represented by a nil file entry in the parent files map;
+// a non-nil GistFileUpdate sets or replaces the file content.
+type GistFileUpdate struct {
+	Content *string `json:"content"`
+}
+
+// gistFileCreate is the per-file payload for POST /gists.
+// Content is a plain string without omitempty so that empty files are
+// serialised as {"content":""} rather than being silently dropped.
+type gistFileCreate struct {
+	Content string `json:"content"`
+}
+
+// CreateGist creates a new gist with the provided files.
+// If public is true, the gist will be publicly visible; otherwise it will be
+// secret. Each map value is a pointer: nil entries are skipped (deletion has
+// no meaning on create), non-nil pointers set the file content.
+func (c *Client) CreateGist(description string, files map[string]*string, public bool) (*Gist, error) {
+	gistFiles := make(map[string]gistFileCreate)
 	for filename, content := range files {
-		gistFiles[filename] = GistFile{
-			Content: content,
+		if content == nil {
+			continue // nothing to create for a nil entry
 		}
+		gistFiles[filename] = gistFileCreate{Content: *content}
 	}
 
 	payload := struct {
-		Description string              `json:"description"`
-		Public      bool                `json:"public"`
-		Files       map[string]GistFile `json:"files"`
+		Description string                     `json:"description"`
+		Public      bool                       `json:"public"`
+		Files       map[string]gistFileCreate  `json:"files"`
 	}{
 		Description: description,
 		Public:      public,
@@ -86,19 +103,28 @@ func (c *Client) CreateGist(description string, files map[string]string, public 
 	return &gist, nil
 }
 
-// ListGists lists all gists for the authenticated user
+// ListGists lists all gists for the authenticated user, paginating through
+// all pages so callers see the complete set regardless of account size.
 func (c *Client) ListGists() ([]*Gist, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/gists", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	var all []*Gist
+	page := 1
+	for {
+		url := fmt.Sprintf("%s/gists?per_page=100&page=%d", c.baseURL, page)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		var pageGists []*Gist
+		if err := c.do(req, &pageGists); err != nil {
+			return nil, err
+		}
+		all = append(all, pageGists...)
+		if len(pageGists) < 100 {
+			break // last page
+		}
+		page++
 	}
-
-	var gists []*Gist
-	if err := c.do(req, &gists); err != nil {
-		return nil, err
-	}
-
-	return gists, nil
+	return all, nil
 }
 
 // UpdateGist updates the description of an existing gist
@@ -107,6 +133,39 @@ func (c *Client) UpdateGist(gistID, description string) error {
 		Description string `json:"description"`
 	}{
 		Description: description,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update payload: %w", err)
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/gists/%s", c.baseURL, gistID), bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	return c.do(req, nil)
+}
+
+// UpdateGistFiles updates or replaces the files of an existing gist.
+// Each key in files is the filename; the value controls the operation:
+//   - nil pointer → delete the file (sends null per the GitHub API)
+//   - non-nil pointer → set or replace content, including empty string
+func (c *Client) UpdateGistFiles(gistID string, files map[string]*string) error {
+	gistFiles := make(map[string]*GistFileUpdate)
+	for filename, content := range files {
+		if content == nil {
+			gistFiles[filename] = nil // marshals to null → deletes the file
+		} else {
+			gistFiles[filename] = &GistFileUpdate{Content: content}
+		}
+	}
+
+	payload := struct {
+		Files map[string]*GistFileUpdate `json:"files"`
+	}{
+		Files: gistFiles,
 	}
 
 	body, err := json.Marshal(payload)

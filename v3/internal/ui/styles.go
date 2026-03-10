@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -289,6 +290,16 @@ func wrapWithHeaderAndStyle(content string) string {
 	return docStyleNoTopPadding().Render(fullContent.String())
 }
 
+// ansiEscapeRe matches ANSI CSI escape sequences (colours, cursor moves, etc.)
+// used to strip them before counting visible lines.
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// visibleLineCount returns the number of newlines in s after stripping ANSI
+// escape sequences, giving an accurate count of rendered terminal lines.
+func visibleLineCount(s string) int {
+	return strings.Count(ansiEscapeRe.ReplaceAllString(s, ""), "\n")
+}
+
 // RenderPageWithBottomHelp renders a page with help text at the bottom of the screen
 func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	// Assemble page content
@@ -296,10 +307,11 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 
 	// Get the rendered header for line counting
 	header := renderHeader()
-	teraHeaderLines := strings.Count(header, "\n")
+	teraHeaderLines := visibleLineCount(header)
 
-	// Count content lines
-	contentLines := strings.Count(content, "\n")
+	// Count visible content lines (strip ANSI so styled checklist output doesn't
+	// inflate the count and push the help text off-screen).
+	contentLines := visibleLineCount(content)
 	p := getPadding()
 	totalUsed := teraHeaderLines + contentLines + p.PageVertical // padding from docStyleNoTopPadding
 

@@ -5,6 +5,42 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - 2026-03-10
+
+### ✨ Added
+
+#### Sync & Backup (menu renamed from "Gist Management")
+- **Export backup (zip)** — save all selected data to a local zip file; no GitHub token required
+- **Restore from backup (zip)** — restore selected categories from a local zip with overwrite warning
+- **Sync all data to Gist** — push selected categories to a dedicated secret `tera-data-backup` Gist
+- **Restore all data from Gist** — pull selected categories from the `tera-data-backup` Gist
+- **Category checklist** — shared checklist UI for all four operations; selections persist in `sync_prefs.json`
+- **Overwrite warning** — lists conflicting files before any restore, with Enter to proceed or Esc to cancel
+- **`sync_prefs.json`** — new file in the config directory that persists checklist selections across runs
+- **`tera-manifest.json`** sentinel in every backup Gist prevents false-positive matches on unrelated Gists
+
+#### Sync categories
+
+| Category                | Default |
+| ----------------------- | ------- |
+| Favorites (playlists)   | ✅ on    |
+| Settings (config.yaml)  | ✅ on    |
+| Ratings & votes         | ✅ on    |
+| Blocklist               | ✅ on    |
+| Station metadata & tags | ✅ on    |
+| Search history          | ❌ off   |
+
+### 🔒 Security
+- Reject path-traversal filenames in Gist restores (`fav--../../config.yaml` style attacks)
+- `FindBackupGist` errors on duplicate backup Gists instead of silently using the first match
+
+### 🐛 Fixed
+- Gist sync/restore actions now gate on `gistSyncMgr != nil` (previously showed misleading "token required" error when sync manager init failed)
+- `NewBackupManager` and `NewGistSyncManager` failures surfaced as startup warnings in the TUI
+- `SaveSyncPrefs` errors shown as non-blocking warnings instead of silently discarded
+- Empty checklist selection rejected before export/sync/restore flows begin
+- Removed redundant `GetGist` fetch in `Pull` (reuses the full Gist returned by `FindBackupGist`)
+
 ## [3.1.0]
 
 - OS keychain token storage with file-based fallback
@@ -227,3 +263,4 @@ Examples:
 ---
 
 [3.0.0]: https://github.com/shinokada/tera/releases/tag/v3.0.0
+[3.8.0]: https://github.com/shinokada/tera/releases/tag/v3.8.0

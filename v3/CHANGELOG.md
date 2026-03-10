@@ -5,6 +5,30 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - unreleased
+
+### Added (Phase 1 — Core Storage)
+- `storage.SyncPrefs` — per-category backup preferences persisted to `sync_prefs.json`; `LoadSyncPrefs()` / `SaveSyncPrefs()` with atomic write and defaults (search history off).
+- `storage.BackupManager` — zip-based export and restore using `archive/zip` (no new dependencies); `Export()`, `Restore()`, `ListArchiveCategories()`, `ConflictingFiles()`, `ResolveBackupPath()`.
+- `storage.RestoreConflictError` — typed error returned when a restore would overwrite existing files; carries the list of conflicting paths for the overwrite-warning UI.
+- `storage.GistSyncManager` — Gist-based push/pull of user data to a dedicated secret Gist (`tera-data-backup`); `Push()`, `Pull()`, `FindBackupGist()`, `AvailableCategories()`.
+- `gist.Client.UpdateGistFiles()` — new PATCH method to replace file contents of an existing Gist, needed by `GistSyncManager.Push()`.
+
+### Internal
+- `gist_filename` / `gistFilenameToRelPath` encode the config-relative path ↔ Gist filename mapping (e.g. `data/favorites/Jazz.json` ↔ `fav--Jazz.json`) since Gist filenames cannot contain `/`.
+- Unit tests: `sync_prefs_test.go`, `backup_test.go`, `gist_sync_test.go`.
+
+### Added (Phase 2 — UI Components)
+- `ui/components.ChecklistModel` — reusable bubbletea checklist component with cursor navigation (`↑↓`/`jk`), Space toggle, `a` toggle-all, Enter confirm, Esc/q cancel.
+- `ChecklistConfirmedMsg` / `ChecklistCancelledMsg` — typed tea messages emitted on confirm and cancel.
+- Unit tests: `checklist_test.go` (navigation, toggle, toggle-all, confirm/cancel, helpers, View).
+
+### Changed (Phase 3 — Gist Screen Integration)
+- `ui/gist.go`: Renamed screen title to `Sync & Backup`; added 8 new states for export/restore/sync flows; implemented export backup (checklist → path prompt → zip), restore from zip (path prompt → inspect → checklist → conflict check → overwrite warn/extract), sync to Gist (checklist → push), restore from Gist (fetch available categories → checklist → conflict check → overwrite warn/pull); overwrite warning prompt shared by zip and Gist flows; checklist selections persisted to `sync_prefs.json` on confirm.
+- `ui/app.go`: Menu label `Gist Management` → `Sync & Backup` via `syncBackupMenuLabel` constant.
+
+---
+
 ## [3.7.1] - 2026-03-09
 
 ### Fixed

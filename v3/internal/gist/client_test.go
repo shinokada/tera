@@ -51,8 +51,9 @@ func TestCreateGist(t *testing.T) {
 	client := NewClient("token")
 	client.baseURL = ts.URL
 
-	files := map[string]string{
-		"test.txt": "content",
+	content := "content"
+	files := map[string]*string{
+		"test.txt": &content,
 	}
 
 	gist, err := client.CreateGist("Test Gist", files, false)
