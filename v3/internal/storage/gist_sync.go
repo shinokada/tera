@@ -108,18 +108,31 @@ func gistFilenameToRelPath(name string) string {
 	return ""
 }
 
-// FindBackupGist returns the existing tera-data-backup Gist, or nil if none exists.
+// FindBackupGist returns the single tera-data-backup Gist, or nil if none exists.
+// It returns an error if more than one matching Gist is found, since Push/Pull
+// cannot safely choose between them.
 func (m *GistSyncManager) FindBackupGist() (*gist.Gist, error) {
 	gists, err := m.client.ListGists()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list gists: %w", err)
 	}
+	var matches []*gist.Gist
 	for _, g := range gists {
 		if g.Description == BackupGistDescription {
-			return g, nil
+			matches = append(matches, g)
 		}
 	}
-	return nil, nil
+	switch len(matches) {
+	case 0:
+		return nil, nil
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf(
+			"found %d gists with description %q; delete duplicates and keep one",
+			len(matches), BackupGistDescription,
+		)
+	}
 }
 
 // AvailableCategories inspects the backup Gist and returns which categories are present.

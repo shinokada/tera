@@ -207,6 +207,10 @@ func NewGistModel(favoritePath string) GistModel {
 		m.gistClient = gist.NewClient(token)
 		if sm, err := storage.NewGistSyncManager(m.gistClient); err == nil {
 			m.gistSyncMgr = sm
+		} else if m.message == "" {
+			// Only set if no higher-priority warning is already shown.
+			m.message = fmt.Sprintf("Warning: Gist sync unavailable: %v", err)
+			m.messageIsError = true
 		}
 	}
 
@@ -300,8 +304,11 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gistClient = gist.NewClient(m.token)
 		if sm, err := storage.NewGistSyncManager(m.gistClient); err == nil {
 			m.gistSyncMgr = sm
+			m.message = fmt.Sprintf("Token saved! User: %s", msg.user)
+		} else {
+			m.gistSyncMgr = nil
+			m.message = fmt.Sprintf("Token saved (User: %s) but Gist sync unavailable: %v", msg.user, err)
 		}
-		m.message = fmt.Sprintf("Token saved! User: %s", msg.user)
 		m.messageIsError = false
 		m.state = gistStateTokenMenu
 		return m, nil
@@ -821,6 +828,11 @@ func checklistToPrefs(items []components.ChecklistItem) storage.SyncPrefs {
 // handleChecklistConfirmed dispatches based on the current checklist state.
 func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg) (tea.Model, tea.Cmd) {
 	prefs := checklistToPrefs(msg.Items)
+	if prefs == (storage.SyncPrefs{}) {
+		m.message = "Select at least one category."
+		m.messageIsError = true
+		return m, nil // stay on the checklist
+	}
 
 	switch m.state {
 	case gistStateExportChecklist:
