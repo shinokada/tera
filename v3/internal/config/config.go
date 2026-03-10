@@ -86,9 +86,10 @@ type ShuffleConfig struct {
 
 // PlayHistoryConfig holds Recently Played display settings for the main menu
 type PlayHistoryConfig struct {
-	Enabled        bool `yaml:"enabled"`         // Show Recently Played section in main menu (default: true)
-	Size           int  `yaml:"size"`            // Number of stations to display, range [1, 20] (default: 5)
-	AllowDuplicate bool `yaml:"allow_duplicate"` // Allow same station to appear more than once (default: false)
+	Enabled        bool `yaml:"enabled"`          // Show Recently Played section in main menu (default: true)
+	Size           int  `yaml:"size"`             // Stations tracked/stored in history, range [1, 20] (default: 5)
+	DisplayRows    int  `yaml:"display_rows"`     // Max rows visible at once in main menu, range [1, 10] (default: 0 = auto)
+	AllowDuplicate bool `yaml:"allow_duplicate"`  // Allow same station to appear more than once (default: false)
 }
 
 // DefaultPlayHistoryConfig returns a PlayHistoryConfig with sensible defaults.
@@ -96,6 +97,7 @@ func DefaultPlayHistoryConfig() PlayHistoryConfig {
 	return PlayHistoryConfig{
 		Enabled:        true,
 		Size:           5,
+		DisplayRows:    0, // 0 = auto (fills available space)
 		AllowDuplicate: false,
 	}
 }
@@ -460,7 +462,7 @@ func (s *ShuffleConfig) Validate() error {
 	return nil
 }
 
-// Validate validates PlayHistoryConfig, clamping Size to [1, 20].
+// Validate validates PlayHistoryConfig, clamping Size to [1, 20] and DisplayRows to [0, 10].
 func (p *PlayHistoryConfig) Validate() error {
 	var errs []string
 
@@ -471,6 +473,16 @@ func (p *PlayHistoryConfig) Validate() error {
 	if p.Size > 20 {
 		p.Size = 20
 		errs = append(errs, "size must be <= 20, set to 20")
+	}
+
+	// DisplayRows 0 means auto; positive values are clamped to [1, 10].
+	if p.DisplayRows < 0 {
+		p.DisplayRows = 0
+		errs = append(errs, "display_rows must be >= 0, set to 0 (auto)")
+	}
+	if p.DisplayRows > 10 {
+		p.DisplayRows = 10
+		errs = append(errs, "display_rows must be <= 10, set to 10")
 	}
 
 	if len(errs) > 0 {

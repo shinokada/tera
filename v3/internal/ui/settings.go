@@ -805,7 +805,7 @@ func (m SettingsModel) viewSearchHistory() string {
 func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	cfg := m.playHistoryCfg
 	switch msg.String() {
-	case "esc", "5":
+	case "esc", "7":
 		m.state = settingsStateHistory
 		return m, nil
 	case "0":
@@ -843,7 +843,7 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.messageTime = 3
 		return m, tickEverySecond()
-	case "3": // Decrease size
+	case "3": // Decrease history size
 		oldSize := cfg.Size
 		cfg.Size--
 		_ = cfg.Validate() // Clamps to [1, 20]
@@ -860,7 +860,47 @@ func (m SettingsModel) updatePlayHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.messageTime = 3
 		return m, tickEverySecond()
-	case "4": // Reset All Play Stats
+	case "4": // Increase display rows
+		oldRows := cfg.DisplayRows
+		cfg.DisplayRows++
+		_ = cfg.Validate() // Clamps to [0, 10]
+		if cfg.DisplayRows == oldRows {
+			m.message = fmt.Sprintf("ℹ Display rows already at maximum (%d)", cfg.DisplayRows)
+			m.messageIsSuccess = true
+		} else if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+			m.playHistoryCfg = cfg
+			m.message = fmt.Sprintf("✓ Display rows set to %d", cfg.DisplayRows)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	case "5": // Decrease display rows
+		oldRows := cfg.DisplayRows
+		cfg.DisplayRows--
+		if cfg.DisplayRows < 0 {
+			cfg.DisplayRows = 0
+		}
+		if cfg.DisplayRows == oldRows {
+			m.message = "ℹ Display rows already at minimum (0 = auto)"
+			m.messageIsSuccess = true
+		} else if err := storage.SavePlayHistoryConfigToUnified(cfg); err == nil {
+			m.playHistoryCfg = cfg
+			if cfg.DisplayRows == 0 {
+				m.message = "✓ Display rows set to auto (fills available space)"
+			} else {
+				m.message = fmt.Sprintf("✓ Display rows set to %d", cfg.DisplayRows)
+			}
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	case "6": // Reset All Play Stats
 		// ClearAll() wipes the entire metadata store (play counts, last played,
 		// duration) — it is intentionally labelled "Reset All Play Stats" in the
 		// UI so users understand it also resets Most Played, not just Recently Played.
@@ -899,21 +939,57 @@ func (m SettingsModel) viewPlayHistory() string {
 		sizeDown = 1
 	}
 
-	content.WriteString(stationFieldStyle().Render("  Current Size: "))
+	content.WriteString(stationFieldStyle().Render("  Configured Size:       "))
 	content.WriteString(highlightStyle().Render(fmt.Sprintf("%d", m.playHistoryCfg.Size)))
-	content.WriteString("\n\n")
+	content.WriteString(helpStyle().Render(" stations stored"))
+	content.WriteString("\n")
+	if m.metadataManager != nil {
+		actual := m.metadataManager.GetRecentlyPlayedCount(m.playHistoryCfg.Size)
+		content.WriteString(stationFieldStyle().Render("  Currently in history:  "))
+		content.WriteString(highlightStyle().Render(fmt.Sprintf("%d", actual)))
+		content.WriteString("\n")
+	}
+	content.WriteString("\n")
 
-	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  1. Toggle Show           (currently: %s)", showStr)))
+	displayRows := m.playHistoryCfg.DisplayRows
+	displayRowsStr := "auto"
+	if displayRows > 0 {
+		displayRowsStr = fmt.Sprintf("%d rows", displayRows)
+	}
+	displayRowsUp := displayRows + 1
+	if displayRowsUp > 10 {
+		displayRowsUp = 10
+	}
+	displayRowsDown := displayRows - 1
+	if displayRowsDown < 0 {
+		displayRowsDown = 0
+	}
+	displayRowsUpStr := fmt.Sprintf("%d rows", displayRowsUp)
+	if displayRowsUp == 0 {
+		displayRowsUpStr = "auto"
+	}
+	displayRowsDownStr := fmt.Sprintf("%d rows", displayRowsDown)
+	if displayRowsDown == 0 {
+		displayRowsDownStr = "auto"
+	}
+
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  1. Toggle Show                (currently: %s)", showStr)))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  2. Increase Size (+1)     → %d", sizeUp)))
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  2. Increase History Size (+1)  → %d", sizeUp)))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  3. Decrease Size (-1)     → %d", sizeDown)))
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  3. Decrease History Size (-1)  → %d", sizeDown)))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render("  4. Reset All Play Stats"))
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  4. Increase Display Rows (+1)  → %s", displayRowsUpStr)))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  5. Decrease Display Rows (-1)  → %s", displayRowsDownStr)))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render(fmt.Sprintf("      Display rows: %s (0 = fill available space)", displayRowsStr)))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render("  6. Reset All Play Stats"))
 	content.WriteString("\n")
 	content.WriteString(helpStyle().Render("      (clears play counts, Most Played, and Recently Played)"))
 	content.WriteString("\n")
-	content.WriteString(normalItemStyle().Render("  5. Back"))
+	content.WriteString(normalItemStyle().Render("  7. Back"))
 	content.WriteString("\n")
 
 	if m.metadataManager != nil {
@@ -934,7 +1010,7 @@ func (m SettingsModel) viewPlayHistory() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings > History > Play History",
 		Content: content.String(),
-		Help:    "1-5: Select • Esc/5: Back • 0: Main Menu • Ctrl+C: Quit",
+		Help:    "1-7: Select • Esc/7: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
 }
 

@@ -1499,8 +1499,12 @@ func (a *App) viewMainMenu() string {
 		// Lines already committed: header + chrome (title/subtitle/blank) +
 		// menu items + blank + QF header + QF items + blank + RP header + 1 margin + footer.
 		headerLines := visibleLineCount(renderHeader())
+		p := getPadding()
 		const (
-			chromeLines   = 4  // blank-after-header + title + subtitle + blank
+			// assemblePageContent always emits 3 lines before Content:
+			//   \n (blank-after-header) + title\n + \n (empty subtitle line)
+			// Content itself starts with "Choose an option:\n\n" = 2 more lines.
+			chromeLines   = 5  // 3 (assemblePageContent) + 2 ("Choose an option:\n\n")
 			footerLines   = 2  // 1 margin + 1 help bar
 			rpHeaderLines = 2  // blank + "─── Recently Played ───"
 		)
@@ -1512,10 +1516,17 @@ func (a *App) viewMainMenu() string {
 		if len(a.quickFavorites) > 0 {
 			qfLines = 2 + len(a.quickFavorites) // blank + header + items
 		}
-		fixed := headerLines + chromeLines + menuLines + qfLines + rpHeaderLines + footerLines
+		// p.PageVertical is the bottom padding added by docStyleNoTopPadding;
+		// RenderPageWithBottomHelp subtracts it, so we must account for it here
+		// to avoid inflating visibleRP and overflowing the terminal height.
+		fixed := headerLines + chromeLines + menuLines + qfLines + rpHeaderLines + footerLines + p.PageVertical
 		visibleRP := a.height - fixed
 		if visibleRP < 1 {
 			visibleRP = 1
+		}
+		// If the user has set a display row cap, honour it.
+		if a.playHistoryCfg.DisplayRows > 0 && visibleRP > a.playHistoryCfg.DisplayRows {
+			visibleRP = a.playHistoryCfg.DisplayRows
 		}
 		if visibleRP > len(a.recentlyPlayed) {
 			visibleRP = len(a.recentlyPlayed)
