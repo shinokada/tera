@@ -13,7 +13,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🕐 **Recently Played** - Last N stations shown below Quick Play Favorites in the main menu
 - 🔊 **Playback Control** - Play/pause with persistent status, adjust volume, and mute during playback
 - 🚫 **Block List** - Block unwanted stations from appearing in searches and auto-play
-- ☁️ **Gist Sync** - Backup and restore favorites via GitHub Gists
+- ☁️ **Sync & Backup** - Export/restore local zip backups and sync all data via GitHub Gists
 - 🗳️ **Voting** - Support your favorite stations on Radio Browser
 - 🎨 **Themes** - Choose from predefined themes or customize via YAML config
 - 💤 **Sleep Timer** - Set a timer to stop playback automatically
@@ -111,7 +111,7 @@ tera
 # 7) Manage Lists        - Create/edit/delete favorite lists
 # 8) Block List          - Manage blocked stations
 # 9) I Feel Lucky        - Random station by keyword
-# 0) Gist Management     - Backup/restore via GitHub
+# 0) Sync & Backup       - Backup/restore data locally or via GitHub
 # -) Settings            - Configure TERA
 
 # Quick Play (from main menu):
@@ -588,7 +588,7 @@ You can edit this file directly or use the Settings menu.
 
 | Key      | Action                       |
 | -------- | ---------------------------- |
-| `0`      | Gist Management              |
+| `0`      | Sync & Backup                |
 | `1-9`    | Quick select menu item       |
 | `10-99+` | Quick play from My-favorites / Recently Played |
 | `-`      | Settings                     |
@@ -682,22 +682,54 @@ Results are sorted by **votes** (most popular first) and limited to 100 stations
 - Press `s` to add to another list
 - Press `v` to vote for the station
 
-## Gist Sync
+## Sync & Backup
 
-Backup and sync your favorite lists across devices using GitHub Gists.
+Back up and sync your data locally or across devices using zip archives and GitHub Gists.
+
+### Export Backup (zip)
+
+Save a local copy of your data with no GitHub account required.
+
+1. From the main menu press `0` → **Sync & Backup**
+2. Select **7. Export backup (zip)**
+3. Choose which categories to include (favorites, ratings, tags, etc.)
+4. Confirm the save path (default: `~/tera-backup-YYYY-MM-DD.zip`)
+
+### Restore from Backup (zip)
+
+1. Select **8. Restore from backup (zip)**
+2. Enter the path to your zip file
+3. Choose which categories to restore
+4. Confirm — you will be warned before any existing files are overwritten
+
+### Sync to Gist
+
+Push all selected data to a dedicated secret GitHub Gist (`tera-data-backup`).
 
 **Quick Setup:**
-1. Go to: Main Menu → 0) Gist Management → 6) Token Management
-2. Create a GitHub Personal Access Token (with `gist` scope only)
-3. Paste token in TERA
-4. Create your first gist backup!
+1. Go to **0) Sync & Backup → Token Management**
+2. Create a GitHub Personal Access Token with `gist` scope
+3. Paste the token in TERA
+4. Select **9. Sync all data to Gist** and choose categories
 
-**Features:**
-- Create secret or public gists
-- View your gist history
-- Recover favorites from any gist URL
-- Update gist descriptions
-- Delete old backups
+### Restore from Gist
+
+1. Select **10. Restore all data from Gist**
+2. TERA fetches the `tera-data-backup` Gist and shows available categories
+3. Choose what to restore — you will be warned before overwriting
+
+### Sync Categories
+
+| Category                | Default |
+| ----------------------- | ------- |
+| Favorites (playlists)   | ✅ on    |
+| Settings (config.yaml)  | ✅ on    |
+| Ratings & votes         | ✅ on    |
+| Blocklist               | ✅ on    |
+| Station metadata & tags | ✅ on    |
+| Search history          | ❌ off   |
+
+Category selections are saved in `sync_prefs.json` and reused on the next run.
 
 **Documentation:**
 - [Gist Setup Guide](GIST_SETUP.md) - Token setup and security
