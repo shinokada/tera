@@ -464,10 +464,14 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 // stageAndWriteGistFiles fetches Gist file content into memory, then writes
 // each selected file atomically to baseDir. Fetching everything before any
 // disk write ensures that a network error never leaves a partially-written
-// config. Note: the write loop commits files one by one; a failure mid-loop
-// leaves already-written files on disk. This is acceptable because
-// atomicWriteFile prevents torn individual files, and the conflict-check +
-// overwrite flow lets the user safely retry.
+// config.
+//
+// Atomicity guarantee: each individual file is written atomically
+// (temp-file + rename), so no single file is ever torn. The set of files as
+// a whole is NOT written atomically — a failure mid-loop leaves
+// already-written files on disk. This is intentional: the individually-atomic
+// files are never corrupt, and the user can complete a partial restore by
+// re-running with force=true (the overwrite-warning screen offers this).
 func stageAndWriteGistFiles(
 	httpClient *http.Client,
 	files map[string]gist.GistFile,
