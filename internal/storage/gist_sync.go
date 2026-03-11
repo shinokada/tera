@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/gist"
 )
 
@@ -422,14 +423,10 @@ func AvailableCategoriesFromGistFiles(files map[string]gist.GistFile) SyncPrefs 
 }
 
 // teraConfigDir returns the tera configuration directory path.
-// It is the single source of truth for config-dir resolution used by all
-// standalone (no-token) helpers so they stay aligned with GistSyncManager.
+// Delegates to config.GetConfigDir so that all parts of the app share a
+// single source of truth for config-dir resolution.
 func teraConfigDir() (string, error) {
-	base, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get config directory: %w", err)
-	}
-	return filepath.Join(base, "tera"), nil
+	return config.GetConfigDir()
 }
 
 // ConflictingFilesForGist checks for existing local files that would be

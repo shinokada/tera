@@ -70,6 +70,7 @@ type zipConflictCheckMsg struct {
 	conflicts []string
 }
 type gistRestoreAvailableMsg struct {
+	requestID uint64
 	g         *gist.Gist
 	available storage.SyncPrefs
 }
@@ -124,6 +125,7 @@ type GistModel struct {
 	overwriteSrc   overwriteSource
 	pendingGist      *gist.Gist // gist fetched during restore-from-URL flow
 	gistFetchPending bool       // true while a URL fetch is in flight
+	gistFetchSeq     uint64     // incremented on each new fetch; matched against msg.requestID to discard stale results
 	// ui
 	message        string
 	messageIsError bool
@@ -364,8 +366,9 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case gistRestoreAvailableMsg:
-		// Discard the result if the user navigated away before the fetch completed.
-		if m.state != gistStateRestoreGistURL {
+		// Discard the result if the user navigated away or a newer fetch has
+		// already been dispatched (stale response from a superseded request).
+		if m.state != gistStateRestoreGistURL || msg.requestID != m.gistFetchSeq {
 			return m, nil
 		}
 		m.gistFetchPending = false
@@ -533,10 +536,12 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.messageIsError = true
 					return m, nil
 				}
+				m.gistFetchSeq++
+				reqID := m.gistFetchSeq
 				m.gistFetchPending = true
 				m.message = "Fetching Gist\u2026"
 				m.messageIsError = false
-				return m, m.doFetchAvailableGistCategoriesCmd(gistID)
+				return m, m.doFetchAvailableGistCategoriesCmd(reqID, gistID)
 			case "esc":
 				m.gistFetchPending = false
 				m.message = ""
@@ -992,7 +997,7 @@ func (m GistModel) restoreZipCmd(zipPath string, prefs storage.SyncPrefs, force 
 	}
 }
 
-func (m GistModel) doFetchAvailableGistCategoriesCmd(gistID string) tea.Cmd {
+func (m GistModel) doFetchAvailableGistCategoriesCmd(requestID uint64, gistID string) tea.Cmd {
 	mgr := m.gistSyncMgr
 	authClient := m.gistClient
 	return func() tea.Msg {
@@ -1026,7 +1031,7 @@ func (m GistModel) doFetchAvailableGistCategoriesCmd(gistID string) tea.Cmd {
 		if available == (storage.SyncPrefs{}) {
 			return errMsg{fmt.Errorf("no recognisable tera data found in this Gist")}
 		}
-		return gistRestoreAvailableMsg{g: g, available: available}
+		return gistRestoreAvailableMsg{requestID: requestID, g: g, available: available}
 	}
 }
 
