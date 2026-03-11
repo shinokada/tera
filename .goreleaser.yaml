@@ -99,36 +99,6 @@ brews:
     test: |
       system "#{bin}/tera", "--version"
 
-# Winget manifest - auto-PRs to microsoft/winget-pkgs
-wingets:
-  - name: tera
-    publisher: Shinokada
-    publisher_url: https://tera.codewithshin.com/
-    publisher_support_url: https://github.com/shinokada/tera/issues
-    short_description: Terminal-based internet radio player
-    description: Terminal-based internet radio player
-    license: MIT
-    license_url: https://github.com/shinokada/tera/blob/main/LICENSE
-    homepage: https://tera.codewithshin.com/
-    package_identifier: Shinokada.Tera
-    tags:
-      - terminal
-      - radio
-      - cli
-      - internet-radio
-    release_notes_url: "https://github.com/shinokada/tera/releases/tag/{{.Tag}}"
-    skip_upload: auto
-    repository:
-      owner: shinokada
-      name: winget-pkgs
-      token: "{{ .Env.WINGET_TOKEN }}"
-      pull_request:
-        enabled: true
-        base:
-          owner: microsoft
-          name: winget-pkgs
-          branch: master
-
 # Scoop bucket (uncomment when you create the scoop bucket repository)
 scoops:
   - repository:
