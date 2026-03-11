@@ -303,6 +303,17 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 	if g == nil {
 		return fmt.Errorf("no backup Gist found (description: %q); push first to create one", BackupGistDescription)
 	}
+	return m.PullFromGist(g, prefs, force)
+}
+
+// PullFromGist downloads selected files from the given Gist directly,
+// without requiring it to be the dedicated backup Gist.
+// When force is false and files already exist, it returns RestoreConflictError.
+// Pass force=true to overwrite without checking.
+func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool) error {
+	if g == nil {
+		return fmt.Errorf("gist is required")
+	}
 
 	if !force {
 		conflicts, err := m.ConflictingGistFiles(g, prefs)
@@ -352,6 +363,102 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 		}
 	}
 
+	return nil
+}
+
+// AvailableCategoriesFromGist inspects the given Gist and returns which
+// categories are present, without requiring authentication or ownership.
+func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, error) {
+	if g == nil {
+		return SyncPrefs{}, fmt.Errorf("gist is required")
+	}
+	var prefs SyncPrefs
+	for name := range g.Files {
+		relPath := gistFilenameToRelPath(name)
+		switch {
+		case relPath == "config.yaml":
+			prefs.Settings = true
+		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
+			prefs.SearchHistory = true
+		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
+			prefs.Favorites = true
+		case relPath == filepath.Join("data", "station_ratings.json") ||
+			relPath == filepath.Join("data", "voted_stations.json"):
+			prefs.RatingsVotes = true
+		case relPath == filepath.Join("data", "blocklist.json"):
+			prefs.Blocklist = true
+		case relPath == filepath.Join("data", "station_metadata.json") ||
+			relPath == filepath.Join("data", "station_tags.json"):
+			prefs.MetadataTags = true
+		}
+	}
+	return prefs, nil
+}
+
+// AvailableCategoriesFromGistFiles inspects a raw Gist file map and returns
+// which tera data categories are present. This is a package-level helper used
+// when no GistSyncManager is available (i.e. no token configured).
+func AvailableCategoriesFromGistFiles(files map[string]gist.GistFile) SyncPrefs {
+	var prefs SyncPrefs
+	for name := range files {
+		relPath := gistFilenameToRelPath(name)
+		switch {
+		case relPath == "config.yaml":
+			prefs.Settings = true
+		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
+			prefs.SearchHistory = true
+		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
+			prefs.Favorites = true
+		case relPath == filepath.Join("data", "station_ratings.json") ||
+			relPath == filepath.Join("data", "voted_stations.json"):
+			prefs.RatingsVotes = true
+		case relPath == filepath.Join("data", "blocklist.json"):
+			prefs.Blocklist = true
+		case relPath == filepath.Join("data", "station_metadata.json") ||
+			relPath == filepath.Join("data", "station_tags.json"):
+			prefs.MetadataTags = true
+		}
+	}
+	return prefs
+}
+
+// RestoreFromGistDirect downloads selected files from a Gist without requiring
+// a GistSyncManager or token. Used when restoring from a public gist URL with
+// no token configured.
+func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs) error {
+	if g == nil {
+		return fmt.Errorf("gist is required")
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
+	baseDir := filepath.Join(configDir, "tera")
+
+	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
+
+	staged := make(map[string][]byte)
+	for name, gistFile := range g.Files {
+		relPath := gistFilenameToRelPath(name)
+		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
+			continue
+		}
+		content, err := fetchRawContent(httpClient, gistFile.RawURL, gistFile.Content)
+		if err != nil {
+			return fmt.Errorf("failed to fetch %s: %w", name, err)
+		}
+		staged[relPath] = []byte(content)
+	}
+
+	for relPath, content := range staged {
+		destPath := filepath.Join(baseDir, relPath)
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return fmt.Errorf("failed to create directory for %s: %w", relPath, err)
+		}
+		if err := os.WriteFile(destPath, content, 0600); err != nil {
+			return fmt.Errorf("failed to write %s: %w", relPath, err)
+		}
+	}
 	return nil
 }
 

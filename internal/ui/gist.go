@@ -43,6 +43,7 @@ const (
 	gistStateRestoreZipPath       // path prompt for zip source
 	gistStateRestoreZipChecklist  // category checklist for zip restore
 	gistStateSyncGistChecklist    // category checklist → Gist push
+	gistStateRestoreGistURL       // URL input for Gist restore
 	gistStateRestoreGistChecklist // category checklist for Gist pull
 	gistStateOverwriteWarn        // warn before clobbering existing files
 	gistStateSyncProgress         // transient: show result then return to menu
@@ -69,9 +70,11 @@ type zipConflictCheckMsg struct {
 	conflicts []string
 }
 type gistRestoreAvailableMsg struct {
+	g         *gist.Gist
 	available storage.SyncPrefs
 }
 type gistConflictCheckMsg struct {
+	g         *gist.Gist
 	prefs     storage.SyncPrefs
 	conflicts []string
 }
@@ -119,6 +122,7 @@ type GistModel struct {
 	pendingPrefs   storage.SyncPrefs // prefs confirmed before conflict check
 	overwritePaths []string          // files that would be clobbered
 	overwriteSrc   overwriteSource
+	pendingGist    *gist.Gist // gist fetched during restore-from-URL flow
 	// ui
 	message        string
 	messageIsError bool
@@ -355,6 +359,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case gistRestoreAvailableMsg:
+		m.pendingGist = msg.g
 		m.checklist = availableChecklist("Select categories to restore from Gist:", msg.available)
 		m.state = gistStateRestoreGistChecklist
 		return m, nil
@@ -362,8 +367,9 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gistConflictCheckMsg:
 		if len(msg.conflicts) == 0 {
 			m.state = gistStateSyncProgress
-			return m, m.restoreGistCmd(msg.prefs, false)
+			return m, m.restoreGistCmd(msg.g, msg.prefs, false)
 		}
+		m.pendingGist = msg.g
 		m.pendingPrefs = msg.prefs
 		m.overwritePaths = msg.conflicts
 		m.overwriteSrc = overwriteSourceGist
@@ -501,6 +507,28 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 		cmds = append(cmds, cmd)
 
+	case gistStateRestoreGistURL:
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "enter":
+				input := m.textInput.Value()
+				gistID, err := gist.ParseGistURL(input)
+				if err != nil {
+					m.message = fmt.Sprintf("Invalid URL or ID: %v", err)
+					m.messageIsError = true
+					return m, nil
+				}
+				m.state = gistStateSyncProgress
+				return m, m.doFetchAvailableGistCategoriesCmd(gistID)
+			case "esc":
+				m.state = gistStateMenu
+				return m, nil
+			}
+		}
+		var urlCmd tea.Cmd
+		m.textInput, urlCmd = m.textInput.Update(msg)
+		return m, urlCmd
+
 	// ── Phase 3: checklist states forward to the checklist widget ─────────────
 	case gistStateExportChecklist, gistStateRestoreZipChecklist,
 		gistStateSyncGistChecklist, gistStateRestoreGistChecklist:
@@ -546,7 +574,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case overwriteSourceZip:
 					return m, m.restoreZipCmd(m.pendingZipPath, m.pendingPrefs, true)
 				case overwriteSourceGist:
-					return m, m.restoreGistCmd(m.pendingPrefs, true)
+					return m, m.restoreGistCmd(m.pendingGist, m.pendingPrefs, true)
 				}
 			case "esc":
 				m.state = gistStateMenu
@@ -642,18 +670,12 @@ func (m GistModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case 9: // Restore all data from Gist
-		if m.token == "" {
-			m.message = "No token configured. Set up a token first."
-			m.messageIsError = true
-			return m, nil
-		}
-		if m.gistSyncMgr == nil {
-			m.message = "Gist sync unavailable — check token setup."
-			m.messageIsError = true
-			return m, nil
-		}
-		m.state = gistStateSyncProgress
-		return m, m.doFetchAvailableGistCategoriesCmd()
+		m.state = gistStateRestoreGistURL
+		m.textInput.Placeholder = "https://gist.github.com/user/id or gist ID"
+		m.textInput.SetValue("")
+		m.textInput.EchoMode = textinput.EchoNormal
+		m.textInput.Focus()
+		return m, nil
 
 	case 10: // Token Management
 		m.state = gistStateTokenMenu
@@ -878,7 +900,7 @@ func (m GistModel) handleChecklistConfirmed(msg components.ChecklistConfirmedMsg
 
 	case gistStateRestoreGistChecklist:
 		m.pendingPrefs = prefs
-		return m, m.doCheckGistConflictsCmd(prefs)
+		return m, m.doCheckGistConflictsCmd(m.pendingGist, prefs)
 	}
 
 	return m, nil
@@ -951,20 +973,41 @@ func (m GistModel) restoreZipCmd(zipPath string, prefs storage.SyncPrefs, force 
 	}
 }
 
-func (m GistModel) doFetchAvailableGistCategoriesCmd() tea.Cmd {
+func (m GistModel) doFetchAvailableGistCategoriesCmd(gistID string) tea.Cmd {
 	mgr := m.gistSyncMgr
+	authClient := m.gistClient
 	return func() tea.Msg {
-		if mgr == nil {
-			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
+		// Try authenticated fetch first (works for both public and private gists).
+		var g *gist.Gist
+		var fetchErr error
+		if authClient != nil {
+			g, fetchErr = authClient.GetGist(gistID)
 		}
-		available, err := mgr.AvailableCategories()
-		if err != nil {
-			return errMsg{fmt.Errorf("failed to inspect backup Gist: %w", err)}
+		// Fall back to unauthenticated fetch for public gists.
+		if g == nil || fetchErr != nil {
+			g, fetchErr = gist.GetGistPublic(gistID)
+			if fetchErr != nil {
+				if authClient == nil {
+					return errMsg{fmt.Errorf("failed to fetch Gist: %w (if private, set up a token first)", fetchErr)}
+				}
+				return errMsg{fmt.Errorf("failed to fetch Gist: %w", fetchErr)}
+			}
+		}
+		// Determine which categories the gist contains.
+		var available storage.SyncPrefs
+		var err error
+		if mgr != nil {
+			available, err = mgr.AvailableCategoriesFromGist(g)
+			if err != nil {
+				return errMsg{fmt.Errorf("failed to inspect Gist: %w", err)}
+			}
+		} else {
+			available = storage.AvailableCategoriesFromGistFiles(g.Files)
 		}
 		if available == (storage.SyncPrefs{}) {
-			return errMsg{fmt.Errorf("no backup Gist found (description %q); sync all data to Gist first", storage.BackupGistDescription)}
+			return errMsg{fmt.Errorf("no recognisable tera data found in this Gist")}
 		}
-		return gistRestoreAvailableMsg{available: available}
+		return gistRestoreAvailableMsg{g: g, available: available}
 	}
 }
 
@@ -981,34 +1024,32 @@ func (m GistModel) doSyncToGistCmd(prefs storage.SyncPrefs) tea.Cmd {
 	}
 }
 
-func (m GistModel) doCheckGistConflictsCmd(prefs storage.SyncPrefs) tea.Cmd {
+func (m GistModel) doCheckGistConflictsCmd(g *gist.Gist, prefs storage.SyncPrefs) tea.Cmd {
 	mgr := m.gistSyncMgr
 	return func() tea.Msg {
 		if mgr == nil {
-			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
-		}
-		g, err := mgr.FindBackupGist()
-		if err != nil {
-			return errMsg{fmt.Errorf("failed to find backup Gist: %w", err)}
-		}
-		if g == nil {
-			return errMsg{fmt.Errorf("no backup Gist found")}
+			// No token — skip conflict detection and proceed.
+			return gistConflictCheckMsg{g: g, prefs: prefs, conflicts: nil}
 		}
 		conflicts, err := mgr.ConflictingGistFiles(g, prefs)
 		if err != nil {
 			return errMsg{fmt.Errorf("conflict check failed: %w", err)}
 		}
-		return gistConflictCheckMsg{prefs: prefs, conflicts: conflicts}
+		return gistConflictCheckMsg{g: g, prefs: prefs, conflicts: conflicts}
 	}
 }
 
-func (m GistModel) restoreGistCmd(prefs storage.SyncPrefs, force bool) tea.Cmd {
+func (m GistModel) restoreGistCmd(g *gist.Gist, prefs storage.SyncPrefs, force bool) tea.Cmd {
 	mgr := m.gistSyncMgr
 	return func() tea.Msg {
-		if mgr == nil {
-			return errMsg{fmt.Errorf("no Gist sync manager — token required")}
+		if mgr != nil {
+			if err := mgr.PullFromGist(g, prefs, force); err != nil {
+				return errMsg{fmt.Errorf("gist restore failed: %w", err)}
+			}
+			return successMsg{"✓ Data restored from Gist."}
 		}
-		if err := mgr.Pull(prefs, force); err != nil {
+		// No token/sync manager — use standalone restore.
+		if err := storage.RestoreFromGistDirect(g, prefs); err != nil {
 			return errMsg{fmt.Errorf("gist restore failed: %w", err)}
 		}
 		return successMsg{"✓ Data restored from Gist."}
@@ -1058,6 +1099,20 @@ func (m GistModel) View() string {
 			Subtitle: "Uploading…",
 			Content:  "Creating gist, please wait…\n\n" + m.renderMessage(),
 			Help:     "Please wait…",
+		}, h)
+
+	case gistStateRestoreGistURL:
+		return RenderPageWithBottomHelp(PageLayout{
+			Title:    "Restore All Data from Gist",
+			Subtitle: "Paste a gist URL or ID",
+			Content: fmt.Sprintf(
+				"Enter a gist URL or ID:\n\n"+
+					"  • https://gist.github.com/username/gist_id\n"+
+					"  • Raw gist ID (e.g., abc123def456…)\n\n"+
+					"Public gists work without a token.\n"+
+					"Private gists require a token to be configured.\n\n"+
+					"%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
+			Help: "Enter: Fetch • Esc: Back",
 		}, h)
 
 	case gistStateImportURL:
