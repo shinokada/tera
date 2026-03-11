@@ -322,46 +322,8 @@ func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool
 
 	// Drive wanted from the Gist's own file list so restores work on a fresh
 	// machine where categoryFiles would return nothing for missing favorites.
-	wanted := make(map[string]string) // gist filename → rel path
-	for name := range g.Files {
-		relPath := gistFilenameToRelPath(name)
-		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
-			continue
-		}
-		wanted[name] = relPath
-	}
-
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
-
-	// Fetch all content into memory first so that a network error never leaves
-	// a partially-written config. Note: the subsequent write loop commits files
-	// one by one; a failure mid-loop leaves already-written files on disk. This
-	// is acceptable because atomicWriteFile prevents torn individual files, and
-	// the conflict-check + overwrite flow lets the user safely retry.
-	staged := make(map[string][]byte, len(wanted))
-	for name, gistFile := range g.Files {
-		relPath, ok := wanted[name]
-		if !ok {
-			continue
-		}
-		content, err := fetchRawContent(httpClient, gistFile.RawURL, gistFile.Content)
-		if err != nil {
-			return fmt.Errorf("failed to fetch %s: %w", name, err)
-		}
-		staged[relPath] = []byte(content)
-	}
-
-	for relPath, content := range staged {
-		destPath := filepath.Join(m.configDir, relPath)
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-			return fmt.Errorf("failed to create directory for %s: %w", relPath, err)
-		}
-		if err := atomicWriteFile(destPath, content, 0600); err != nil {
-			return fmt.Errorf("failed to write %s: %w", relPath, err)
-		}
-	}
-
-	return nil
+	return stageAndWriteGistFiles(httpClient, g.Files, prefs, m.configDir)
 }
 
 // categorizePath updates prefs based on a single gist filename.
@@ -496,14 +458,24 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 	}
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
+	return stageAndWriteGistFiles(httpClient, g.Files, prefs, baseDir)
+}
 
-	// Fetch all content into memory first so that a network error never leaves
-	// a partially-written config. Note: the subsequent write loop commits files
-	// one by one; a failure mid-loop leaves already-written files on disk. This
-	// is acceptable because atomicWriteFile prevents torn individual files, and
-	// the conflict-check + overwrite flow lets the user safely retry.
+// stageAndWriteGistFiles fetches Gist file content into memory, then writes
+// each selected file atomically to baseDir. Fetching everything before any
+// disk write ensures that a network error never leaves a partially-written
+// config. Note: the write loop commits files one by one; a failure mid-loop
+// leaves already-written files on disk. This is acceptable because
+// atomicWriteFile prevents torn individual files, and the conflict-check +
+// overwrite flow lets the user safely retry.
+func stageAndWriteGistFiles(
+	httpClient *http.Client,
+	files map[string]gist.GistFile,
+	prefs SyncPrefs,
+	baseDir string,
+) error {
 	staged := make(map[string][]byte)
-	for name, gistFile := range g.Files {
+	for name, gistFile := range files {
 		relPath := gistFilenameToRelPath(name)
 		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
 			continue
@@ -514,7 +486,6 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 		}
 		staged[relPath] = []byte(content)
 	}
-
 	for relPath, content := range staged {
 		destPath := filepath.Join(baseDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
