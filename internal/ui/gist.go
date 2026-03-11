@@ -362,6 +362,12 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case gistRestoreAvailableMsg:
+		// Discard the result if the user navigated away before the fetch completed.
+		if m.state != gistStateRestoreGistURL {
+			return m, nil
+		}
+		m.message = ""
+		m.messageIsError = false
 		m.pendingGist = msg.g
 		m.checklist = availableChecklist("Select categories to restore from Gist:", msg.available)
 		m.state = gistStateRestoreGistChecklist

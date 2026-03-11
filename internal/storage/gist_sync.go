@@ -298,6 +298,13 @@ func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool
 	if g == nil {
 		return fmt.Errorf("gist is required")
 	}
+	if len(g.Files) == 0 {
+		full, err := m.client.GetGist(g.ID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch gist: %w", err)
+		}
+		g = full
+	}
 	if _, ok := g.Files[backupGistMarkerFile]; !ok {
 		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
 	}
@@ -382,6 +389,13 @@ func categorizePath(name string, prefs *SyncPrefs) {
 func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, error) {
 	if g == nil {
 		return SyncPrefs{}, fmt.Errorf("gist is required")
+	}
+	if len(g.Files) == 0 {
+		full, err := m.client.GetGist(g.ID)
+		if err != nil {
+			return SyncPrefs{}, fmt.Errorf("failed to fetch gist: %w", err)
+		}
+		g = full
 	}
 	if _, ok := g.Files[backupGistMarkerFile]; !ok {
 		return SyncPrefs{}, fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
