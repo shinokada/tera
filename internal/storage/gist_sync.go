@@ -114,6 +114,13 @@ func gistFilenameToRelPath(name string) string {
 		if base == "" || base == "." || base == ".." || base != filepath.Base(base) {
 			return ""
 		}
+		// Reject fav--search-history.json: search-history.json already has its
+		// own canonical mapping and this alias would resolve to the same
+		// destination, letting a crafted gist silently overwrite it with
+		// arbitrary content categorised as a plain favorites file.
+		if base == SystemFileSearchHistory {
+			return ""
+		}
 		return filepath.Join("data", "favorites", base)
 	}
 	return ""
