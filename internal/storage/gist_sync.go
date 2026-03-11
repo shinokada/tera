@@ -37,13 +37,13 @@ func NewGistSyncManager(client *gist.Client) (*GistSyncManager, error) {
 	if client == nil {
 		return nil, fmt.Errorf("gist client is required")
 	}
-	configDir, err := os.UserConfigDir()
+	dir, err := teraConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get config directory: %w", err)
+		return nil, err
 	}
 	return &GistSyncManager{
 		client:    client,
-		configDir: filepath.Join(configDir, "tera"),
+		configDir: dir,
 	}, nil
 }
 
@@ -421,17 +421,34 @@ func AvailableCategoriesFromGistFiles(files map[string]gist.GistFile) SyncPrefs 
 	return prefs
 }
 
+// teraConfigDir returns the tera configuration directory path.
+// It is the single source of truth for config-dir resolution used by all
+// standalone (no-token) helpers so they stay aligned with GistSyncManager.
+func teraConfigDir() (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get config directory: %w", err)
+	}
+	return filepath.Join(base, "tera"), nil
+}
+
 // ConflictingFilesForGist checks for existing local files that would be
 // overwritten by a restore from the given Gist. Works without a GistSyncManager.
 func ConflictingFilesForGist(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
 	if g == nil {
 		return nil, fmt.Errorf("gist is required")
 	}
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config directory: %w", err)
+	if len(g.Files) == 0 {
+		full, err := gist.GetGistPublic(g.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch gist: %w", err)
+		}
+		g = full
 	}
-	baseDir := filepath.Join(configDir, "tera")
+	baseDir, err := teraConfigDir()
+	if err != nil {
+		return nil, err
+	}
 
 	var conflicts []string
 	for name := range g.Files {
@@ -456,6 +473,13 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 	if g == nil {
 		return fmt.Errorf("gist is required")
 	}
+	if len(g.Files) == 0 {
+		full, err := gist.GetGistPublic(g.ID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch gist: %w", err)
+		}
+		g = full
+	}
 	if _, ok := g.Files[backupGistMarkerFile]; !ok {
 		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
 	}
@@ -468,11 +492,10 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 			return &RestoreConflictError{Paths: conflicts}
 		}
 	}
-	configDir, err := os.UserConfigDir()
+	baseDir, err := teraConfigDir()
 	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
+		return err
 	}
-	baseDir := filepath.Join(configDir, "tera")
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
 

@@ -122,7 +122,8 @@ type GistModel struct {
 	pendingPrefs   storage.SyncPrefs // prefs confirmed before conflict check
 	overwritePaths []string          // files that would be clobbered
 	overwriteSrc   overwriteSource
-	pendingGist    *gist.Gist // gist fetched during restore-from-URL flow
+	pendingGist      *gist.Gist // gist fetched during restore-from-URL flow
+	gistFetchPending bool       // true while a URL fetch is in flight
 	// ui
 	message        string
 	messageIsError bool
@@ -267,6 +268,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.message = msg.err.Error()
 		m.messageIsError = true
+		m.gistFetchPending = false // always clear on any error
 		// Dismiss transient states on error, returning to the menu.
 		// gistStateRestoreGistURL is intentionally excluded: errors received
 		// while fetching stay on the URL form so the user can correct a typo
@@ -366,6 +368,7 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state != gistStateRestoreGistURL {
 			return m, nil
 		}
+		m.gistFetchPending = false
 		m.message = ""
 		m.messageIsError = false
 		m.pendingGist = msg.g
@@ -520,6 +523,9 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			switch keyMsg.String() {
 			case "enter":
+				if m.gistFetchPending {
+					return m, nil // ignore double-submit while fetch is in flight
+				}
 				input := m.textInput.Value()
 				gistID, err := gist.ParseGistURL(input)
 				if err != nil {
@@ -527,10 +533,13 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.messageIsError = true
 					return m, nil
 				}
+				m.gistFetchPending = true
 				m.message = "Fetching Gist\u2026"
 				m.messageIsError = false
 				return m, m.doFetchAvailableGistCategoriesCmd(gistID)
 			case "esc":
+				m.gistFetchPending = false
+				m.message = ""
 				m.state = gistStateMenu
 				return m, nil
 			}
