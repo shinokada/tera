@@ -49,6 +49,14 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("failed to rename temp file to destination: %w", err)
 	}
 
+	// Sync the parent directory so the rename is durable. Some platforms
+	// (macOS, certain Linux configurations) return EINVAL for Sync on a
+	// directory; we ignore that error since the rename itself already succeeded.
+	if dirHandle, err := os.Open(dir); err == nil {
+		_ = dirHandle.Sync() // best-effort; ignore EINVAL on some platforms
+		_ = dirHandle.Close()
+	}
+
 	success = true
 	return nil
 }

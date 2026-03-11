@@ -383,6 +383,9 @@ func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, 
 	if g == nil {
 		return SyncPrefs{}, fmt.Errorf("gist is required")
 	}
+	if _, ok := g.Files[backupGistMarkerFile]; !ok {
+		return SyncPrefs{}, fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
+	}
 	var prefs SyncPrefs
 	for name := range g.Files {
 		categorizePath(name, &prefs)
@@ -394,6 +397,9 @@ func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, 
 // which tera data categories are present. This is a package-level helper used
 // when no GistSyncManager is available (i.e. no token configured).
 func AvailableCategoriesFromGistFiles(files map[string]gist.GistFile) SyncPrefs {
+	if _, ok := files[backupGistMarkerFile]; !ok {
+		return SyncPrefs{}
+	}
 	var prefs SyncPrefs
 	for name := range files {
 		categorizePath(name, &prefs)
