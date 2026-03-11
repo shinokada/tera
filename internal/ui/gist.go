@@ -268,13 +268,18 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = msg.err.Error()
 		m.messageIsError = true
 		// Dismiss transient states on error.
+		// gistStateRestoreGistURL is intentionally excluded: stay on the URL form
+		// so the user can correct a typo or retry without losing their input.
 		switch m.state {
 		case gistStateCreate, gistStateList, gistStateUpdate, gistStateDelete,
-			gistStateRecover, gistStateImportURL, gistStateSyncProgress,
+			gistStateRecover, gistStateImportURL,
 			gistStateExportPath, gistStateRestoreZipPath,
 			gistStateRestoreZipChecklist, gistStateSyncGistChecklist,
 			gistStateRestoreGistChecklist:
 			m.state = gistStateMenu
+		case gistStateSyncProgress:
+			// If fetch was triggered from the URL form, go back there on error.
+			m.state = gistStateRestoreGistURL
 		}
 		return m, nil
 
@@ -518,7 +523,8 @@ func (m GistModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.messageIsError = true
 					return m, nil
 				}
-				m.state = gistStateSyncProgress
+				m.message = "Fetching Gist\u2026"
+				m.messageIsError = false
 				return m, m.doFetchAvailableGistCategoriesCmd(gistID)
 			case "esc":
 				m.state = gistStateMenu

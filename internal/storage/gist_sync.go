@@ -298,6 +298,9 @@ func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool
 	if g == nil {
 		return fmt.Errorf("gist is required")
 	}
+	if _, ok := g.Files[backupGistMarkerFile]; !ok {
+		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
+	}
 
 	if !force {
 		conflicts, err := m.ConflictingGistFiles(g, prefs)
@@ -342,7 +345,7 @@ func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", relPath, err)
 		}
-		if err := os.WriteFile(destPath, content, 0600); err != nil {
+		if err := atomicWriteFile(destPath, content, 0600); err != nil {
 			return fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 	}
@@ -433,6 +436,9 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 	if g == nil {
 		return fmt.Errorf("gist is required")
 	}
+	if _, ok := g.Files[backupGistMarkerFile]; !ok {
+		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
+	}
 	if !force {
 		conflicts, err := ConflictingFilesForGist(g, prefs)
 		if err != nil {
@@ -468,7 +474,7 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", relPath, err)
 		}
-		if err := os.WriteFile(destPath, content, 0600); err != nil {
+		if err := atomicWriteFile(destPath, content, 0600); err != nil {
 			return fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 	}
