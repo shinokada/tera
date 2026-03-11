@@ -431,16 +431,15 @@ func teraConfigDir() (string, error) {
 
 // ConflictingFilesForGist checks for existing local files that would be
 // overwritten by a restore from the given Gist. Works without a GistSyncManager.
+// The caller must ensure g.Files is populated (e.g. by fetching the full gist
+// first); this function does not re-fetch because it has no authenticated client
+// and a public re-fetch would fail for private gists.
 func ConflictingFilesForGist(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
 	if g == nil {
 		return nil, fmt.Errorf("gist is required")
 	}
 	if len(g.Files) == 0 {
-		full, err := gist.GetGistPublic(g.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch gist: %w", err)
-		}
-		g = full
+		return nil, fmt.Errorf("gist files not populated; fetch the full gist before calling ConflictingFilesForGist")
 	}
 	baseDir, err := teraConfigDir()
 	if err != nil {
@@ -466,16 +465,15 @@ func ConflictingFilesForGist(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
 // a GistSyncManager or token. Used when restoring from a public gist URL with
 // no token configured. When force is false, returns RestoreConflictError if
 // any local files would be overwritten.
+// The caller must ensure g.Files is populated (e.g. by fetching the full gist
+// first); this function does not re-fetch because it has no authenticated client
+// and a public re-fetch would fail for private gists.
 func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 	if g == nil {
 		return fmt.Errorf("gist is required")
 	}
 	if len(g.Files) == 0 {
-		full, err := gist.GetGistPublic(g.ID)
-		if err != nil {
-			return fmt.Errorf("failed to fetch gist: %w", err)
-		}
-		g = full
+		return fmt.Errorf("gist files not populated; fetch the full gist before calling RestoreFromGistDirect")
 	}
 	if _, ok := g.Files[backupGistMarkerFile]; !ok {
 		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
