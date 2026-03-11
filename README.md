@@ -737,8 +737,8 @@ Push all selected data to a dedicated secret GitHub Gist (`tera-data-backup`).
 Category selections are saved in `sync_prefs.json` and reused on the next run.
 
 **Documentation:**
-- [Gist Setup Guide](GIST_SETUP.md) - Token setup and security
-- [Gist Management Guide](GIST_CRUD_GUIDE.md) - Complete feature guide
+- [Gist Setup Guide](docs/GIST_SETUP.md) - Token setup and security
+- [Gist Management Guide](docs/GIST_CRUD_GUIDE.md) - Complete feature guide
 
 ## File Locations
 

@@ -147,6 +147,11 @@ release:
     sudo rpm -i tera_1.x.x_linux_amd64.rpm
     ```
 
+    ### Windows Winget
+    ```sh
+    winget install Shinokada.Tera
+    ```
+
     ### Windows Scoop
     ```sh
     scoop bucket add shinokada https://github.com/shinokada/scoop-bucket
