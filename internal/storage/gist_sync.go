@@ -333,8 +333,11 @@ func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
 
-	// Fetch all content first; only write to disk once everything is ready
-	// so a mid-restore failure doesn't leave a partially updated config.
+	// Fetch all content into memory first so that a network error never leaves
+	// a partially-written config. Note: the subsequent write loop commits files
+	// one by one; a failure mid-loop leaves already-written files on disk. This
+	// is acceptable because atomicWriteFile prevents torn individual files, and
+	// the conflict-check + overwrite flow lets the user safely retry.
 	staged := make(map[string][]byte, len(wanted))
 	for name, gistFile := range g.Files {
 		relPath, ok := wanted[name]
@@ -494,6 +497,11 @@ func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
 
+	// Fetch all content into memory first so that a network error never leaves
+	// a partially-written config. Note: the subsequent write loop commits files
+	// one by one; a failure mid-loop leaves already-written files on disk. This
+	// is acceptable because atomicWriteFile prevents torn individual files, and
+	// the conflict-check + overwrite flow lets the user safely retry.
 	staged := make(map[string][]byte)
 	for name, gistFile := range g.Files {
 		relPath := gistFilenameToRelPath(name)
