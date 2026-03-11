@@ -1027,11 +1027,14 @@ func (m GistModel) doSyncToGistCmd(prefs storage.SyncPrefs) tea.Cmd {
 func (m GistModel) doCheckGistConflictsCmd(g *gist.Gist, prefs storage.SyncPrefs) tea.Cmd {
 	mgr := m.gistSyncMgr
 	return func() tea.Msg {
-		if mgr == nil {
-			// No token — skip conflict detection and proceed.
-			return gistConflictCheckMsg{g: g, prefs: prefs, conflicts: nil}
+		var conflicts []string
+		var err error
+		if mgr != nil {
+			conflicts, err = mgr.ConflictingGistFiles(g, prefs)
+		} else {
+			// No token — use standalone conflict detection.
+			conflicts, err = storage.ConflictingFilesForGist(g, prefs)
 		}
-		conflicts, err := mgr.ConflictingGistFiles(g, prefs)
 		if err != nil {
 			return errMsg{fmt.Errorf("conflict check failed: %w", err)}
 		}
@@ -1049,7 +1052,7 @@ func (m GistModel) restoreGistCmd(g *gist.Gist, prefs storage.SyncPrefs, force b
 			return successMsg{"✓ Data restored from Gist."}
 		}
 		// No token/sync manager — use standalone restore.
-		if err := storage.RestoreFromGistDirect(g, prefs); err != nil {
+		if err := storage.RestoreFromGistDirect(g, prefs, force); err != nil {
 			return errMsg{fmt.Errorf("gist restore failed: %w", err)}
 		}
 		return successMsg{"✓ Data restored from Gist."}

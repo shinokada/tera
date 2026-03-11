@@ -171,23 +171,7 @@ func (m *GistSyncManager) AvailableCategories() (SyncPrefs, error) {
 
 	var prefs SyncPrefs
 	for name := range g.Files {
-		relPath := gistFilenameToRelPath(name)
-		switch {
-		case relPath == "config.yaml":
-			prefs.Settings = true
-		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
-			prefs.SearchHistory = true
-		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
-			prefs.Favorites = true
-		case relPath == filepath.Join("data", "station_ratings.json") ||
-			relPath == filepath.Join("data", "voted_stations.json"):
-			prefs.RatingsVotes = true
-		case relPath == filepath.Join("data", "blocklist.json"):
-			prefs.Blocklist = true
-		case relPath == filepath.Join("data", "station_metadata.json") ||
-			relPath == filepath.Join("data", "station_tags.json"):
-			prefs.MetadataTags = true
-		}
+		categorizePath(name, &prefs)
 	}
 	return prefs, nil
 }
@@ -366,6 +350,30 @@ func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool
 	return nil
 }
 
+// categorizePath updates prefs based on a single gist filename.
+// It is the single source of truth for mapping gist filenames to SyncPrefs
+// categories, shared by AvailableCategories, AvailableCategoriesFromGist, and
+// AvailableCategoriesFromGistFiles.
+func categorizePath(name string, prefs *SyncPrefs) {
+	relPath := gistFilenameToRelPath(name)
+	switch {
+	case relPath == "config.yaml":
+		prefs.Settings = true
+	case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
+		prefs.SearchHistory = true
+	case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
+		prefs.Favorites = true
+	case relPath == filepath.Join("data", "station_ratings.json") ||
+		relPath == filepath.Join("data", "voted_stations.json"):
+		prefs.RatingsVotes = true
+	case relPath == filepath.Join("data", "blocklist.json"):
+		prefs.Blocklist = true
+	case relPath == filepath.Join("data", "station_metadata.json") ||
+		relPath == filepath.Join("data", "station_tags.json"):
+		prefs.MetadataTags = true
+	}
+}
+
 // AvailableCategoriesFromGist inspects the given Gist and returns which
 // categories are present, without requiring authentication or ownership.
 func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, error) {
@@ -374,23 +382,7 @@ func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, 
 	}
 	var prefs SyncPrefs
 	for name := range g.Files {
-		relPath := gistFilenameToRelPath(name)
-		switch {
-		case relPath == "config.yaml":
-			prefs.Settings = true
-		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
-			prefs.SearchHistory = true
-		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
-			prefs.Favorites = true
-		case relPath == filepath.Join("data", "station_ratings.json") ||
-			relPath == filepath.Join("data", "voted_stations.json"):
-			prefs.RatingsVotes = true
-		case relPath == filepath.Join("data", "blocklist.json"):
-			prefs.Blocklist = true
-		case relPath == filepath.Join("data", "station_metadata.json") ||
-			relPath == filepath.Join("data", "station_tags.json"):
-			prefs.MetadataTags = true
-		}
+		categorizePath(name, &prefs)
 	}
 	return prefs, nil
 }
@@ -401,33 +393,54 @@ func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, 
 func AvailableCategoriesFromGistFiles(files map[string]gist.GistFile) SyncPrefs {
 	var prefs SyncPrefs
 	for name := range files {
-		relPath := gistFilenameToRelPath(name)
-		switch {
-		case relPath == "config.yaml":
-			prefs.Settings = true
-		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
-			prefs.SearchHistory = true
-		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
-			prefs.Favorites = true
-		case relPath == filepath.Join("data", "station_ratings.json") ||
-			relPath == filepath.Join("data", "voted_stations.json"):
-			prefs.RatingsVotes = true
-		case relPath == filepath.Join("data", "blocklist.json"):
-			prefs.Blocklist = true
-		case relPath == filepath.Join("data", "station_metadata.json") ||
-			relPath == filepath.Join("data", "station_tags.json"):
-			prefs.MetadataTags = true
-		}
+		categorizePath(name, &prefs)
 	}
 	return prefs
 }
 
+// ConflictingFilesForGist checks for existing local files that would be
+// overwritten by a restore from the given Gist. Works without a GistSyncManager.
+func ConflictingFilesForGist(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
+	if g == nil {
+		return nil, fmt.Errorf("gist is required")
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config directory: %w", err)
+	}
+	baseDir := filepath.Join(configDir, "tera")
+
+	var conflicts []string
+	for name := range g.Files {
+		relPath := gistFilenameToRelPath(name)
+		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
+			continue
+		}
+		absPath := filepath.Join(baseDir, relPath)
+		if _, err := os.Stat(absPath); err == nil {
+			conflicts = append(conflicts, relPath)
+		}
+	}
+	sort.Strings(conflicts)
+	return conflicts, nil
+}
+
 // RestoreFromGistDirect downloads selected files from a Gist without requiring
 // a GistSyncManager or token. Used when restoring from a public gist URL with
-// no token configured.
-func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs) error {
+// no token configured. When force is false, returns RestoreConflictError if
+// any local files would be overwritten.
+func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
 	if g == nil {
 		return fmt.Errorf("gist is required")
+	}
+	if !force {
+		conflicts, err := ConflictingFilesForGist(g, prefs)
+		if err != nil {
+			return err
+		}
+		if len(conflicts) > 0 {
+			return &RestoreConflictError{Paths: conflicts}
+		}
 	}
 	configDir, err := os.UserConfigDir()
 	if err != nil {
