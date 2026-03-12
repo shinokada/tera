@@ -178,7 +178,11 @@ func joinLuckyKeyword(args []string) string {
 }
 
 // truncate shortens s to at most maxLen runes, appending "…" if truncated.
+// Returns an empty string if maxLen is 0 or negative.
 func truncate(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s
@@ -350,15 +354,18 @@ func handlePlayRecent(n int, dur time.Duration) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	// No defer Close() here — runPlayback takes ownership and closes meta.
+	// No defer Close() here — on the happy path runPlayback takes ownership
+	// and closes meta. Early exits close explicitly to stop the saveLoop goroutine.
 
 	results := meta.GetRecentlyPlayed(0) // 0 = no limit
 	if len(results) == 0 {
+		_ = meta.Close()
 		fmt.Fprintln(os.Stderr, "Error: no recently played stations found")
 		os.Exit(1)
 	}
 
 	if n < 1 || n > len(results) {
+		_ = meta.Close()
 		fmt.Fprintf(os.Stderr, "Error: only %d station(s) in recently played. Please choose 1–%d.\n",
 			len(results), len(results))
 		os.Exit(1)
@@ -418,15 +425,18 @@ func handlePlayMostPlayed(n int, dur time.Duration) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	// No defer Close() here — runPlayback takes ownership and closes meta.
+	// No defer Close() here — on the happy path runPlayback takes ownership
+	// and closes meta. Early exits close explicitly to stop the saveLoop goroutine.
 
 	results := meta.GetTopPlayed(0) // 0 = no limit
 	if len(results) == 0 {
+		_ = meta.Close()
 		fmt.Fprintln(os.Stderr, "Error: no play history found")
 		os.Exit(1)
 	}
 
 	if n < 1 || n > len(results) {
+		_ = meta.Close()
 		fmt.Fprintf(os.Stderr, "Error: only %d station(s) in play history. Please choose 1–%d.\n",
 			len(results), len(results))
 		os.Exit(1)
