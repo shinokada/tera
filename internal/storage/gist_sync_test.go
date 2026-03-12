@@ -45,6 +45,13 @@ func TestGistFilenameToRelPath(t *testing.T) {
 		{"fav--Jazz.json", filepath.Join("data", "favorites", "Jazz.json")},
 		{"fav--Bossa-nova.json", filepath.Join("data", "favorites", "Bossa-nova.json")},
 		{"unknown.json", ""},
+		// fav--search-history.json must be rejected: search-history.json already
+		// has its own canonical mapping and both would resolve to the same path.
+		{"fav--search-history.json", ""},
+		// Path-traversal guards.
+		{"fav--", ""},
+		{"fav--.", ""},
+		{"fav--..", ""},
 	}
 
 	for _, tc := range cases {
@@ -52,6 +59,18 @@ func TestGistFilenameToRelPath(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("gistFilenameToRelPath(%q) = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+// TestCategorizePath_NoAliasCollision verifies that fav--search-history.json
+// is not miscategorised as a Favorites file (it should be silently ignored
+// because gistFilenameToRelPath rejects the alias).
+func TestCategorizePath_NoAliasCollision(t *testing.T) {
+	var prefs SyncPrefs
+	categorizePath("fav--search-history.json", &prefs)
+	if prefs.Favorites || prefs.SearchHistory {
+		t.Errorf("fav--search-history.json should not set any category, got Favorites=%v SearchHistory=%v",
+			prefs.Favorites, prefs.SearchHistory)
 	}
 }
 

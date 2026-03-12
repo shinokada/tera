@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/gist"
 )
 
@@ -37,13 +38,13 @@ func NewGistSyncManager(client *gist.Client) (*GistSyncManager, error) {
 	if client == nil {
 		return nil, fmt.Errorf("gist client is required")
 	}
-	configDir, err := os.UserConfigDir()
+	dir, err := teraConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get config directory: %w", err)
+		return nil, err
 	}
 	return &GistSyncManager{
 		client:    client,
-		configDir: filepath.Join(configDir, "tera"),
+		configDir: dir,
 	}, nil
 }
 
@@ -113,6 +114,13 @@ func gistFilenameToRelPath(name string) string {
 		if base == "" || base == "." || base == ".." || base != filepath.Base(base) {
 			return ""
 		}
+		// Reject fav--search-history.json: search-history.json already has its
+		// own canonical mapping and this alias would resolve to the same
+		// destination, letting a crafted gist silently overwrite it with
+		// arbitrary content categorised as a plain favorites file.
+		if base == SystemFileSearchHistory {
+			return ""
+		}
 		return filepath.Join("data", "favorites", base)
 	}
 	return ""
@@ -171,23 +179,7 @@ func (m *GistSyncManager) AvailableCategories() (SyncPrefs, error) {
 
 	var prefs SyncPrefs
 	for name := range g.Files {
-		relPath := gistFilenameToRelPath(name)
-		switch {
-		case relPath == "config.yaml":
-			prefs.Settings = true
-		case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
-			prefs.SearchHistory = true
-		case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
-			prefs.Favorites = true
-		case relPath == filepath.Join("data", "station_ratings.json") ||
-			relPath == filepath.Join("data", "voted_stations.json"):
-			prefs.RatingsVotes = true
-		case relPath == filepath.Join("data", "blocklist.json"):
-			prefs.Blocklist = true
-		case relPath == filepath.Join("data", "station_metadata.json") ||
-			relPath == filepath.Join("data", "station_tags.json"):
-			prefs.MetadataTags = true
-		}
+		categorizePath(name, &prefs)
 	}
 	return prefs, nil
 }
@@ -303,6 +295,27 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 	if g == nil {
 		return fmt.Errorf("no backup Gist found (description: %q); push first to create one", BackupGistDescription)
 	}
+	return m.PullFromGist(g, prefs, force)
+}
+
+// PullFromGist downloads selected files from the given Gist directly,
+// without requiring it to be the dedicated backup Gist.
+// When force is false and files already exist, it returns RestoreConflictError.
+// Pass force=true to overwrite without checking.
+func (m *GistSyncManager) PullFromGist(g *gist.Gist, prefs SyncPrefs, force bool) error {
+	if g == nil {
+		return fmt.Errorf("gist is required")
+	}
+	if len(g.Files) == 0 {
+		full, err := m.client.GetGist(g.ID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch gist: %w", err)
+		}
+		g = full
+	}
+	if _, ok := g.Files[backupGistMarkerFile]; !ok {
+		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
+	}
 
 	if !force {
 		conflicts, err := m.ConflictingGistFiles(g, prefs)
@@ -316,23 +329,166 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 
 	// Drive wanted from the Gist's own file list so restores work on a fresh
 	// machine where categoryFiles would return nothing for missing favorites.
-	wanted := make(map[string]string) // gist filename → rel path
+	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
+	return stageAndWriteGistFiles(httpClient, g.Files, prefs, m.configDir)
+}
+
+// categorizePath updates prefs based on a single gist filename.
+// It is the single source of truth for mapping gist filenames to SyncPrefs
+// categories, shared by AvailableCategories, AvailableCategoriesFromGist, and
+// AvailableCategoriesFromGistFiles.
+func categorizePath(name string, prefs *SyncPrefs) {
+	relPath := gistFilenameToRelPath(name)
+	switch {
+	case relPath == "config.yaml":
+		prefs.Settings = true
+	case relPath == filepath.Join("data", "favorites", SystemFileSearchHistory):
+		prefs.SearchHistory = true
+	case strings.HasPrefix(filepath.ToSlash(relPath), "data/favorites/"):
+		prefs.Favorites = true
+	case relPath == filepath.Join("data", "station_ratings.json") ||
+		relPath == filepath.Join("data", "voted_stations.json"):
+		prefs.RatingsVotes = true
+	case relPath == filepath.Join("data", "blocklist.json"):
+		prefs.Blocklist = true
+	case relPath == filepath.Join("data", "station_metadata.json") ||
+		relPath == filepath.Join("data", "station_tags.json"):
+		prefs.MetadataTags = true
+	}
+}
+
+// AvailableCategoriesFromGist inspects the given Gist and returns which
+// categories are present, without requiring authentication or ownership.
+func (m *GistSyncManager) AvailableCategoriesFromGist(g *gist.Gist) (SyncPrefs, error) {
+	if g == nil {
+		return SyncPrefs{}, fmt.Errorf("gist is required")
+	}
+	if len(g.Files) == 0 {
+		full, err := m.client.GetGist(g.ID)
+		if err != nil {
+			return SyncPrefs{}, fmt.Errorf("failed to fetch gist: %w", err)
+		}
+		g = full
+	}
+	if _, ok := g.Files[backupGistMarkerFile]; !ok {
+		return SyncPrefs{}, fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
+	}
+	var prefs SyncPrefs
+	for name := range g.Files {
+		categorizePath(name, &prefs)
+	}
+	return prefs, nil
+}
+
+// AvailableCategoriesFromGistFiles inspects a raw Gist file map and returns
+// which tera data categories are present. This is a package-level helper used
+// when no GistSyncManager is available (i.e. no token configured).
+func AvailableCategoriesFromGistFiles(files map[string]gist.GistFile) SyncPrefs {
+	if _, ok := files[backupGistMarkerFile]; !ok {
+		return SyncPrefs{}
+	}
+	var prefs SyncPrefs
+	for name := range files {
+		categorizePath(name, &prefs)
+	}
+	return prefs
+}
+
+// teraConfigDir returns the tera configuration directory path.
+// Delegates to config.GetConfigDir so that all parts of the app share a
+// single source of truth for config-dir resolution.
+func teraConfigDir() (string, error) {
+	return config.GetConfigDir()
+}
+
+// ConflictingFilesForGist checks for existing local files that would be
+// overwritten by a restore from the given Gist. Works without a GistSyncManager.
+// The caller must ensure g.Files is populated (e.g. by fetching the full gist
+// first); this function does not re-fetch because it has no authenticated client
+// and a public re-fetch would fail for private gists.
+func ConflictingFilesForGist(g *gist.Gist, prefs SyncPrefs) ([]string, error) {
+	if g == nil {
+		return nil, fmt.Errorf("gist is required")
+	}
+	if len(g.Files) == 0 {
+		return nil, fmt.Errorf("gist files not populated; fetch the full gist before calling ConflictingFilesForGist")
+	}
+	baseDir, err := teraConfigDir()
+	if err != nil {
+		return nil, err
+	}
+
+	var conflicts []string
 	for name := range g.Files {
 		relPath := gistFilenameToRelPath(name)
 		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
 			continue
 		}
-		wanted[name] = relPath
+		absPath := filepath.Join(baseDir, relPath)
+		if _, err := os.Stat(absPath); err == nil {
+			conflicts = append(conflicts, relPath)
+		}
+	}
+	sort.Strings(conflicts)
+	return conflicts, nil
+}
+
+// RestoreFromGistDirect downloads selected files from a Gist without requiring
+// a GistSyncManager or token. Used when restoring from a public gist URL with
+// no token configured. When force is false, returns RestoreConflictError if
+// any local files would be overwritten.
+// The caller must ensure g.Files is populated (e.g. by fetching the full gist
+// first); this function does not re-fetch because it has no authenticated client
+// and a public re-fetch would fail for private gists.
+func RestoreFromGistDirect(g *gist.Gist, prefs SyncPrefs, force bool) error {
+	if g == nil {
+		return fmt.Errorf("gist is required")
+	}
+	if len(g.Files) == 0 {
+		return fmt.Errorf("gist files not populated; fetch the full gist before calling RestoreFromGistDirect")
+	}
+	if _, ok := g.Files[backupGistMarkerFile]; !ok {
+		return fmt.Errorf("gist is not a tera backup (missing %s)", backupGistMarkerFile)
+	}
+	if !force {
+		conflicts, err := ConflictingFilesForGist(g, prefs)
+		if err != nil {
+			return err
+		}
+		if len(conflicts) > 0 {
+			return &RestoreConflictError{Paths: conflicts}
+		}
+	}
+	baseDir, err := teraConfigDir()
+	if err != nil {
+		return err
 	}
 
 	httpClient := &http.Client{Timeout: backupGistHTTPTimeout}
+	return stageAndWriteGistFiles(httpClient, g.Files, prefs, baseDir)
+}
 
-	// Fetch all content first; only write to disk once everything is ready
-	// so a mid-restore failure doesn't leave a partially updated config.
-	staged := make(map[string][]byte, len(wanted))
-	for name, gistFile := range g.Files {
-		relPath, ok := wanted[name]
-		if !ok {
+// stageAndWriteGistFiles fetches Gist file content into memory, then writes
+// each selected file atomically to baseDir. Fetching everything before any
+// disk write ensures that a network error never leaves a partially-written
+// config.
+//
+// Atomicity guarantee: each individual file is written atomically
+// (temp-file + rename), so no single file is ever torn. The set of files as
+// a whole is NOT written atomically — a failure mid-loop leaves
+// already-written files on disk. This is intentional: the individually-atomic
+// files are never corrupt, and the user can complete a partial restore by
+// re-running with force=true (the overwrite-warning screen offers this).
+func stageAndWriteGistFiles(
+	httpClient *http.Client,
+	files map[string]gist.GistFile,
+	prefs SyncPrefs,
+	baseDir string,
+) error {
+	staged := make(map[string][]byte)
+	for name, gistFile := range files {
+		relPath := gistFilenameToRelPath(name)
+		if relPath == "" || !syncPrefForRelPath(relPath, prefs) {
 			continue
 		}
 		content, err := fetchRawContent(httpClient, gistFile.RawURL, gistFile.Content)
@@ -341,17 +497,15 @@ func (m *GistSyncManager) Pull(prefs SyncPrefs, force bool) error {
 		}
 		staged[relPath] = []byte(content)
 	}
-
 	for relPath, content := range staged {
-		destPath := filepath.Join(m.configDir, relPath)
+		destPath := filepath.Join(baseDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", relPath, err)
 		}
-		if err := os.WriteFile(destPath, content, 0600); err != nil {
+		if err := atomicWriteFile(destPath, content, 0600); err != nil {
 			return fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 	}
-
 	return nil
 }
 
