@@ -204,7 +204,7 @@ The optional `--duration` flag accepts Go duration format: `30s`, `10m`, `1h`, `
 
 A single line is printed when playback starts:
 
-```
+```text
 ▶ Playing: Jazz FM  [jazz · item 1 of 12]  (Ctrl+C to stop)
 ▶ Playing: Jazz FM  [jazz · item 1 of 12]  (stops in 30m · Ctrl+C to stop early)
 ```

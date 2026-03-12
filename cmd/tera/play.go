@@ -19,17 +19,19 @@ import (
 )
 
 // handlePlay is the entry point for `tera play ...`.
-// It creates a flag.FlagSet scoped to the play subcommand so that --duration
-// can appear anywhere after "play" without interfering with the global
-// os.Args switch in main.go.
+// --duration is pre-extracted from rawArgs before flag.FlagSet.Parse so that
+// it is recognised regardless of where it appears relative to the source
+// argument (e.g. `tera play fav --duration 30m` and
+// `tera play --duration 30m fav` both work). Go's standard flag parser stops
+// at the first non-flag positional, so without this pre-scan the flag would
+// be silently ignored when placed after the source name.
 func handlePlay(rawArgs []string) {
+	// Pre-scan for --duration / --duration=VALUE so it works in any position.
+	durationStr, filteredArgs := extractDurationFlag(rawArgs)
+
 	playCmd := flag.NewFlagSet("play", flag.ExitOnError)
 	playCmd.Usage = printPlayHelp
-	durationStr := playCmd.String("duration", "", "Stop after duration (e.g. 30s, 10m, 1h, 1h30m)")
-
-	if err := playCmd.Parse(rawArgs); err != nil {
-		// flag.ExitOnError exits on error, so this is unreachable, but kept
-		// for clarity.
+	if err := playCmd.Parse(filteredArgs); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -43,11 +45,11 @@ func handlePlay(rawArgs []string) {
 
 	// Parse --duration
 	var dur time.Duration
-	if *durationStr != "" {
+	if durationStr != "" {
 		var err error
-		dur, err = time.ParseDuration(*durationStr)
+		dur, err = time.ParseDuration(durationStr)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: invalid duration %q (use e.g. 30s, 10m, 1h, 1h30m)\n", *durationStr)
+			fmt.Fprintf(os.Stderr, "Error: invalid duration %q (use e.g. 30s, 10m, 1h, 1h30m)\n", durationStr)
 			os.Exit(1)
 		}
 		if dur <= 0 {
@@ -83,6 +85,32 @@ func handlePlay(rawArgs []string) {
 		printPlayHelp()
 		os.Exit(1)
 	}
+}
+
+// extractDurationFlag scans rawArgs for --duration VALUE or --duration=VALUE,
+// removes those tokens, and returns the value string and the remaining args.
+// This allows --duration to appear anywhere (before or after the source name)
+// without tripping Go's flag parser, which stops at the first positional arg.
+func extractDurationFlag(rawArgs []string) (durationStr string, rest []string) {
+	rest = make([]string, 0, len(rawArgs))
+	for i := 0; i < len(rawArgs); i++ {
+		arg := rawArgs[i]
+		// --duration=VALUE form
+		if strings.HasPrefix(arg, "--duration=") {
+			durationStr = strings.TrimPrefix(arg, "--duration=")
+			continue
+		}
+		// --duration VALUE form
+		if arg == "--duration" || arg == "-duration" {
+			if i+1 < len(rawArgs) {
+				i++
+				durationStr = rawArgs[i]
+			}
+			continue
+		}
+		rest = append(rest, arg)
+	}
+	return
 }
 
 // parseFavArgs extracts [list-name] and [n] from the args following "fav".
@@ -232,6 +260,7 @@ func runPlayback(station *api.Station, contextLabel string, dur time.Duration, m
 	// Set up signal handler
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	if dur > 0 {
 		timer := time.NewTimer(dur)
@@ -241,10 +270,18 @@ func runPlayback(station *api.Station, contextLabel string, dur time.Duration, m
 			fmt.Println("\nStopped.")
 		case <-timer.C:
 			fmt.Println("\nStopped (duration reached).")
+		case <-p.Done():
+			fmt.Println("\nStopped (stream ended).")
+			return // mpv already cleaned up; skip p.Stop()
 		}
 	} else {
-		<-sigChan
-		fmt.Println("\nStopped.")
+		select {
+		case <-sigChan:
+			fmt.Println("\nStopped.")
+		case <-p.Done():
+			fmt.Println("\nStopped (stream ended).")
+			return // mpv already cleaned up; skip p.Stop()
+		}
 	}
 
 	_ = p.Stop()
