@@ -705,9 +705,10 @@ func (p *MPVPlayer) IsPaused() bool {
 	return p.paused
 }
 
-// Done returns a channel that is closed when the mpv process exits naturally
-// (stream drop, process killed externally). Callers can select on this to
-// unblock when playback ends without an explicit Stop call.
+// Done returns a channel that is closed when playback ends for any reason:
+// a natural stream drop, an external process kill, or an explicit Stop call.
+// Callers must not rely on this channel to distinguish between these cases;
+// it only signals that the player is no longer active.
 func (p *MPVPlayer) Done() <-chan struct{} {
 	p.mu.Lock()
 	defer p.mu.Unlock()

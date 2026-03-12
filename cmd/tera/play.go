@@ -58,6 +58,17 @@ func handlePlay(rawArgs []string) {
 		}
 	}
 
+	// Reject unrecognised option-like tokens before dispatching to sub-parsers.
+	// Without this guard, flags like --help fall through and are mis-handled
+	// (e.g. treated as a list name by parseFavArgs or silently ignored by parseNArg).
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") && a != "--help" && a != "-h" {
+			fmt.Fprintf(os.Stderr, "Error: unknown flag %q\n\n", a)
+			printPlayHelp()
+			os.Exit(1)
+		}
+	}
+
 	switch args[0] {
 	case "--help", "-h":
 		printPlayHelp()
@@ -102,9 +113,12 @@ func extractDurationFlag(rawArgs []string) (durationStr string, rest []string) {
 		}
 		// --duration VALUE form
 		if arg == "--duration" || arg == "-duration" {
-			if i+1 < len(rawArgs) {
+			if i+1 < len(rawArgs) && !strings.HasPrefix(rawArgs[i+1], "-") {
 				i++
 				durationStr = rawArgs[i]
+			} else {
+				fmt.Fprintln(os.Stderr, "Error: --duration requires a value (e.g. --duration 30m)")
+				os.Exit(1)
 			}
 			continue
 		}
