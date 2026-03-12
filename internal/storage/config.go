@@ -164,6 +164,27 @@ func SavePlayHistoryConfigToUnified(ph config.PlayHistoryConfig) error {
 	return config.Save(cfg)
 }
 
+// LoadPlayOptionsConfigFromUnified loads play options settings from unified config.
+func LoadPlayOptionsConfigFromUnified() (config.PlayOptionsConfig, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return config.DefaultPlayOptionsConfig(), err
+	}
+	return cfg.PlayOptions, nil
+}
+
+// SavePlayOptionsConfigToUnified saves play options settings to unified config.
+// NOTE: Performs non-atomic read-modify-write; safe within Bubble Tea's
+// single-threaded Update loop.
+func SavePlayOptionsConfigToUnified(po config.PlayOptionsConfig) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	cfg.PlayOptions = po
+	return config.Save(cfg)
+}
+
 // CheckAndMigrateV2Config checks for v2 config and migrates if found
 // Returns true if migration was performed, false otherwise
 // If force is true, migration runs even if v3 config already exists

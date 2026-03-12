@@ -522,6 +522,166 @@ func TestThemeConfigValidation(t *testing.T) {
 	}
 }
 
+func TestPlayOptionsConfigDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.PlayOptions.ContinueOnNavigate {
+		t.Error("expected ContinueOnNavigate to be false")
+	}
+	if cfg.PlayOptions.DefaultVolume != 80 {
+		t.Errorf("expected DefaultVolume 80, got %d", cfg.PlayOptions.DefaultVolume)
+	}
+	if cfg.PlayOptions.ConfirmStop {
+		t.Error("expected ConfirmStop to be false")
+	}
+	if !cfg.PlayOptions.ShowMetadata {
+		t.Error("expected ShowMetadata to be true")
+	}
+	if cfg.PlayOptions.StartVolumeMode != "default" {
+		t.Errorf("expected StartVolumeMode \"default\", got %q", cfg.PlayOptions.StartVolumeMode)
+	}
+	if cfg.PlayOptions.LastUsedVolume != 80 {
+		t.Errorf("expected LastUsedVolume 80, got %d", cfg.PlayOptions.LastUsedVolume)
+	}
+}
+
+func TestPlayOptionsConfigValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    PlayOptionsConfig
+		want     PlayOptionsConfig
+		hasError bool
+	}{
+		{
+			name: "valid defaults",
+			input: PlayOptionsConfig{
+				ContinueOnNavigate: false,
+				DefaultVolume:      80,
+				ConfirmStop:        false,
+				ShowMetadata:       true,
+				StartVolumeMode:    "default",
+				LastUsedVolume:     80,
+			},
+			want: PlayOptionsConfig{
+				ContinueOnNavigate: false,
+				DefaultVolume:      80,
+				ConfirmStop:        false,
+				ShowMetadata:       true,
+				StartVolumeMode:    "default",
+				LastUsedVolume:     80,
+			},
+			hasError: false,
+		},
+		{
+			name:     "default_volume too low — clamped to 0",
+			input:    PlayOptionsConfig{DefaultVolume: -5, StartVolumeMode: "default", ShowMetadata: true},
+			want:     PlayOptionsConfig{DefaultVolume: 0, StartVolumeMode: "default", ShowMetadata: true},
+			hasError: true,
+		},
+		{
+			name:     "default_volume too high — clamped to 100",
+			input:    PlayOptionsConfig{DefaultVolume: 150, StartVolumeMode: "default", ShowMetadata: true},
+			want:     PlayOptionsConfig{DefaultVolume: 100, StartVolumeMode: "default", ShowMetadata: true},
+			hasError: true,
+		},
+		{
+			name:     "last_used_volume too low — clamped to 0",
+			input:    PlayOptionsConfig{DefaultVolume: 80, LastUsedVolume: -1, StartVolumeMode: "default", ShowMetadata: true},
+			want:     PlayOptionsConfig{DefaultVolume: 80, LastUsedVolume: 0, StartVolumeMode: "default", ShowMetadata: true},
+			hasError: true,
+		},
+		{
+			name:     "last_used_volume too high — clamped to 100",
+			input:    PlayOptionsConfig{DefaultVolume: 80, LastUsedVolume: 120, StartVolumeMode: "last_used", ShowMetadata: true},
+			want:     PlayOptionsConfig{DefaultVolume: 80, LastUsedVolume: 100, StartVolumeMode: "last_used", ShowMetadata: true},
+			hasError: true,
+		},
+		{
+			name:     "invalid start_volume_mode — reset to default",
+			input:    PlayOptionsConfig{DefaultVolume: 80, StartVolumeMode: "random", ShowMetadata: true},
+			want:     PlayOptionsConfig{DefaultVolume: 80, StartVolumeMode: "default", ShowMetadata: true},
+			hasError: true,
+		},
+		{
+			name:     "last_used mode valid",
+			input:    PlayOptionsConfig{DefaultVolume: 60, LastUsedVolume: 55, StartVolumeMode: "last_used", ShowMetadata: false},
+			want:     PlayOptionsConfig{DefaultVolume: 60, LastUsedVolume: 55, StartVolumeMode: "last_used", ShowMetadata: false},
+			hasError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.input.Validate()
+			if tt.hasError && err == nil {
+				t.Error("expected validation error, got nil")
+			}
+			if !tt.hasError && err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+			if tt.input.DefaultVolume != tt.want.DefaultVolume {
+				t.Errorf("DefaultVolume: got %d, want %d", tt.input.DefaultVolume, tt.want.DefaultVolume)
+			}
+			if tt.input.LastUsedVolume != tt.want.LastUsedVolume {
+				t.Errorf("LastUsedVolume: got %d, want %d", tt.input.LastUsedVolume, tt.want.LastUsedVolume)
+			}
+			if tt.input.StartVolumeMode != tt.want.StartVolumeMode {
+				t.Errorf("StartVolumeMode: got %q, want %q", tt.input.StartVolumeMode, tt.want.StartVolumeMode)
+			}
+		})
+	}
+}
+
+func TestLoadLegacyConfig_MissingPlayOptions(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-legacy-playopts-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
+
+	originalFunc := userConfigDirFunc
+	defer func() { userConfigDirFunc = originalFunc }()
+	userConfigDirFunc = func() (string, error) { return tmpDir, nil }
+
+	// Write a legacy config that intentionally omits the play_options section.
+	legacyYAML := `version: "3.0"
+player:
+  default_volume: 80
+  buffer_size_mb: 50
+`
+	configDir, _ := GetConfigDir()
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	configPath, _ := GetConfigPath()
+	if err := os.WriteFile(configPath, []byte(legacyYAML), 0644); err != nil {
+		t.Fatalf("failed to write legacy config: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	defaults := DefaultPlayOptionsConfig()
+	if cfg.PlayOptions.ContinueOnNavigate != defaults.ContinueOnNavigate {
+		t.Errorf("ContinueOnNavigate: got %v, want %v", cfg.PlayOptions.ContinueOnNavigate, defaults.ContinueOnNavigate)
+	}
+	if cfg.PlayOptions.DefaultVolume != defaults.DefaultVolume {
+		t.Errorf("DefaultVolume: got %d, want %d", cfg.PlayOptions.DefaultVolume, defaults.DefaultVolume)
+	}
+	if cfg.PlayOptions.ShowMetadata != defaults.ShowMetadata {
+		t.Errorf("ShowMetadata: got %v, want %v", cfg.PlayOptions.ShowMetadata, defaults.ShowMetadata)
+	}
+	if cfg.PlayOptions.StartVolumeMode != defaults.StartVolumeMode {
+		t.Errorf("StartVolumeMode: got %q, want %q", cfg.PlayOptions.StartVolumeMode, defaults.StartVolumeMode)
+	}
+}
+
 // TestLoadLegacyConfig_MissingPlayHistory verifies that loading a pre-3.7 config
 // file that has no play_history section yields DefaultPlayHistoryConfig values
 // rather than Go zero-values ({enabled:false, size:0}).
