@@ -127,12 +127,24 @@ func TestParseDuration_Valid(t *testing.T) {
 }
 
 func TestParseDuration_Invalid(t *testing.T) {
-	invalids := []string{"2x", "abc", "10", "-5m"}
+	// These strings are rejected by time.ParseDuration itself.
+	invalids := []string{"2x", "abc", "10"}
 	for _, s := range invalids {
-		d, err := time.ParseDuration(s)
-		if err == nil && d > 0 {
-			t.Errorf("expected error or non-positive duration for %q, got %v", s, d)
+		_, err := time.ParseDuration(s)
+		if err == nil {
+			t.Errorf("expected parse error for %q", s)
 		}
+	}
+}
+
+func TestParseDuration_Negative(t *testing.T) {
+	// "-5m" parses without error but is negative; the app rejects d <= 0.
+	d, err := time.ParseDuration("-5m")
+	if err != nil {
+		t.Errorf("expected no parse error for -5m, got %v", err)
+	}
+	if d >= 0 {
+		t.Errorf("expected negative duration for -5m, got %v", d)
 	}
 }
 

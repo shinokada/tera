@@ -891,7 +891,7 @@ If missing, restart TERA and it will be created.
 ```sh
 git clone https://github.com/shinokada/tera.git
 cd tera
-go run cmd/tera/main.go
+go run ./cmd/tera/
 ```
 
 ### Test
@@ -901,7 +901,7 @@ go test ./... -v
 
 ### Build
 ```sh
-go build -o tera cmd/tera/main.go
+go build -o tera ./cmd/tera/
 ```
 
 ## Contributing

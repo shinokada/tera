@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/shinokada/tera/v3/internal/api"
-	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 )
@@ -398,13 +397,9 @@ func handlePlayMostPlayed(n int, dur time.Duration) {
 func handlePlayLucky(keyword string, dur time.Duration) {
 	fmt.Printf("Searching for %q...\n", keyword)
 
-	// Load config for a potential timeout override; non-fatal on error
-	cfg, _ := config.Load()
-	timeout := 10 * time.Second
-	if cfg != nil && cfg.Network.ReconnectDelay > 0 {
-		// Re-use the network timeout setting as a reasonable upper bound
-		timeout = time.Duration(cfg.Network.ReconnectDelay*2) * time.Second
-	}
+	// Fixed timeout for Radio Browser API calls.
+	const apiTimeout = 15 * time.Second
+	timeout := apiTimeout
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
