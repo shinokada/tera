@@ -79,6 +79,11 @@ type App struct {
 	playingFromMain          bool
 	playingStation           *api.Station
 	playHistoryCfg           config.PlayHistoryConfig    // cached play history settings
+	playOptsCfg              config.PlayOptionsConfig    // cached play options settings
+	// Continuous playback (v3.11) — non-nil when a screen has handed off its player
+	activePlayer             *player.MPVPlayer  // app-level player after a handoff
+	activeStation            *api.Station       // station currently handed off
+	activeContextLabel       string             // context label from the originating screen
 	recentlyPlayed           []storage.StationWithMetadata // refreshed on each return to main menu
 	numberBuffer             string               // Buffer for multi-digit number input
 	unifiedMenuIndex         int                  // Unified index for navigating both menu and favorites
@@ -203,6 +208,13 @@ func NewApp() *App {
 		app.playHistoryCfg = config.DefaultPlayHistoryConfig()
 	}
 
+	// Load play options config
+	if po, err := storage.LoadPlayOptionsConfigFromUnified(); err == nil {
+		app.playOptsCfg = po
+	} else {
+		app.playOptsCfg = config.DefaultPlayOptionsConfig()
+	}
+
 	// Initialize header renderer
 	InitializeHeaderRenderer()
 
@@ -285,6 +297,10 @@ func (a *App) Cleanup() {
 		if a.sleepTimer != nil {
 			a.sleepTimer.Cancel()
 			a.sleepTimer = nil
+		}
+		if a.activePlayer != nil {
+			_ = a.activePlayer.Stop()
+			a.activePlayer = nil
 		}
 		if a.quickFavPlayer != nil {
 			_ = a.quickFavPlayer.Stop()
@@ -603,6 +619,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Return to main menu and reload favorites and play history
 			a.loadQuickFavorites()
 			a.refreshPlayHistoryConfig()
+			a.refreshPlayOptionsConfig()
 			a.loadRecentlyPlayed()
 			a.unifiedMenuIndex = 0
 			a.numberBuffer = ""
@@ -691,12 +708,34 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
+	case handoffPlaybackMsg:
+		// A play screen is navigating away with ContinueOnNavigate=true.
+		// Stop any previously handed-off player before accepting the new one.
+		if a.activePlayer != nil && a.activePlayer != msg.player {
+			_ = a.activePlayer.Stop()
+		}
+		a.activePlayer = msg.player
+		a.activeStation = msg.station
+		a.activeContextLabel = msg.contextLabel
+		return a, nil
+
+	case stopActivePlaybackMsg:
+		// Stop the app-level handed-off player and clear its state.
+		if a.activePlayer != nil {
+			_ = a.activePlayer.Stop()
+			a.activePlayer = nil
+		}
+		a.activeStation = nil
+		a.activeContextLabel = ""
+		return a, nil
+
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
 		// Reload quick favorites and play history in case they were updated
 		a.loadQuickFavorites()
 		a.refreshPlayHistoryConfig()
+		a.refreshPlayOptionsConfig()
 		a.loadRecentlyPlayed()
 		a.unifiedMenuIndex = 0
 		a.numberBuffer = ""
@@ -1184,6 +1223,14 @@ func (a *App) refreshPlayHistoryConfig() {
 	}
 }
 
+// refreshPlayOptionsConfig reloads the play options config from disk so that
+// changes made in Settings > Play Options are reflected immediately on return.
+func (a *App) refreshPlayOptionsConfig() {
+	if po, err := storage.LoadPlayOptionsConfigFromUnified(); err == nil {
+		a.playOptsCfg = po
+	}
+}
+
 // loadRecentlyPlayed loads recently played stations from metadata, respecting
 // the play history config (enabled flag and size limit).
 // Callers that need a fresh config from disk should call refreshPlayHistoryConfig
@@ -1289,6 +1336,7 @@ func (a *App) View() string {
 // stopAllPlayback stops mpv on every screen that may be playing.
 func (a *App) stopAllPlayback() {
 	for _, p := range []*player.MPVPlayer{
+		a.activePlayer,
 		a.quickFavPlayer,
 		a.playScreen.player,
 		a.searchScreen.player,
@@ -1302,6 +1350,9 @@ func (a *App) stopAllPlayback() {
 			_ = p.Stop()
 		}
 	}
+	a.activePlayer = nil
+	a.activeStation = nil
+	a.activeContextLabel = ""
 	a.playingFromMain = false
 	a.playingStation = nil
 }
