@@ -265,6 +265,11 @@ func runPlayback(station *api.Station, contextLabel string, dur time.Duration, m
 	}
 
 	if err := p.Play(station); err != nil {
+		if meta != nil {
+			if closeErr := meta.Close(); closeErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not flush play stats: %v\n", closeErr)
+			}
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -284,14 +289,15 @@ func runPlayback(station *api.Station, contextLabel string, dur time.Duration, m
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
+	var stopMsg string
 	if dur > 0 {
 		timer := time.NewTimer(dur)
 		defer timer.Stop()
 		select {
 		case <-sigChan:
-			fmt.Println("\nStopped.")
+			stopMsg = "Stopped."
 		case <-timer.C:
-			fmt.Println("\nStopped (duration reached).")
+			stopMsg = "Stopped (duration reached)."
 		case <-p.Done():
 			fmt.Println("\nStopped (stream ended).")
 			return // mpv already cleaned up; skip p.Stop()
@@ -299,14 +305,17 @@ func runPlayback(station *api.Station, contextLabel string, dur time.Duration, m
 	} else {
 		select {
 		case <-sigChan:
-			fmt.Println("\nStopped.")
+			stopMsg = "Stopped."
 		case <-p.Done():
 			fmt.Println("\nStopped (stream ended).")
 			return // mpv already cleaned up; skip p.Stop()
 		}
 	}
 
-	_ = p.Stop()
+	if err := p.Stop(); err != nil {
+		fmt.Fprintf(os.Stderr, "\nWarning: could not stop playback cleanly: %v\n", err)
+	}
+	fmt.Printf("\n%s\n", stopMsg)
 }
 
 // -----------------------------------------------------------------
