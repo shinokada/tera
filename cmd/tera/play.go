@@ -62,7 +62,7 @@ func handlePlay(rawArgs []string) {
 	// Without this guard, flags like --help fall through and are mis-handled
 	// (e.g. treated as a list name by parseFavArgs or silently ignored by parseNArg).
 	for _, a := range args {
-		if strings.HasPrefix(a, "-") && a != "--help" && a != "-h" {
+		if strings.HasPrefix(a, "-") {
 			fmt.Fprintf(os.Stderr, "Error: unknown flag %q\n\n", a)
 			printPlayHelp()
 			os.Exit(1)
@@ -109,6 +109,10 @@ func extractDurationFlag(rawArgs []string) (durationStr string, rest []string) {
 		// --duration=VALUE form
 		if strings.HasPrefix(arg, "--duration=") {
 			durationStr = strings.TrimPrefix(arg, "--duration=")
+			if durationStr == "" {
+				fmt.Fprintln(os.Stderr, "Error: --duration requires a value (e.g. --duration 30m)")
+				os.Exit(1)
+			}
 			continue
 		}
 		// --duration VALUE form
@@ -390,15 +394,18 @@ func handlePlayTopRated(n int, dur time.Duration) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	defer func() { _ = ratings.Close() }()
+	// No defer Close() here — early exits close explicitly to stop the
+	// saveLoop goroutine; on the happy path we close before entering runPlayback.
 
 	results := ratings.GetTopRated(0) // 0 = no limit
 	if len(results) == 0 {
+		_ = ratings.Close()
 		fmt.Fprintln(os.Stderr, "Error: no rated stations found")
 		os.Exit(1)
 	}
 
 	if n < 1 || n > len(results) {
+		_ = ratings.Close()
 		fmt.Fprintf(os.Stderr, "Error: only %d rated station(s). Please choose 1–%d.\n",
 			len(results), len(results))
 		os.Exit(1)
@@ -411,8 +418,9 @@ func handlePlayTopRated(n int, dur time.Duration) {
 	}
 	stars := storage.RenderStarsCompact(item.Rating.Rating, true)
 	label := fmt.Sprintf("top rated · %s", stars)
-	// RatingsManager doesn't track play stats; pass nil so runPlayback
-	// opens a MetadataManager itself.
+	// Close before runPlayback: RatingsManager has no data left to write here,
+	// and runPlayback opens its own MetadataManager for play stats.
+	_ = ratings.Close()
 	runPlayback(&station, label, dur, nil)
 }
 
