@@ -5,6 +5,25 @@ All notable changes to TERA will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0] - unreleased
+
+### Added
+- **Command-Line Play** (`tera play`) — play stations directly from the terminal without opening the TUI.
+  - Five sources: `favorites`/`fav`, `recent`/`rec`, `top-rated`/`top`, `most-played`/`most`, `lucky`
+  - Optional `--duration` flag (`30s`, `10m`, `1h`, `1h30m`) stops playback automatically
+  - Single status line printed on start: station name, context (list, rank, play count, stars, keyword), and stop hint
+  - CLI sessions update Recently Played and Most Played history in the TUI
+  - Clear error messages for every failure mode (list not found, n out of range, no history, network failure, mpv missing)
+  - No new dependencies — stdlib only (`flag`, `time`, `os/signal`)
+- `cmd/tera/play.go` — all play subcommand handlers, `runPlayback`, and argument parsing helpers
+- `cmd/tera/play_test.go` — 18 unit tests covering argument parsing and edge cases
+
+### Changed
+- `cmd/tera/main.go` — added `case "play":` to the CLI switch; added `play` to `printHelp()`
+- `Makefile` — `build`, `run`, and `install` targets now use `./cmd/tera/` (package path) instead of `cmd/tera/main.go` (single-file path) to correctly include all files in the package
+
+---
+
 ## [3.8.0] - unreleased
 
 ### Added (Phase 1 — Core Storage)

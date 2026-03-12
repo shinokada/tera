@@ -705,6 +705,16 @@ func (p *MPVPlayer) IsPaused() bool {
 	return p.paused
 }
 
+// Done returns a channel that is closed when playback ends for any reason:
+// a natural stream drop, an external process kill, or an explicit Stop call.
+// Callers must not rely on this channel to distinguish between these cases;
+// it only signals that the player is no longer active.
+func (p *MPVPlayer) Done() <-chan struct{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.stopCh
+}
+
 // SetMetadataManager sets the metadata manager for play statistics tracking
 func (p *MPVPlayer) SetMetadataManager(mgr *storage.MetadataManager) {
 	p.mu.Lock()

@@ -56,6 +56,9 @@ func main() {
 	// Handle CLI arguments
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "play":
+			handlePlay(os.Args[2:])
+			return
 		case "theme":
 			handleThemeCommand()
 			return
@@ -324,6 +327,7 @@ func printHelp() {
 Usage: tera [command]
 
 Commands:
+  play     Play a station from the command line (no TUI)
   theme    Manage theme settings (reset, path, edit, export)
   config   Manage configuration (path, reset, validate, migrate)
 

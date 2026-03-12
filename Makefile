@@ -1,7 +1,7 @@
 .PHONY: build test clean clean-cache clean-all run lint lint-fix coverage install
 
 build: test
-	go build -o tera cmd/tera/main.go
+	go build -o tera ./cmd/tera/
 
 test:
 	go test -v ./...
@@ -17,7 +17,7 @@ coverage:
 	go tool cover -html=coverage.out
 
 run:
-	go run cmd/tera/main.go
+	go run ./cmd/tera/
 
 # Clean build artifacts
 clean:
@@ -31,4 +31,4 @@ clean-cache:
 clean-all: clean clean-cache
 
 install:
-	go install cmd/tera/main.go
+	go install ./cmd/tera/

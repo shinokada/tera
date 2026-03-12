@@ -21,6 +21,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🔄 **Update Checker** - Get notified when a new version is available
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 - ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
+- 🖥️ **Command-Line Play** - Play stations directly from the terminal without opening the TUI
 
 ## What's New in v3.0.0
 
@@ -143,6 +144,79 @@ tera
 
 # Need help? Press ? anytime to see keyboard shortcuts!
 ```
+
+## Command-Line Play
+
+Play stations directly from the terminal without opening the TUI — useful for shell scripts, startup routines, or timed listening sessions.
+
+```sh
+tera play <source> [args] [--duration <duration>]
+```
+
+### Sources
+
+| Full form | Short alias | Args | Description |
+| --- | --- | --- | --- |
+| `favorites` | `fav` | `[list-name] [n]` | Play nth station from a favorites list |
+| `recent` | `rec` | `[n]` | Play the nth most recently played station |
+| `top-rated` | `top` | `[n]` | Play the nth highest-rated station |
+| `most-played` | `most` | `[n]` | Play the nth most-played station |
+| `lucky` | — | `<keyword ...>` | Play a random station matching keyword(s) |
+
+`[list-name]` defaults to `My-favorites`. `[n]` defaults to `1` (first item, 1-based).
+
+### Examples
+
+```sh
+# Play the first station from My-favorites
+tera play fav
+
+# Play the 3rd station from the jazz list
+tera play fav jazz 3
+
+# Play the most recently played station
+tera play rec
+
+# Play the highest-rated station
+tera play top
+
+# Play the most-played station
+tera play most
+
+# Play a random station matching a keyword
+tera play lucky ambient
+
+# Multi-word keywords work too
+tera play lucky smooth jazz
+
+# Stop automatically after 30 minutes
+tera play fav --duration 30m
+
+# Play for 1 hour then stop
+tera play lucky ambient --duration 1h
+```
+
+### Duration
+
+The optional `--duration` flag accepts Go duration format: `30s`, `10m`, `1h`, `1h30m`. Without it, playback continues until `Ctrl+C`.
+
+### Status Line
+
+A single line is printed when playback starts:
+
+```text
+▶ Playing: Jazz FM  [jazz · item 1 of 12]  (Ctrl+C to stop)
+▶ Playing: Jazz FM  [jazz · item 1 of 12]  (stops in 30m · Ctrl+C to stop early)
+```
+
+### Notes
+
+- Requires `mpv` to be installed (same as the TUI)
+- CLI play sessions update Recently Played and Most Played history in the TUI
+- `lucky` requires network access to query Radio Browser; all other sources are local
+- Run `tera play --help` for full usage
+
+---
 
 ## Configuration Management (v3)
 
@@ -916,7 +990,7 @@ Your favorites and user data are never touched during migration.
 ```sh
 git clone https://github.com/shinokada/tera.git
 cd tera
-go run cmd/tera/main.go
+go run ./cmd/tera/
 ```
 
 ### Test
@@ -926,7 +1000,7 @@ go test ./... -v
 
 ### Build
 ```sh
-go build -o tera cmd/tera/main.go
+go build -o tera ./cmd/tera/
 ```
 
 ## Contributing
