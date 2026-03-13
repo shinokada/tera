@@ -35,6 +35,7 @@ const (
 	luckyStateNewListInput
 	luckyStateTagInput
 	luckyStateManageTags
+	luckyStateConfirmStop // Phase 5: Confirm before stopping
 )
 
 // Footer help text constants for the I Feel Lucky screen
@@ -823,6 +824,11 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.state = luckyStateConfirmStop
+			return m, nil
+		}
 		// Stop (or hand off) playback and return to I Feel Lucky input.
 		cmd := m.navigateBackCmd()
 		m.state = luckyStateInput
@@ -837,6 +843,11 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "0":
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.state = luckyStateConfirmStop
+			return m, nil
+		}
 		// Return to main menu (or hand off and navigate).
 		m.selectedStation = nil
 		m.state = luckyStateInput
@@ -1127,7 +1138,8 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 	}
 }
 
-// startPlayback initiates playback of the selected station
+// startPlayback initiates playback of the selected station.
+// Phase 5: volume is resolved from PlayOptions (DefaultVolume / StartVolumeMode).
 func (m LuckyModel) startPlayback() tea.Cmd {
 	if m.selectedStation == nil {
 		return func() tea.Msg {
@@ -1135,9 +1147,16 @@ func (m LuckyModel) startPlayback() tea.Cmd {
 		}
 	}
 	station := *m.selectedStation
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return tea.Batch(
 		func() tea.Msg {
-			if err := m.player.Play(&station); err != nil {
+			if err := m.player.PlayWithVolume(&station, startVol); err != nil {
 				return playbackErrorMsg{err}
 			}
 			return playbackStartedMsg{}
@@ -1263,6 +1282,8 @@ func (m LuckyModel) View() string {
 			Content: sb.String(),
 			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
 		}, m.height)
+	case luckyStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 	return "Unknown state"
 }
@@ -1388,26 +1409,33 @@ func (m LuckyModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info with rating
-	// Get rating for display
+	// Station info with rating and metadata (Phase 5: ShowMetadata)
 	var rating int
 	if m.ratingsManager != nil {
 		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
 			rating = r.Rating
 		}
 	}
-	// Get metadata for display
 	var metadata *storage.StationMetadata
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
 	voted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
+	if m.playOptsCfg.ShowMetadata {
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
+	} else {
+		// Render only basic info (name, country, etc.)
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			content.WriteString("  ")
+			content.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		content.WriteString("\n")
+	}
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		// Use the cached track to avoid a blocking IPC socket call in the render path.
 		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
@@ -2048,4 +2076,23 @@ func (m *LuckyModel) reloadSearchHistory() {
 		history = storage.NewSearchHistoryStore()
 	}
 	m.searchHistory = history
+}
+
+// viewConfirmStop renders the ConfirmStop prompt for LuckyModel (Phase 5)
+func (m LuckyModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString(errorStyle().Render("⚠ Stop Playback?"))
+	content.WriteString("\n\n")
+	if m.selectedStation != nil {
+		content.WriteString("Station: ")
+		content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString("Are you sure you want to stop playback?\n")
+	content.WriteString(infoStyle().Render("Press y/1 to stop, n/2/Esc to cancel."))
+	return RenderPage(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y/1: Stop • n/2/Esc: Cancel",
+	})
 }

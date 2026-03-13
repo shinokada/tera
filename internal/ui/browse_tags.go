@@ -14,21 +14,31 @@ import (
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
-// browseTagsState tracks sub-views within the Browse by Tag screen.
+// browseTagsState represents the state of the BrowseTagsModel state machine.
 type browseTagsState int
 
 const (
-	browseTagsStateList       browseTagsState = iota // list of all tags
-	browseTagsStateDetail                            // stations for a selected tag
-	browseTagsStatePlaying                           // playing a station from a tag
-	browseTagsStateTagInput                          // entering a new tag (single via 't')
-	browseTagsStateManageTags                        // full tag manager via 'T'
+	browseTagsStateList browseTagsState = iota
+	browseTagsStateDetail
+	browseTagsStatePlaying
+	browseTagsStateTagInput
+	browseTagsStateManageTags
+	browseTagsStateConfirmStop
 )
 
-// tagStat holds a tag name and how many stations carry it.
+// tagStat holds a tag and the count of stations with that tag.
 type tagStat struct {
 	tag   string
 	count int
+}
+
+// viewConfirmStop renders the confirmation prompt for stopping playback.
+func (m BrowseTagsModel) viewConfirmStop() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop Playback",
+		Content: "Are you sure you want to stop playback?\n\n[y] Yes    [n/Esc] No",
+		Help:    "y: Yes    n/Esc: No",
+	}, m.height)
 }
 
 // BrowseTagsModel is the model for the "Browse by Tag" screen.
@@ -42,9 +52,9 @@ type BrowseTagsModel struct {
 	tagRenderer      *components.TagRenderer
 
 	// Tag list view
-	tagStats        []tagStat
-	tagCursor       int
-	deleteConfirm   bool // true = waiting for second 'd' to confirm tag deletion
+	tagStats      []tagStat
+	tagCursor     int
+	deleteConfirm bool // true = waiting for second 'd' to confirm tag deletion
 
 	// Station detail view
 	selectedTag    string
@@ -56,8 +66,8 @@ type BrowseTagsModel struct {
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	ratingMode      bool
-	tagInput    components.TagInput
-	manageTags  components.ManageTags
+	tagInput        components.TagInput
+	manageTags      components.ManageTags
 
 	// Help overlay
 	helpModel components.HelpModel
@@ -355,6 +365,10 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 	}
 	switch msg.String() {
 	case "esc":
+		if m.playOptsCfg.ConfirmStop {
+			m.state = browseTagsStateConfirmStop
+			return m, nil
+		}
 		// Stop (or hand off) playback and return to detail view.
 		cmd := m.navigateBackCmd()
 		m.state = browseTagsStateDetail
@@ -364,6 +378,10 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			return m, cmd
 		}
 	case "0":
+		if m.playOptsCfg.ConfirmStop {
+			m.state = browseTagsStateConfirmStop
+			return m, nil
+		}
 		// Return to main menu (or hand off and navigate).
 		m.selectedStation = nil
 		return m, m.navigateToMainCmd()
@@ -489,13 +507,21 @@ func (m *BrowseTagsModel) deleteTagFromAll(tag string) int {
 }
 
 // playSelected starts playing the currently selected station.
+// Phase 5: volume is resolved from PlayOptions (DefaultVolume / StartVolumeMode).
 func (m BrowseTagsModel) playSelected() tea.Cmd {
 	if m.selectedStation == nil {
 		return nil
 	}
 	station := *m.selectedStation
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return func() tea.Msg {
-		if err := m.player.Play(&station); err != nil {
+		if err := m.player.PlayWithVolume(&station, startVol); err != nil {
 			return playbackErrorMsg{err}
 		}
 		return playbackStartedMsg{}
@@ -643,7 +669,17 @@ func (m BrowseTagsModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	sb.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	// Phase 5: ShowMetadata wiring
+	if m.playOptsCfg.ShowMetadata {
+		sb.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	} else {
+		sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			sb.WriteString("  ")
+			sb.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		sb.WriteString("\n")
+	}
 
 	sb.WriteString("\n")
 	if m.player != nil && m.player.IsPlaying() {

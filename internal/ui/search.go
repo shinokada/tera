@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -18,6 +17,7 @@ import (
 	"github.com/shinokada/tera/v3/internal/blocklist"
 	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
+	"github.com/shinokada/tera/v3/internal/shuffle"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/theme"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -35,6 +35,7 @@ const (
 	searchStateResults
 	searchStateStationInfo
 	searchStatePlaying
+	searchStateConfirmStop // new state for confirm stop prompt
 	searchStateSavePrompt
 	searchStateSelectList
 	searchStateNewListInput
@@ -44,73 +45,74 @@ const (
 	searchStateSleepTimer
 )
 
-// SearchModel represents the search screen
+// SearchModel represents the state and data for the search screen
+// (fields are modeled after other play screens and previous usage)
 type SearchModel struct {
-	state            searchState
-	searchType       api.SearchType
-	menuList         list.Model // List-based menu navigation
-	stationInfoMenu  list.Model // Station info submenu navigation
-	apiClient        *api.Client
-	textInput        textinput.Model
-	newListInput     textinput.Model
-	spinner          spinner.Model
-	results          []api.Station
-	resultsItems     []list.Item
-	resultsList      list.Model
-	selectedStation  *api.Station
-	player           *player.MPVPlayer
-	favoritePath     string
-	quickFavorites   []api.Station               // My-favorites.json for duplicate checking
-	searchHistory    *storage.SearchHistoryStore // Search history
-	numberBuffer     string                      // Buffer for number input display
-	saveMessage      string
-	saveMessageTime  int
-	width            int
-	height           int
-	err              error
-	availableLists   []string
-	listItems        []list.Item
-	listModel        list.Model
-	helpModel        components.HelpModel
-	votedStations    *storage.VotedStations // Track voted stations
-	blocklistManager *blocklist.Manager
-	metadataManager  *storage.MetadataManager // Track play statistics
-	lastBlockTime    time.Time
-	// Star rating fields
-	ratingsManager *storage.RatingsManager
-	starRenderer   *components.StarRenderer
-	ratingMode     bool // true when waiting for 1-5 input after pressing R
-	// Advanced search form fields
-	advancedInputs      [5]textinput.Model // tag, language, country, state, name
-	advancedFocusIdx    int                // 0-4: text fields, 5: sort, 6: bitrate
-	advancedBitrate     string             // "1", "2", "3", or ""
-	advancedSortByVotes bool               // true = votes, false = relevance
-	// Tag fields
-	tagsManager *storage.TagsManager
-	tagRenderer *components.TagRenderer
-	tagInput    components.TagInput
-	manageTags  components.ManageTags
-	// Sleep timer fields
+	// struct fields continue here
+	state               searchState
+	width               int
+	height              int
+	menuList            list.Model
+	resultsList         list.Model
+	stationInfoMenu     list.Model
+	helpModel           components.HelpModel
+	textInput           textinput.Model
+	newListInput        textinput.Model
+	selectedStation     *api.Station
+	results             []api.Station
+	searchType          api.SearchType
+	searchHistory       *storage.SearchHistoryStore
+	quickFavorites      []api.Station
+	availableLists      []string
+	listModel           list.Model
+	player              *player.MPVPlayer
+	playOptsCfg         config.PlayOptionsConfig
+	votedStations       *storage.VotedStations
+	ratingsManager      *storage.RatingsManager
+	starRenderer        *components.StarRenderer
+	tagsManager         *storage.TagsManager
+	tagRenderer         *components.TagRenderer
+	tagInput            components.TagInput
+	manageTags          components.ManageTags
+	metadataManager     *storage.MetadataManager
+	blocklistManager    *blocklist.Manager
+	dataPath            string
+	favoritePath        string
+	saveMessage         string
+	saveMessageTime     int
+	numberBuffer        string
+	err                 error
+	lastBlockTime       time.Time
+	ratingMode          bool
+	shuffleManager      *shuffle.Manager
+	shuffleEnabled      bool
+	shuffleConfig       storage.ShuffleConfig
+	lastSearchKeyword   string
+	sleepTimerActive    bool
 	sleepTimerDialog    components.SleepTimerDialog
-	dataPath            string // for loading last-used duration preference
-	sleepCountdown      string // refreshed by App on each tick
-	sleepTimerActive    bool   // true once a timer is running; cleared on cancel/expiry
-	showBlockedInSearch bool   // when false, blocked stations are filtered out of results
-	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	sleepCountdown      int
+	advancedInputs      []textinput.Model
+	advancedFocusIdx    int
+	advancedBitrate     string
+	advancedSortByVotes bool
+	// Add missing fields for search screen
+	resultsItems        []list.Item
+	showBlockedInSearch bool
+	spinner             spinner.Model
+	listItems           []list.Item
 }
 
-// Messages for search screen
+// Message types for search screen (patterned after lucky.go and play.go)
+type quickFavoritesLoadedMsg struct {
+	stations []api.Station
+}
+
 type searchResultsMsg struct {
 	results []api.Station
 }
 
 type searchErrorMsg struct {
 	err error
-}
-
-type quickFavoritesLoadedMsg struct {
-	stations []api.Station
 }
 
 type playerErrorMsg struct {
@@ -126,459 +128,16 @@ type checkSignalMsg struct {
 	attempt int
 }
 
-// NewSearchModel creates a new search screen model
-func NewSearchModel(apiClient *api.Client, favoritePath string, dataPath string, blocklistManager *blocklist.Manager) SearchModel {
-	ti := textinput.New()
-	ti.Placeholder = "Enter search query..."
-	ti.CharLimit = 100
-	ti.Width = 50
-
-	// New list input
-	nli := textinput.New()
-	nli.Placeholder = "Enter new list name..."
-	nli.CharLimit = 50
-	nli.Width = 50
-
-	// Advanced search inputs
-	var advInputs [5]textinput.Model
-	placeholders := []string{
-		"classical",
-		"italian",
-		"US",
-		"California",
-		"BBC Radio",
-	}
-	for i := 0; i < 5; i++ {
-		advInputs[i] = textinput.New()
-		advInputs[i].Placeholder = placeholders[i]
-		advInputs[i].CharLimit = 100
-		advInputs[i].Width = 40
-	}
-
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-
-	// Create search menu items
-	menuItems := []components.MenuItem{
-		components.NewMenuItem("Search by Tag", "(genre, style, etc.)", "1"),
-		components.NewMenuItem("Search by Name", "", "2"),
-		components.NewMenuItem("Search by Language", "", "3"),
-		components.NewMenuItem("Search by Country Code", "", "4"),
-		components.NewMenuItem("Search by State", "", "5"),
-		components.NewMenuItem("Advanced Search", "(multiple criteria)", "6"),
-	}
-
-	// Set enough height for all 6 menu items + title
-	menuList := components.CreateMenu(menuItems, "🔍 Search Radio Stations", 50, 15)
-
-	// Create station info submenu items
-	infoMenuItems := []components.MenuItem{
-		components.NewMenuItem("Play this station", "", "1"),
-		components.NewMenuItem("Save to Quick Favorites", "", "2"),
-		components.NewMenuItem("Back to search results", "", "3"),
-	}
-
-	// Initial height will be updated on first WindowSizeMsg
-	stationInfoMenu := components.CreateMenu(infoMenuItems, "What would you like to do?", 50, 10)
-
-	// Load search history (if it fails, just use empty history)
-	store := storage.NewStorage(favoritePath)
-	history, err := store.LoadSearchHistory(context.Background())
-	if err != nil || history == nil {
-		history = storage.NewSearchHistoryStore()
-	}
-
-	// Load voted stations
-	votedStations, err := storage.LoadVotedStations()
-	if err != nil {
-		// If we can't load, just create empty list
-		votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
-	}
-
-	model := SearchModel{
-		state:               searchStateMenu,
-		apiClient:           apiClient,
-		menuList:            menuList,
-		stationInfoMenu:     stationInfoMenu,
-		textInput:           ti,
-		newListInput:        nli,
-		spinner:             sp,
-		favoritePath:        favoritePath,
-		dataPath:            dataPath,
-		player:              player.NewMPVPlayer(),
-		quickFavorites:      []api.Station{},
-		searchHistory:       history,
-		width:               80, // Default width
-		height:              24, // Default height
-		helpModel:           components.NewHelpModel(components.CreatePlayingHelp()),
-		votedStations:       votedStations,
-		advancedInputs:      advInputs,
-		advancedFocusIdx:    0,
-		advancedBitrate:     "",
-		advancedSortByVotes: true, // Default to sorting by votes
-		blocklistManager:    blocklistManager,
-	}
-
-	// Build menu with history items included
-	model.rebuildMenuWithHistory()
-
-	return model
-}
-
-// Init initializes the search screen
-func (m SearchModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.loadQuickFavorites(),
-		m.spinner.Tick,
-		tickEverySecond(), // For save message countdown
-	)
+// viewConfirmStop renders the confirmation prompt for stopping playback.
+func (m SearchModel) viewConfirmStop() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop Playback",
+		Content: "Are you sure you want to stop playback?\n\n[y] Yes    [n/Esc] No",
+		Help:    "y: Yes    n/Esc: No",
+	}, m.height)
 }
 
 // Note: tickEverySecond() is defined in messages.go and ticks once per second
-
-// loadQuickFavorites loads My-favorites.json for duplicate checking
-func (m SearchModel) loadQuickFavorites() tea.Cmd {
-	return func() tea.Msg {
-		store := storage.NewStorage(m.favoritePath)
-		list, err := store.LoadList(context.Background(), "My-favorites")
-		if err != nil {
-			// It's OK if My-favorites doesn't exist yet
-			return quickFavoritesLoadedMsg{stations: []api.Station{}}
-		}
-		return quickFavoritesLoadedMsg{stations: list.Stations}
-	}
-}
-
-// Update handles messages for the search screen
-func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		// Calculate usable height based on actual header size
-		listHeight := availableListHeight(msg.Height)
-
-		// Update list sizes based on current state
-		switch m.state {
-		case searchStateMenu:
-			m.menuList.SetSize(msg.Width-4, listHeight)
-		case searchStateResults:
-			if m.resultsList.Items() != nil && len(m.resultsList.Items()) > 0 {
-				m.resultsList.SetSize(msg.Width-4, listHeight)
-			}
-		case searchStateStationInfo:
-			// Station info menu is smaller
-			infoHeight := 10
-			if infoHeight > listHeight {
-				infoHeight = listHeight
-			}
-			m.stationInfoMenu.SetSize(msg.Width-4, infoHeight)
-		}
-
-		m.helpModel.SetSize(msg.Width, msg.Height)
-
-	case tea.KeyMsg:
-		if m.helpModel.IsVisible() {
-			var cmd tea.Cmd
-			m.helpModel, cmd = m.helpModel.Update(msg)
-			return m, cmd
-		}
-
-		switch m.state {
-		case searchStateMenu:
-			return m.handleMenuInput(msg)
-		case searchStateInput:
-			return m.handleTextInput(msg)
-		case searchStateResults:
-			return m.handleResultsInput(msg)
-		case searchStateStationInfo:
-			return m.handleStationInfoInput(msg)
-		case searchStatePlaying:
-			return m.handlePlayerUpdate(msg)
-		case searchStateTagInput:
-			return m.handleTagInputKey(msg)
-		case searchStateManageTags:
-			return m.handleManageTagsKey(msg)
-		case searchStateSleepTimer:
-			return m.handleSleepTimerDialogKey(msg)
-		case searchStateSavePrompt:
-			return m.handleSavePrompt(msg)
-		case searchStateSelectList:
-			return m.handleSelectList(msg)
-		case searchStateNewListInput:
-			return m.handleNewListInput(msg)
-		case searchStateAdvancedForm:
-			return m.handleAdvancedForm(msg)
-		}
-
-	case quickFavoritesLoadedMsg:
-		m.quickFavorites = msg.stations
-
-	case searchResultsMsg:
-		m.results = msg.results
-		m.state = searchStateResults
-		m.resultsItems = make([]list.Item, 0, len(m.results))
-		tr := components.NewTagRenderer()
-		for _, station := range m.results {
-			isBlocked := false
-			if m.blocklistManager != nil {
-				isBlocked = m.blocklistManager.IsBlockedByAny(&station)
-			}
-			// Skip blocked stations unless the user has opted to show them
-			if isBlocked && !m.showBlockedInSearch {
-				continue
-			}
-			tagPills := ""
-			if m.tagsManager != nil {
-				if tags := m.tagsManager.GetTags(station.StationUUID); len(tags) > 0 {
-					tagPills = tr.RenderPills(tags)
-				}
-			}
-			m.resultsItems = append(m.resultsItems, stationListItem{station: station, isBlocked: isBlocked, tagPills: tagPills})
-		}
-
-		// Create results list
-		delegate := createStyledDelegate()
-
-		m.resultsList = list.New(m.resultsItems, delegate, m.width, availableListHeight(m.height))
-		m.resultsList.Title = fmt.Sprintf("Search Results (%d stations)", len(m.resultsItems))
-		m.resultsList.SetShowHelp(false)     // We use custom footer instead
-		m.resultsList.SetShowStatusBar(true) // Show status bar for filter count
-		m.resultsList.SetFilteringEnabled(true)
-		// Disable 'q' quit keybinding in the list
-		m.resultsList.KeyMap.Quit = key.NewBinding(key.WithDisabled())
-		return m, nil
-
-	case searchErrorMsg:
-		m.err = msg.err
-		m.state = searchStateMenu
-		return m, nil
-
-	case spinner.TickMsg:
-		if m.state == searchStateLoading {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
-
-	case playbackStartedMsg:
-		// Playback started successfully, stay in playing state
-		return m, nil
-
-	case playerErrorMsg:
-		m.err = msg.err
-		m.ratingMode = false // Clear rating mode on async state transition
-		m.state = searchStateResults
-		return m, nil
-
-	case playbackStalledMsg:
-		// Stop player if it's still "playing" (but silent)
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
-		m.ratingMode = false // Clear rating mode on async state transition
-		m.saveMessage = "✗ No signal detected"
-		m.saveMessageTime = messageDisplayShort
-		m.state = searchStateResults
-		m.selectedStation = nil
-		return m, nil
-
-	case checkSignalMsg:
-		if m.state == searchStatePlaying && m.selectedStation != nil && m.selectedStation.StationUUID == msg.station.StationUUID {
-			return m, m.checkPlaybackSignal(msg.station, msg.attempt)
-		}
-		return m, nil
-
-	case playbackStoppedMsg:
-		// Handle save prompt after playback
-		return m.handlePlaybackStopped()
-
-	case saveSuccessMsg:
-		// Update local cache
-		m.quickFavorites = append(m.quickFavorites, *msg.station)
-		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
-		m.saveMessageTime = messageDisplayShort
-		return m, nil
-
-	case saveFailedMsg:
-		if msg.isDuplicate {
-			m.saveMessage = "Already in Quick Favorites"
-		} else {
-			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
-		}
-		m.saveMessageTime = messageDisplayShort
-		return m, nil
-
-	case components.VoteSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		m.saveMessageTime = messageDisplayShort
-		return m, nil
-
-	case components.VoteFailedMsg:
-		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		m.saveMessageTime = messageDisplayShort
-		return m, nil
-
-	case tickMsg:
-		// Handle save message countdown
-		if m.saveMessageTime > 0 {
-			m.saveMessageTime--
-			if m.saveMessageTime <= 0 {
-				m.saveMessage = ""
-			}
-		}
-		// Continue ticking
-		return m, tickEverySecond()
-
-	case listsLoadedMsg:
-		m.availableLists = msg.lists
-		m.listItems = make([]list.Item, len(msg.lists))
-		for i, name := range msg.lists {
-			m.listItems[i] = playListItem{name: name}
-		}
-		if m.width > 0 && m.height > 0 {
-			m.initializeListModel()
-		}
-		return m, nil
-
-	case saveToListSuccessMsg:
-		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to '%s'", msg.stationName, msg.listName)
-		m.saveMessageTime = messageDisplayShort
-		m.state = searchStatePlaying
-		return m, nil
-
-	case saveToListFailedMsg:
-		if msg.isDuplicate {
-			m.saveMessage = "Already in this list"
-		} else {
-			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
-		}
-		m.saveMessageTime = messageDisplayShort
-		m.state = searchStatePlaying
-		return m, nil
-
-	case stationBlockedMsg:
-		m.lastBlockTime = time.Now()
-
-		if msg.success {
-			// Stop playback
-			if m.player != nil {
-				_ = m.player.Stop()
-			}
-
-			// Show message
-			m.saveMessage = msg.message + " (press 'u' within 5s to undo)"
-			m.saveMessageTime = messageDisplayMedium
-
-			// Return to results
-			m.state = searchStateResults
-
-			// Update blocked status in the list items
-			if m.resultsList.Items() != nil {
-				items := m.resultsList.Items()
-				for i, item := range items {
-					if si, ok := item.(stationListItem); ok && si.station.StationUUID == msg.stationUUID {
-						si.isBlocked = true
-						items[i] = si
-						break
-					}
-				}
-				m.resultsList.SetItems(items)
-			}
-			m.selectedStation = nil
-		} else {
-			// Already blocked
-			m.saveMessage = msg.message
-			m.saveMessageTime = messageDisplayShort
-		}
-		return m, nil
-
-	case undoBlockSuccessMsg:
-		m.saveMessage = "✓ Block undone"
-		m.saveMessageTime = messageDisplayShort
-		// Update blocked status in the list items
-		if m.resultsList.Items() != nil {
-			items := m.resultsList.Items()
-			for i, item := range items {
-				if si, ok := item.(stationListItem); ok {
-					if m.blocklistManager != nil && !m.blocklistManager.IsBlockedByAny(&si.station) {
-						if si.isBlocked {
-							si.isBlocked = false
-							items[i] = si
-						}
-					}
-				}
-			}
-			m.resultsList.SetItems(items)
-		}
-		return m, nil
-
-	case undoBlockFailedMsg:
-		m.saveMessage = "No recent block to undo"
-		m.saveMessageTime = messageDisplayShort
-		return m, nil
-
-	case components.TagSubmittedMsg:
-		if m.state == searchStateManageTags {
-			var cmd tea.Cmd
-			m.manageTags, cmd = m.manageTags.HandleTagSubmitted(msg.Tag)
-			return m, cmd
-		}
-		if m.selectedStation != nil && m.tagsManager != nil {
-			if err := m.tagsManager.AddTag(m.selectedStation.StationUUID, msg.Tag); err != nil {
-				m.saveMessage = fmt.Sprintf("✗ %v", err)
-			} else {
-				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
-				m.refreshResultsTagPills(m.selectedStation.StationUUID)
-			}
-			m.saveMessageTime = messageDisplayShort
-		}
-		m.state = searchStatePlaying
-		return m, nil
-
-	case components.TagCancelledMsg:
-		if m.state == searchStateManageTags {
-			m.manageTags = m.manageTags.HandleTagCancelled()
-			return m, nil
-		}
-		m.state = searchStatePlaying
-		return m, nil
-
-	case components.ManageTagsDoneMsg:
-		if m.selectedStation != nil && m.tagsManager != nil {
-			if err := m.tagsManager.SetTags(m.selectedStation.StationUUID, msg.Tags); err != nil {
-				m.saveMessage = fmt.Sprintf("✗ %v", err)
-			} else if len(msg.Tags) == 0 {
-				m.saveMessage = "✓ All tags removed"
-				m.refreshResultsTagPills(m.selectedStation.StationUUID)
-			} else {
-				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
-				m.refreshResultsTagPills(m.selectedStation.StationUUID)
-			}
-			m.saveMessageTime = messageDisplayShort
-		}
-		m.state = searchStatePlaying
-		return m, nil
-
-	case components.ManageTagsCancelledMsg:
-		m.state = searchStatePlaying
-		return m, nil
-
-	case components.SleepTimerSelectedMsg:
-		m.state = searchStatePlaying
-		m.sleepTimerActive = true
-		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
-
-	case components.SleepTimerCancelledMsg:
-		m.state = searchStatePlaying
-		return m, nil
-	}
-
-	return m, tea.Batch(cmds...)
-}
 
 // handleMenuInput handles input in the search menu state
 func (m SearchModel) handleMenuInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -738,122 +297,73 @@ func (m SearchModel) handleNewListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // loadAvailableLists loads all favorite lists
-func (m SearchModel) loadAvailableLists() tea.Cmd {
-	return func() tea.Msg {
-		store := storage.NewStorage(m.favoritePath)
-		lists, err := store.GetAllLists(context.Background())
-		if err != nil {
-			return saveToListFailedMsg{err: fmt.Errorf("failed to load lists: %w", err)}
-		}
-		return listsLoadedMsg{lists: lists}
+func (m SearchModel) viewPlaying() string {
+	if m.selectedStation == nil {
+		return "No station selected"
 	}
-}
 
-// initializeListModel creates the list model with current dimensions.
-// It uses availableListHeight to account for the actual rendered header so that
-// tall ASCII art headers don't cause the page to overflow the terminal.
-func (m *SearchModel) initializeListModel() {
-	listHeight := availableListHeight(m.height)
+	var content strings.Builder
 
-	delegate := createStyledDelegate()
-
-	m.listModel = list.New(m.listItems, delegate, m.width, listHeight)
-	m.listModel.Title = ""
-	m.listModel.SetShowStatusBar(false)
-	m.listModel.SetFilteringEnabled(false)
-	m.listModel.SetShowHelp(false)
-	m.listModel.Styles.Title = titleStyle()
-	m.listModel.Styles.PaginationStyle = paginationStyle()
-	m.listModel.Styles.HelpStyle = helpStyle()
-}
-
-// saveToList saves the current station to a specific list
-func (m SearchModel) saveToList(listName string) tea.Cmd {
-	return func() tea.Msg {
-		if m.selectedStation == nil {
-			return saveToListFailedMsg{err: fmt.Errorf("no station selected")}
+	// Station info with metadata and rating
+	hasVoted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
+	var metadata *storage.StationMetadata
+	if m.metadataManager != nil {
+		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+	}
+	// Get rating for display
+	var rating int
+	if m.ratingsManager != nil {
+		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+			rating = r.Rating
 		}
+	}
+	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 
-		store := storage.NewStorage(m.favoritePath)
-		err := store.AddStation(context.Background(), listName, *m.selectedStation)
+	// ShowMetadata wiring
+	if m.playOptsCfg.ShowMetadata && metadata != nil {
+		content.WriteString("\n")
+		content.WriteString(dimStyle().Render(fmt.Sprintf("Bitrate: %dkbps  Codec: %s  Country: %s", metadata.Bitrate, metadata.Codec, metadata.Country)))
+	}
 
-		if err != nil {
-			if err == storage.ErrDuplicateStation {
-				return saveToListFailedMsg{err: err, isDuplicate: true}
+	// Playback status
+	content.WriteString("\n")
+	if m.player.IsPlaying() {
+		if m.player.IsPaused() {
+			content.WriteString(infoStyle().Render("\u23f8 Paused"))
+		} else {
+			// Use cached track to avoid IPC call in the render path
+			track := m.player.GetCachedTrack()
+			if IsValidTrackMetadata(track, m.selectedStation.Name) {
+				content.WriteString(successStyle().Render("\u25b6 Now Playing:"))
+				content.WriteString(" ")
+				content.WriteString(infoStyle().Render(track))
+			} else {
+				content.WriteString(successStyle().Render("\u25b6 Playing..."))
 			}
-			return saveToListFailedMsg{err: err}
 		}
-
-		return saveToListSuccessMsg{
-			listName:    listName,
-			stationName: m.selectedStation.TrimName(),
-		}
-	}
-}
-
-// executeSearchType sets up the search based on selected menu index
-func (m SearchModel) executeSearchType(index int) (tea.Model, tea.Cmd) {
-	switch index {
-	case 0: // Search by Tag
-		m.searchType = api.SearchByTag
-		m.textInput.Placeholder = "Enter tag (e.g., jazz, rock, news)..."
-	case 1: // Search by Name
-		m.searchType = api.SearchByName
-		m.textInput.Placeholder = "Enter station name..."
-	case 2: // Search by Language
-		m.searchType = api.SearchByLanguage
-		m.textInput.Placeholder = "Enter language (e.g., english, spanish)..."
-	case 3: // Search by Country
-		m.searchType = api.SearchByCountry
-		m.textInput.Placeholder = "Enter country code (e.g., US, UK, FR)..."
-	case 4: // Search by State
-		m.searchType = api.SearchByState
-		m.textInput.Placeholder = "Enter state (e.g., California, Texas)..."
-	case 5: // Advanced Search
-		m.searchType = api.SearchAdvanced
-		// Reset advanced form
-		for i := range m.advancedInputs {
-			m.advancedInputs[i].SetValue("")
-		}
-		m.advancedFocusIdx = 0
-		m.advancedBitrate = ""
-		m.advancedSortByVotes = true
-		m.advancedInputs[0].Focus()
-		m.state = searchStateAdvancedForm
-		return m, textinput.Blink
+	} else {
+		content.WriteString(infoStyle().Render("\u23f9 Stopped"))
 	}
 
-	m.state = searchStateInput
-	m.textInput.Focus()
-	return m, nil
-}
+	// Volume
+	fmt.Fprintf(&content, "\n\nVolume: %d%%", m.player.GetVolume())
 
-// handleTextInput handles input in the text input state
-func (m SearchModel) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
-		query := strings.TrimSpace(m.textInput.Value())
-		if query == "" {
-			return m, nil
+	// Tag display
+	if m.tagsManager != nil && m.tagRenderer != nil {
+		tags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
+		content.WriteString("\n")
+		if len(tags) > 0 {
+			fmt.Fprintf(&content, "Tags: %s", m.tagRenderer.RenderList(tags))
+		} else {
+			content.WriteString(dimStyle().Render("No tags d press t to add one"))
 		}
-		m.textInput.SetValue("")
-		m.textInput.Blur()
-		m.state = searchStateLoading
-		return m, m.performSearch(query)
-	case "esc":
-		m.textInput.SetValue("")
-		m.textInput.Blur()
-		m.state = searchStateMenu
-		// Reload history in case it was updated
-		m.reloadSearchHistory()
-		m.rebuildMenuWithHistory()
-		return m, nil
-	default:
-		// Pass all other keys to text input for normal typing
-		var cmd tea.Cmd
-		m.textInput, cmd = m.textInput.Update(msg)
-		return m, cmd
 	}
+
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "🎵 Now Playing",
+		Content: content.String(),
+		Help:    "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back",
+	}, m.height)
 }
 
 // performSearch executes the search based on type
@@ -1027,11 +537,19 @@ func (m SearchModel) executeStationAction(index int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// playStation starts playing a station
+// playStation starts playing a station.
+// Phase 5: volume is resolved from PlayOptions (DefaultVolume / StartVolumeMode).
 func (m SearchModel) playStation(station api.Station) tea.Cmd {
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return tea.Batch(
 		func() tea.Msg {
-			err := m.player.Play(&station)
+			err := m.player.PlayWithVolume(&station, startVol)
 			if err != nil {
 				return playerErrorMsg{err: err}
 			}
@@ -1638,13 +1156,9 @@ func (m SearchModel) View() string {
 		}
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
-			if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Volume:") {
-				if strings.Contains(m.saveMessage, "Muted") {
-					content.WriteString(infoStyle().Render(m.saveMessage))
-				} else {
-					content.WriteString(successStyle().Render(m.saveMessage))
-				}
-			} else if strings.Contains(m.saveMessage, "Already") || strings.HasPrefix(m.saveMessage, "Press") {
+			if strings.Contains(m.saveMessage, "✓") {
+				content.WriteString(successStyle().Render(m.saveMessage))
+			} else if strings.Contains(m.saveMessage, "Already") {
 				content.WriteString(infoStyle().Render(m.saveMessage))
 			} else {
 				content.WriteString(errorStyle().Render(m.saveMessage))

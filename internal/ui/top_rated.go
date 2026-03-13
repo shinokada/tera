@@ -91,7 +91,8 @@ const (
 	topRatedStatePlaying
 	topRatedStateSavePrompt
 	topRatedStateSelectList
-	topRatedStateRating // Rating mode activated with *
+	topRatedStateRating      // Rating mode activated with *
+	topRatedStateConfirmStop // Phase 5: Confirm before stopping
 )
 
 // TopRatedModel represents the Top Rated screen
@@ -107,7 +108,7 @@ type TopRatedModel struct {
 	ratingsManager     *storage.RatingsManager
 	metadataManager    *storage.MetadataManager
 	starRenderer       *components.StarRenderer
-	tagsManager        *storage.TagsManager   // for tag pill display
+	tagsManager        *storage.TagsManager    // for tag pill display
 	tagRenderer        *components.TagRenderer // for rendering tag pills
 	favoritePath       string
 	saveMessage        string
@@ -275,6 +276,8 @@ func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
 			return m.handleSelectListInput(msg)
 		case topRatedStateRating:
 			return m.handleRatingInput(msg)
+		case topRatedStateConfirmStop:
+			return m.handleConfirmStopInput(msg)
 		}
 
 	case tickMsg:
@@ -387,12 +390,21 @@ func (m TopRatedModel) handleListInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) 
 		if len(m.stationItems) > 0 {
 			selected := m.stationListModel.SelectedItem()
 			if item, ok := selected.(topRatedStationItem); ok {
-				m.selectedStation = &item.station
 				// Check if we have the URL to play
 				if item.station.URLResolved != "" {
-					if err := m.player.Play(&item.station); err != nil {
+					// Phase 5: resolve volume from PlayOptions
+					startVol := m.playOptsCfg.DefaultVolume
+					if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+						startVol = m.playOptsCfg.LastUsedVolume
+					}
+					st := item.station
+					if st.Volume != nil {
+						startVol = *st.Volume
+					}
+					if err := m.player.PlayWithVolume(&st, startVol); err != nil {
 						m.err = err
 					} else {
+						m.selectedStation = &st
 						m.state = topRatedStatePlaying
 					}
 				} else {
@@ -544,6 +556,11 @@ func (m TopRatedModel) navigateToMainCmd() tea.Cmd {
 func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc", "m":
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.state = topRatedStateConfirmStop
+			return m, nil
+		}
 		// Stop (or hand off) playback and return to list.
 		cmd := m.navigateBackCmd()
 		m.state = topRatedStateList
@@ -573,6 +590,27 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 			_ = m.player.Stop()
 		}
 		m.state = topRatedStateList
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleConfirmStopInput handles input in the ConfirmStop state (Phase 5)
+func (m TopRatedModel) handleConfirmStopInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "y", "1":
+		// Stop playback and return to list
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.state = topRatedStateList
+		m.saveMessage = "Stopped playback"
+		m.saveMessageTime = 2
+		return m, nil
+	case "n", "2", "esc":
+		// Cancel stop, return to playing
+		m.state = topRatedStatePlaying
 		return m, nil
 	}
 	return m, nil
@@ -707,23 +745,29 @@ func (m TopRatedModel) View() string {
 
 	case topRatedStatePlaying:
 		if m.selectedStation != nil {
-			content.WriteString(stationNameStyle().Render(m.selectedStation.Name))
-			content.WriteString("\n")
-			if m.selectedStation.Country != "" {
-				content.WriteString(helpStyle().Render(m.selectedStation.Country))
+			if m.playOptsCfg.ShowMetadata && m.selectedStation != nil {
+				// Render full metadata block (reuse from most_played.go pattern)
+				var metadata *storage.StationMetadata
+				if m.metadataManager != nil {
+					metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+				}
+				var rating int
+				if m.ratingsManager != nil {
+					if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+						rating = r.Rating
+					}
+				}
+				content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
 				content.WriteString("\n")
-			}
-			// Show current rating
-			if m.ratingsManager != nil {
-				rating := m.ratingsManager.GetRating(m.selectedStation.StationUUID)
-				if rating != nil {
-					stars := storage.RenderStars(rating.Rating, true)
-					content.WriteString(highlightStyle().Render(stars))
+			} else {
+				// Render only basic info
+				content.WriteString(stationNameStyle().Render(m.selectedStation.Name))
+				content.WriteString("\n")
+				if m.selectedStation.Country != "" {
+					content.WriteString(helpStyle().Render(m.selectedStation.Country))
 					content.WriteString("\n")
 				}
 			}
-			content.WriteString("\n")
-			content.WriteString(successStyle().Render("▶ Now Playing"))
 		}
 
 	case topRatedStateSavePrompt:
@@ -763,5 +807,18 @@ func (m TopRatedModel) View() string {
 	return RenderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
+	}, m.height)
+}
+
+// Phase 5: Confirm stop prompt view
+func (m TopRatedModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString("Are you sure you want to stop playback?\n\n")
+	content.WriteString("y: Yes, stop\n")
+	content.WriteString("n/Esc: No, keep playing\n")
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y: Yes • n/Esc: No",
 	}, m.height)
 }

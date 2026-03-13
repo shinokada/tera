@@ -18,12 +18,13 @@ import (
 type tagPlaylistsState int
 
 const (
-	tagPlaylistsStateList       tagPlaylistsState = iota // list of playlists
-	tagPlaylistsStateCreate                              // multi-step create/edit dialog
-	tagPlaylistsStateDetail                              // stations for selected playlist
-	tagPlaylistsStatePlaying                             // playing a station
-	tagPlaylistsStateTagInput                            // single tag input via 't'
-	tagPlaylistsStateManageTags                          // full tag manager via 'T'
+	tagPlaylistsStateConfirmStop tagPlaylistsState = iota // Phase 5: Confirm before stopping
+	tagPlaylistsStateList                                 // list of playlists
+	tagPlaylistsStateCreate                               // multi-step create/edit dialog
+	tagPlaylistsStateDetail                               // stations for selected playlist
+	tagPlaylistsStatePlaying                              // playing a station
+	tagPlaylistsStateTagInput                             // single tag input via 't'
+	tagPlaylistsStateManageTags                           // full tag manager via 'T'
 )
 
 // createStep tracks which step of the create/edit wizard is active.
@@ -56,9 +57,9 @@ type TagPlaylistsModel struct {
 	player           *player.MPVPlayer
 
 	// Playlist list view
-	playlists      []playlistEntry
-	listCursor     int
-	deleteConfirm  bool // true = waiting for second 'd' to confirm playlist deletion
+	playlists     []playlistEntry
+	listCursor    int
+	deleteConfirm bool // true = waiting for second 'd' to confirm playlist deletion
 
 	// Create / edit wizard
 	isEditing    bool   // true = editing existing playlist
@@ -593,18 +594,24 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 	}
 	switch msg.String() {
 	case "esc":
-		// Stop (or hand off) playback and return to detail view.
+		if m.playOptsCfg.ConfirmStop {
+			m.state = tagPlaylistsStateConfirmStop
+			return m, nil
+		}
 		cmd := m.navigateBackCmd()
 		m.state = tagPlaylistsStateDetail
 		m.selectedStation = nil
 		if m.selectedPlaylist != nil {
-			m.loadDetailStations() // refresh in case tags were modified while playing
+			m.loadDetailStations()
 		}
 		if cmd != nil {
 			return m, cmd
 		}
 	case "0":
-		// Return to main menu (or hand off and navigate).
+		if m.playOptsCfg.ConfirmStop {
+			m.state = tagPlaylistsStateConfirmStop
+			return m, nil
+		}
 		m.selectedStation = nil
 		return m, m.navigateToMainCmd()
 	case " ":
@@ -669,6 +676,15 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 		return m, nil
 	}
 	return m, nil
+}
+
+// viewConfirmStop renders the confirmation prompt for stopping playback.
+func (m TagPlaylistsModel) viewConfirmStop() string {
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop Playback",
+		Content: "Are you sure you want to stop playback?\n\n[y] Yes    [n/Esc] No",
+		Help:    "y: Yes    n/Esc: No",
+	}, m.height)
 }
 
 func (m TagPlaylistsModel) handleRatingInput(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
@@ -741,13 +757,22 @@ func (m *TagPlaylistsModel) loadDetailStations() {
 	})
 }
 
+// startPlayback initiates playback of the selected station.
+// Phase 5: volume is resolved from PlayOptions (DefaultVolume / StartVolumeMode).
 func (m TagPlaylistsModel) startPlayback() tea.Cmd {
 	if m.selectedStation == nil {
 		return nil
 	}
 	station := *m.selectedStation
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return func() tea.Msg {
-		if err := m.player.Play(&station); err != nil {
+		if err := m.player.PlayWithVolume(&station, startVol); err != nil {
 			return playbackErrorMsg{err}
 		}
 		return playbackStartedMsg{}
@@ -1034,9 +1059,20 @@ func (m TagPlaylistsModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	sb.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
-	sb.WriteString("\n")
+	// Phase 5: ShowMetadata wiring
+	if m.playOptsCfg.ShowMetadata && metadata != nil {
+		sb.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	} else {
+		// Render only basic info (name, country, etc.)
+		sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			sb.WriteString("  ")
+			sb.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		sb.WriteString("\n")
+	}
 
+	sb.WriteString("\n")
 	if m.player != nil && m.player.IsPlaying() {
 		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
 			sb.WriteString(successStyle().Render("▶ Now Playing:") + " " + infoStyle().Render(track))

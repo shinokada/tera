@@ -1,4 +1,103 @@
+
 package player
+
+import (
+       "bufio"
+       "encoding/json"
+       "errors"
+       "fmt"
+       "net"
+       "net/url"
+       "os"
+       "os/exec"
+       "path/filepath"
+       "runtime"
+       "strings"
+       "sync"
+       "sync/atomic"
+       "time"
+
+       "github.com/shinokada/tera/v3/internal/api"
+       "github.com/shinokada/tera/v3/internal/storage"
+)
+
+// PlayWithVolume starts playing a radio station with a specific volume (overrides station.Volume)
+func (p *MPVPlayer) PlayWithVolume(station *api.Station, volume int) error {
+       p.mu.Lock()
+       defer p.mu.Unlock()
+
+       // Stop any existing playback
+       if p.playing {
+	       _ = p.stopInternal()
+       }
+
+       // Check if mpv is available
+       if _, err := exec.LookPath("mpv"); err != nil {
+	       return fmt.Errorf("mpv not found in PATH. Please install mpv: %w", err)
+       }
+
+       // Clamp volume to valid range (0-100)
+       if volume < 0 {
+	       volume = 0
+       }
+       if volume > 100 {
+	       volume = 100
+       }
+       p.volume = volume
+
+       // Create unique socket path for IPC (platform-specific)
+       if runtime.GOOS == "windows" {
+	       p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+os.Getpid()%50000)
+       } else {
+	       p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
+	       _ = os.Remove(p.socketPath)
+       }
+
+       connConfig, err := storage.LoadConnectionConfig()
+       if err != nil {
+	       connConfig = storage.DefaultConnectionConfig()
+       }
+
+       args := []string{
+	       "--no-video",
+	       "--no-terminal",
+	       "--really-quiet",
+	       fmt.Sprintf("--volume=%d", volume),
+	       fmt.Sprintf("--input-ipc-server=%s", p.socketPath),
+       }
+       if connConfig.AutoReconnect {
+	       args = append(args, "--loop-playlist=force")
+	       args = append(args,
+		       fmt.Sprintf("--stream-lavf-o=reconnect_streamed=1,reconnect_delay_max=%d", connConfig.ReconnectDelay),
+	       )
+       }
+       // Add caching/buffering based on config (reuse from Play)
+       if connConfig.BufferSize > 0 {
+	       args = append(args, fmt.Sprintf("--cache=%d", connConfig.BufferSize))
+       }
+
+       // Build and start the mpv process
+       streamURL := station.URLResolved
+       if streamURL == "" {
+	       streamURL = station.URL
+       }
+       if streamURL == "" {
+	       return errors.New("station URL is empty")
+       }
+       p.cmd = exec.Command("mpv", append(args, streamURL)...)
+       if err := p.cmd.Start(); err != nil {
+	       return fmt.Errorf("failed to start mpv: %w", err)
+       }
+       p.playing = true
+       p.paused = false
+       p.station = station
+       // Optionally: start metadata manager, IPC, etc. (reuse from Play)
+       if p.metadataManager != nil {
+	       _ = p.metadataManager.StartPlay(station)
+       }
+       // ... (other setup as in Play)
+       return nil
+}
 
 import (
 	"bufio"

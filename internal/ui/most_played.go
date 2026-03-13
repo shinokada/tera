@@ -55,6 +55,7 @@ const (
 	mostPlayedStateSavePrompt
 	mostPlayedStateSelectList
 	mostPlayedStateTagInput
+	mostPlayedStateConfirmStop // Phase 5: Confirm before stopping
 )
 
 // MostPlayedModel represents the Most Played screen
@@ -365,11 +366,19 @@ func (m *MostPlayedModel) refreshStationTagPills(stationUUID string) {
 func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc", "m":
-		// Stop player before returning
-		if m.player != nil && m.player.IsPlaying() {
-			_ = m.player.Stop()
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.state = mostPlayedStateConfirmStop
+			return m, nil
 		}
-		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		// Stop (or hand off) playback and return to list.
+		cmd := m.navigateBackCmd()
+		m.state = mostPlayedStateList
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
 
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
@@ -381,12 +390,21 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 		if len(m.stationItems) > 0 {
 			selected := m.stationListModel.SelectedItem()
 			if item, ok := selected.(mostPlayedStationItem); ok {
-				m.selectedStation = &item.station
 				// Check if we have the URL to play
 				if item.station.URLResolved != "" {
-					if err := m.player.Play(&item.station); err != nil {
+					// Phase 5: resolve volume from PlayOptions
+					startVol := m.playOptsCfg.DefaultVolume
+					if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+						startVol = m.playOptsCfg.LastUsedVolume
+					}
+					st := item.station
+					if st.Volume != nil {
+						startVol = *st.Volume
+					}
+					if err := m.player.PlayWithVolume(&st, startVol); err != nil {
 						m.err = err
 					} else {
+						m.selectedStation = &st
 						m.state = mostPlayedStatePlaying
 					}
 				} else {
@@ -476,6 +494,11 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 
 	switch msg.String() {
 	case "q", "esc", "m":
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.state = mostPlayedStateConfirmStop
+			return m, nil
+		}
 		// Stop (or hand off) playback and return to list.
 		cmd := m.navigateBackCmd()
 		m.state = mostPlayedStateList
@@ -547,6 +570,11 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		}
 
 	case "0":
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.state = mostPlayedStateConfirmStop
+			return m, nil
+		}
 		// Return to main menu (or hand off and navigate).
 		m.state = mostPlayedStateList
 		m.selectedStation = nil
@@ -747,6 +775,8 @@ func (m MostPlayedModel) View() string {
 		return m.viewSelectList()
 	case mostPlayedStateTagInput:
 		return m.viewTagInput()
+	case mostPlayedStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 
 	return m.viewList()
@@ -808,8 +838,17 @@ func (m MostPlayedModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
-
+	if m.playOptsCfg.ShowMetadata {
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
+	} else {
+		// Render only basic info (name, country, etc.)
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			content.WriteString("  ")
+			content.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		content.WriteString("\n")
+	}
 	// Playback status
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
@@ -891,6 +930,19 @@ func (m MostPlayedModel) viewSavePrompt() string {
 		Title:   "💾 Save Station",
 		Content: content.String(),
 		Help:    "Y: My-favorites • L: Choose list • N: Cancel",
+	}, m.height)
+}
+
+// Phase 5: Confirm stop prompt view
+func (m MostPlayedModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString("Are you sure you want to stop playback?\n\n")
+	content.WriteString("y: Yes, stop\n")
+	content.WriteString("n/Esc: No, keep playing\n")
+	return RenderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y: Yes • n/Esc: No",
 	}, m.height)
 }
 
