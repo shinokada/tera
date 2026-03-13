@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -76,6 +77,8 @@ type PlayModel struct {
 	dataPath         string // for loading last-used duration preference
 	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
 	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
+	// Play options (injected by App)
+	playOptsCfg config.PlayOptionsConfig
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -743,6 +746,50 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App and returns to the station-selection list; otherwise it stops the player
+// first.
+func (m PlayModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		// Hand off to App — music keeps playing.
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Favorites",
+			}
+		}
+	}
+	// Default: stop the player, return to station list.
+	if err := m.player.Stop(); err != nil {
+		m.err = fmt.Errorf("failed to stop playback: %w", err)
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m PlayModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Favorites",
+			}
+		}
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle rating mode input first
@@ -775,26 +822,20 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
-		// Stop playback and go back
-		if err := m.player.Stop(); err != nil {
-			m.err = fmt.Errorf("failed to stop playback: %w", err)
-			return m, nil
-		}
+		// Stop (or hand off) and go back to station list.
+		cmd := m.navigateBackCmd()
 		m.state = playStateStationSelection
 		m.selectedStation = nil
 		m.trackHistory = []string{}
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case "0":
-		// Return to main menu (Level 3 shortcut)
-		if err := m.player.Stop(); err != nil {
-			m.err = fmt.Errorf("failed to stop playback: %w", err)
-			return m, nil
-		}
+		// Return to main menu (or hand off and navigate).
 		m.selectedStation = nil
 		m.trackHistory = []string{}
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
+		return m, m.navigateToMainCmd()
 	case "f":
 		// Save to Quick Favorites
 		return m, m.saveToQuickFavorites()

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -87,6 +88,8 @@ type TagPlaylistsModel struct {
 	saveMessageTime int
 	width           int
 	height          int
+	// Play options (injected by App)
+	playOptsCfg config.PlayOptionsConfig
 }
 
 // NewTagPlaylistsModel creates a Tag Playlists model.
@@ -542,25 +545,68 @@ func (m TagPlaylistsModel) updateDetail(msg tea.KeyMsg) (TagPlaylistsModel, tea.
 // Playing view
 // ---------------------------------------------------------------------------
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m TagPlaylistsModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Tag Playlists",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m TagPlaylistsModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Tag Playlists",
+			}
+		}
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return backToMainMsg{} }
+}
+
 func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
 	if m.ratingMode {
 		return m.handleRatingInput(msg)
 	}
 	switch msg.String() {
 	case "esc":
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
+		// Stop (or hand off) playback and return to detail view.
+		cmd := m.navigateBackCmd()
 		m.state = tagPlaylistsStateDetail
 		m.selectedStation = nil
 		if m.selectedPlaylist != nil {
 			m.loadDetailStations() // refresh in case tags were modified while playing
 		}
-	case "0":
-		if m.player != nil {
-			_ = m.player.Stop()
+		if cmd != nil {
+			return m, cmd
 		}
-		return m, func() tea.Msg { return backToMainMsg{} }
+	case "0":
+		// Return to main menu (or hand off and navigate).
+		m.selectedStation = nil
+		return m, m.navigateToMainCmd()
 	case " ":
 		if m.player != nil {
 			if err := m.player.TogglePause(); err == nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/theme"
@@ -95,6 +96,8 @@ type SearchModel struct {
 	sleepCountdown      string // refreshed by App on each tick
 	sleepTimerActive    bool   // true once a timer is running; cleared on cancel/expiry
 	showBlockedInSearch bool   // when false, blocked stations are filtered out of results
+	// Play options (injected by App)
+	playOptsCfg config.PlayOptionsConfig
 }
 
 // Messages for search screen
@@ -1124,6 +1127,48 @@ func (m SearchModel) handleSavePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m SearchModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Search",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m SearchModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Search",
+			}
+		}
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return backToMainMsg{} }
+}
+
 // handlePlayerUpdate handles player-related updates during playback
 func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle rating mode input first
@@ -1139,19 +1184,17 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 	case "0":
-		// Return to main menu (Level 3 shortcut)
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
+		// Return to main menu (or hand off and navigate).
 		m.selectedStation = nil
-		return m, func() tea.Msg { return backToMainMsg{} }
+		return m, m.navigateToMainCmd()
 	case "esc":
-		// Esc during playback goes back without save prompt
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
+		// Go back to results (or hand off).
+		cmd := m.navigateBackCmd()
 		m.selectedStation = nil
 		m.state = searchStateResults
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case "1":
 		// Stop playback and trigger save prompt flow

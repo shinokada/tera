@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/shuffle"
 	"github.com/shinokada/tera/v3/internal/storage"
@@ -85,6 +86,8 @@ type LuckyModel struct {
 	manageTags  components.ManageTags
 	// Input focus mode: true = typing in Genre/keyword, false = history navigation
 	inputMode bool
+	// Play options (injected by App)
+	playOptsCfg config.PlayOptionsConfig
 }
 
 // Messages for lucky screen
@@ -757,6 +760,48 @@ func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m LuckyModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Lucky",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m LuckyModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Lucky",
+			}
+		}
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 // updatePlaying handles input during playback
 func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle rating mode input first
@@ -778,12 +823,8 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
-		// Stop playback and return to I Feel Lucky input
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
-			return m, nil
-		}
+		// Stop (or hand off) playback and return to I Feel Lucky input.
+		cmd := m.navigateBackCmd()
 		m.state = luckyStateInput
 		m.inputMode = true
 		m.textInput.Focus()
@@ -791,19 +832,15 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Reload history from disk so recent search appears
 		m.reloadSearchHistory()
 		m.rebuildMenuWithHistory()
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case "0":
-		// Return to main menu (Level 2+ shortcut)
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
-			return m, nil
-		}
+		// Return to main menu (or hand off and navigate).
 		m.selectedStation = nil
 		m.state = luckyStateInput
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
+		return m, m.navigateToMainCmd()
 	case "f":
 		// Save to Quick Favorites during playback
 		return m, m.saveToQuickFavorites()
@@ -1583,15 +1620,11 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc":
-		// Stop shuffle and playback, return to I Feel Lucky input
+		// Stop shuffle and playback (or hand off), return to I Feel Lucky input.
 		if m.shuffleManager != nil {
 			m.shuffleManager.Stop()
 		}
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
-			return m, nil
-		}
+		cmd := m.navigateBackCmd()
 		m.state = luckyStateInput
 		m.inputMode = true
 		m.textInput.Focus()
@@ -1601,24 +1634,20 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Reload history from disk
 		m.reloadSearchHistory()
 		m.rebuildMenuWithHistory()
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case "0":
-		// Return to main menu
+		// Return to main menu (or hand off and navigate).
 		if m.shuffleManager != nil {
 			m.shuffleManager.Stop()
-		}
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
-			return m, nil
 		}
 		m.selectedStation = nil
 		m.state = luckyStateInput
 		m.shuffleEnabled = false
 		m.shuffleManager = nil
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
+		return m, m.navigateToMainCmd()
 	case "h":
 		// Stop shuffle but keep playing current station
 		if m.shuffleManager != nil {

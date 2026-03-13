@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -122,6 +123,8 @@ type TopRatedModel struct {
 	availableLists []string
 	listItems      []list.Item
 	listModel      list.Model
+	// Play options (injected by App)
+	playOptsCfg config.PlayOptionsConfig
 }
 
 // topRatedStationItem wraps a station with rating for the list
@@ -496,13 +499,58 @@ func (m TopRatedModel) handleRatingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd
 	return m, nil
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m TopRatedModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Top Rated",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m TopRatedModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Top Rated",
+			}
+		}
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc", "m":
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
+		// Stop (or hand off) playback and return to list.
+		cmd := m.navigateBackCmd()
 		m.state = topRatedStateList
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 
 	case "*":

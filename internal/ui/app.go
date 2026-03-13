@@ -1295,42 +1295,63 @@ func (a *App) playRecentStation(index int) (tea.Model, tea.Cmd) {
 	}
 }
 
+// nowPlayingBar returns the now-playing bar string when a station has been
+// handed off to the app level (ContinueOnNavigate=true). Returns "" otherwise.
+func (a *App) nowPlayingBar() string {
+	if a.activeStation == nil {
+		return ""
+	}
+	vol := 0
+	if a.activePlayer != nil {
+		vol = a.activePlayer.GetVolume()
+	}
+	return renderNowPlayingBar(a.activeStation, a.activeContextLabel, vol)
+}
+
 func (a *App) View() string {
+	var view string
 	switch a.screen {
 	case screenMainMenu:
 		return a.viewMainMenu()
 	case screenPlay:
-		return a.playScreen.View()
+		view = a.playScreen.View()
 	case screenSearch:
-		return a.searchScreen.View()
+		view = a.searchScreen.View()
 	case screenList:
-		return a.listManagementScreen.View()
+		view = a.listManagementScreen.View()
 	case screenLucky:
-		return a.luckyScreen.View()
+		view = a.luckyScreen.View()
 	case screenGist:
-		return a.gistScreen.View()
+		view = a.gistScreen.View()
 	case screenSettings:
-		return a.settingsScreen.View()
+		view = a.settingsScreen.View()
 	case screenShuffleSettings:
-		return a.shuffleSettingsScreen.View()
+		view = a.shuffleSettingsScreen.View()
 	case screenConnectionSettings:
-		return a.connectionSettingsScreen.View()
+		view = a.connectionSettingsScreen.View()
 	case screenAppearanceSettings:
-		return a.appearanceSettingsScreen.View()
+		view = a.appearanceSettingsScreen.View()
 	case screenBlocklist:
-		return a.blocklistScreen.View()
+		view = a.blocklistScreen.View()
 	case screenMostPlayed:
-		return a.mostPlayedScreen.View()
+		view = a.mostPlayedScreen.View()
 	case screenTopRated:
-		return a.topRatedScreen.View()
+		view = a.topRatedScreen.View()
 	case screenBrowseTags:
-		return a.browseTagsScreen.View()
+		view = a.browseTagsScreen.View()
 	case screenTagPlaylists:
-		return a.tagPlaylistsScreen.View()
+		view = a.tagPlaylistsScreen.View()
 	case screenSleepSummary:
-		return a.sleepSummary.View()
+		view = a.sleepSummary.View()
+	default:
+		return "Unknown screen"
 	}
-	return "Unknown screen"
+	// Append the global now-playing bar on every non-main-menu screen when
+	// ContinueOnNavigate is active and a station has been handed off to App.
+	if bar := a.nowPlayingBar(); bar != "" {
+		view += "\n" + bar
+	}
+	return view
 }
 
 // stopAllPlayback stops mpv on every screen that may be playing.

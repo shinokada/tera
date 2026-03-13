@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -88,6 +89,8 @@ type MostPlayedModel struct {
 	availableLists []string
 	listItems      []list.Item
 	listModel      list.Model
+	// Play options (injected by App)
+	playOptsCfg config.PlayOptionsConfig
 }
 
 // mostPlayedStationItem wraps a station with metadata for the list
@@ -423,6 +426,48 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 	return m, cmd
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m MostPlayedModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Most Played",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m MostPlayedModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Most Played",
+			}
+		}
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	// Handle rating mode input first
 	if m.ratingMode {
@@ -431,11 +476,13 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 
 	switch msg.String() {
 	case "q", "esc", "m":
-		// Stop playback and return to list
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
+		// Stop (or hand off) playback and return to list.
+		cmd := m.navigateBackCmd()
 		m.state = mostPlayedStateList
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 
 	case "s":
@@ -500,12 +547,10 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		}
 
 	case "0":
-		// Return to main menu
-		if m.player != nil {
-			_ = m.player.Stop()
-		}
+		// Return to main menu (or hand off and navigate).
 		m.state = mostPlayedStateList
-		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		m.selectedStation = nil
+		return m, m.navigateToMainCmd()
 
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
