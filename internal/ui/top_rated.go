@@ -553,6 +553,12 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 		}
 		return m, nil
 
+	case "0":
+		// Return to main menu (or hand off and navigate).
+		m.state = topRatedStateList
+		m.selectedStation = nil
+		return m, m.navigateToMainCmd()
+
 	case "*":
 		// Enter rating mode while playing
 		m.state = topRatedStateRating
@@ -751,7 +757,7 @@ func (m TopRatedModel) View() string {
 	case topRatedStateRating:
 		helpText = "1-5: Set rating • 0/r: Remove rating • Esc: Cancel"
 	case topRatedStatePlaying:
-		helpText = "s: Stop • *1-5: Rate • Esc: Back"
+		helpText = "s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
 	}
 
 	return RenderPageWithBottomHelp(PageLayout{
