@@ -559,6 +559,27 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle escape - return to main menu
 	if key == "esc" {
 		m.numberBuffer = "" // Clear buffer
+		// When ContinueOnNavigate is on and a station is playing, hand the
+		// player off to App so music keeps going, then navigate to main menu.
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			station := m.selectedStation
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{
+						player:       m.player,
+						station:      station,
+						contextLabel: "Lucky",
+					}
+				},
+				func() tea.Msg {
+					return navigateMsg{screen: screenMainMenu}
+				},
+			)
+		}
+		// ContinueOnNavigate off — stop before leaving.
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
@@ -784,17 +805,20 @@ func (m LuckyModel) navigateBackCmd() tea.Cmd {
 
 // navigateToMainCmd returns the appropriate command when the user presses 0
 // during playback. When ContinueOnNavigate is on it hands the player off to
-// App; otherwise it stops the player first.
+// App and navigates to the main menu; otherwise it stops the player first.
 func (m LuckyModel) navigateToMainCmd() tea.Cmd {
 	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
 		station := m.selectedStation
-		return func() tea.Msg {
-			return handoffPlaybackMsg{
-				player:       m.player,
-				station:      station,
-				contextLabel: "Lucky",
-			}
-		}
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Lucky",
+				}
+			},
+			func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+		)
 	}
 	// Default: stop the player, then navigate.
 	if m.player != nil {
@@ -829,18 +853,30 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state = luckyStateConfirmStop
 			return m, nil
 		}
-		// Stop (or hand off) playback and return to I Feel Lucky input.
-		cmd := m.navigateBackCmd()
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			// Hand off player to App and go straight to main menu so the
+			// user never lands on the input screen with a nil selectedStation
+			// (which would cause the second Esc to stop the player).
+			station := m.selectedStation
+			m.selectedStation = nil
+			m.state = luckyStateInput
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{player: m.player, station: station, contextLabel: "Lucky"}
+				},
+				func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+			)
+		}
+		// ContinueOnNavigate off — stop and return to Lucky input.
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
 		m.state = luckyStateInput
 		m.inputMode = true
 		m.textInput.Focus()
 		m.selectedStation = nil
-		// Reload history from disk so recent search appears
 		m.reloadSearchHistory()
 		m.rebuildMenuWithHistory()
-		if cmd != nil {
-			return m, cmd
-		}
 		return m, nil
 	case "0":
 		// Phase 5: Confirm before stopping
@@ -849,9 +885,23 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Return to main menu (or hand off and navigate).
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			station := m.selectedStation
+			m.selectedStation = nil
+			m.state = luckyStateInput
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{player: m.player, station: station, contextLabel: "Lucky"}
+				},
+				func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+			)
+		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
 		m.selectedStation = nil
 		m.state = luckyStateInput
-		return m, m.navigateToMainCmd()
+		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
 	case "f":
 		// Save to Quick Favorites during playback
 		return m, m.saveToQuickFavorites()
@@ -1115,19 +1165,23 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
-		// Filter out blocked stations
-		if m.blocklistManager != nil {
+		// Filter out stations with no stream URL and blocked stations
+		{
 			filtered := make([]api.Station, 0, len(stations))
 			for _, s := range stations {
-				if !m.blocklistManager.IsBlockedByAny(&s) {
-					filtered = append(filtered, s)
+				if s.URLResolved == "" {
+					continue
 				}
+				if m.blocklistManager != nil && m.blocklistManager.IsBlockedByAny(&s) {
+					continue
+				}
+				filtered = append(filtered, s)
 			}
 			stations = filtered
 		}
 
 		if len(stations) == 0 {
-			return luckySearchErrorMsg{err: fmt.Errorf("all stations found for '%s' are blocked", keyword)}
+			return luckySearchErrorMsg{err: fmt.Errorf("no playable stations found for '%s'", keyword)}
 		}
 
 		// Pick a random station (rand is auto-seeded since Go 1.20)
@@ -1838,19 +1892,23 @@ func (m LuckyModel) searchForShuffle(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
-		// Filter out blocked stations
-		if m.blocklistManager != nil {
+		// Filter out stations with no stream URL and blocked stations
+		{
 			filtered := make([]api.Station, 0, len(stations))
 			for _, s := range stations {
-				if !m.blocklistManager.IsBlockedByAny(&s) {
-					filtered = append(filtered, s)
+				if s.URLResolved == "" {
+					continue
 				}
+				if m.blocklistManager != nil && m.blocklistManager.IsBlockedByAny(&s) {
+					continue
+				}
+				filtered = append(filtered, s)
 			}
 			stations = filtered
 		}
 
 		if len(stations) == 0 {
-			return luckySearchErrorMsg{err: fmt.Errorf("all stations found for '%s' are blocked", keyword)}
+			return luckySearchErrorMsg{err: fmt.Errorf("no playable stations found for '%s'", keyword)}
 		}
 
 		return luckyShuffleSearchResultsMsg{

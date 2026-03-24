@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
@@ -15,6 +17,12 @@ import (
 )
 
 // browseTagsState represents the state of the BrowseTagsModel state machine.
+// browseTagsResolvedMsg is sent when a UUID lookup completes for playback
+type browseTagsResolvedMsg struct {
+	station *api.Station
+	err     error
+}
+
 type browseTagsState int
 
 const (
@@ -33,13 +41,6 @@ type tagStat struct {
 }
 
 // viewConfirmStop renders the confirmation prompt for stopping playback.
-func (m BrowseTagsModel) viewConfirmStop() string {
-	return RenderPageWithBottomHelp(PageLayout{
-		Title:   "Confirm Stop Playback",
-		Content: "Are you sure you want to stop playback?\n\n[y] Yes    [n/Esc] No",
-		Help:    "y: Yes    n/Esc: No",
-	}, m.height)
-}
 
 // BrowseTagsModel is the model for the "Browse by Tag" screen.
 type BrowseTagsModel struct {
@@ -203,6 +204,18 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 			return m, cmd
 		}
 
+	case browseTagsResolvedMsg:
+		if msg.err != nil || msg.station == nil {
+			m.saveMessage = "✗ Could not resolve station URL"
+			m.saveMessageTime = messageDisplayShort
+			return m, nil
+		}
+		m.selectedStation = msg.station
+		m.state = browseTagsStatePlaying
+		// Refresh detail list with new cached URL
+		m.loadDetailStations()
+		return m, m.playSelected()
+
 	case playbackStartedMsg:
 		return m, nil
 
@@ -304,15 +317,24 @@ func (m BrowseTagsModel) updateDetail(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd)
 		if len(m.detailStations) == 0 {
 			break
 		}
-		station := m.detailStations[m.stationCursor]
-		if station.URLResolved == "" {
-			m.saveMessage = "✗ No URL cached for this station — play it from search first"
-			m.saveMessageTime = messageDisplayShort
-			break
+		// Copy the station so its address is stable on the heap
+		st := m.detailStations[m.stationCursor]
+		if st.URLResolved != "" {
+			m.selectedStation = &st
+			m.state = browseTagsStatePlaying
+			return m, m.playSelected()
 		}
-		m.selectedStation = &station
-		m.state = browseTagsStatePlaying
-		return m, m.playSelected()
+		// URL missing — look it up live from the API
+		uuid := st.StationUUID
+		m.saveMessage = "Looking up station…"
+		m.saveMessageTime = messageDisplayShort
+		return m, func() tea.Msg {
+			client := api.NewClient()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			resolved, err := client.GetByUUID(ctx, uuid)
+			return browseTagsResolvedMsg{station: resolved, err: err}
+		}
 	}
 	return m, nil
 }
@@ -344,13 +366,16 @@ func (m BrowseTagsModel) navigateBackCmd() tea.Cmd {
 func (m BrowseTagsModel) navigateToMainCmd() tea.Cmd {
 	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
 		station := m.selectedStation
-		return func() tea.Msg {
-			return handoffPlaybackMsg{
-				player:       m.player,
-				station:      station,
-				contextLabel: "Browse Tags",
-			}
-		}
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Browse Tags",
+				}
+			},
+			func() tea.Msg { return backToMainMsg{} },
+		)
 	}
 	// Default: stop the player, then navigate.
 	if m.player != nil {
@@ -382,9 +407,10 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 			m.state = browseTagsStateConfirmStop
 			return m, nil
 		}
-		// Return to main menu (or hand off and navigate).
+		// Build cmd before clearing selectedStation.
+		cmd := m.navigateToMainCmd()
 		m.selectedStation = nil
-		return m, m.navigateToMainCmd()
+		return m, cmd
 	case " ":
 		if m.player != nil {
 			if err := m.player.TogglePause(); err == nil {

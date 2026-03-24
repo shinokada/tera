@@ -72,6 +72,33 @@ type VoteResult struct {
 	Message string `json:"message"`
 }
 
+// GetByUUID fetches a single station by its UUID from the Radio Browser API.
+// Returns an error if the station is not found or the request fails.
+func (c *Client) GetByUUID(ctx context.Context, stationUUID string) (*Station, error) {
+	reqURL := strings.TrimSuffix(baseURL, "/stations") + "/stations/byuuid/" + url.PathEscape(stationUUID)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("byuuid request failed: %s", resp.Status)
+	}
+	var stations []Station
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&stations); err != nil {
+		return nil, err
+	}
+	if len(stations) == 0 {
+		return nil, fmt.Errorf("station %s not found", stationUUID)
+	}
+	return &stations[0], nil
+}
+
 // Vote increases the vote count for a station by one
 // Note: Can only vote once per IP per station every 10 minutes
 func (c *Client) Vote(ctx context.Context, stationUUID string) (*VoteResult, error) {

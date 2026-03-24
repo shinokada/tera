@@ -812,3 +812,59 @@ func TestPlayHistoryConfigValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestPlayOptionsConfig_RoundTrip(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tera-playopts-roundtrip-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Logf("failed to clean up temp dir: %v", err)
+		}
+	}()
+
+	originalFunc := userConfigDirFunc
+	defer func() { userConfigDirFunc = originalFunc }()
+	userConfigDirFunc = func() (string, error) { return tmpDir, nil }
+
+	// Build a config with non-default PlayOptions values.
+	cfg := DefaultConfig()
+	cfg.PlayOptions = PlayOptionsConfig{
+		ContinueOnNavigate: true,
+		DefaultVolume:      65,
+		ConfirmStop:        true,
+		ShowMetadata:       false,
+		StartVolumeMode:    "last_used",
+		LastUsedVolume:     60,
+	}
+	if err := Save(&cfg); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	po := loaded.PlayOptions
+	want := cfg.PlayOptions
+	if po.ContinueOnNavigate != want.ContinueOnNavigate {
+		t.Errorf("ContinueOnNavigate: got %v, want %v", po.ContinueOnNavigate, want.ContinueOnNavigate)
+	}
+	if po.DefaultVolume != want.DefaultVolume {
+		t.Errorf("DefaultVolume: got %d, want %d", po.DefaultVolume, want.DefaultVolume)
+	}
+	if po.ConfirmStop != want.ConfirmStop {
+		t.Errorf("ConfirmStop: got %v, want %v", po.ConfirmStop, want.ConfirmStop)
+	}
+	if po.ShowMetadata != want.ShowMetadata {
+		t.Errorf("ShowMetadata: got %v, want %v", po.ShowMetadata, want.ShowMetadata)
+	}
+	if po.StartVolumeMode != want.StartVolumeMode {
+		t.Errorf("StartVolumeMode: got %q, want %q", po.StartVolumeMode, want.StartVolumeMode)
+	}
+	if po.LastUsedVolume != want.LastUsedVolume {
+		t.Errorf("LastUsedVolume: got %d, want %d", po.LastUsedVolume, want.LastUsedVolume)
+	}
+}

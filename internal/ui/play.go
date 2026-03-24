@@ -171,6 +171,9 @@ func (m PlayModel) playStation(station api.Station) tea.Cmd {
 		startVol = *station.Volume
 	}
 	return tea.Batch(
+		// Stop any app-level handed-off player (e.g. from Top Rated / Most
+		// Played with ContinueOnNavigate on) before starting the new stream.
+		func() tea.Msg { return stopActivePlaybackMsg{} },
 		func() tea.Msg {
 			err := m.player.PlayWithVolume(&station, startVol)
 			if err != nil {
@@ -690,10 +693,16 @@ func (m *PlayModel) initializeStationListModel() {
 func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// Return to main menu
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
+		// Leaving the Play screen entirely — hand off (with fresh player) or stop.
+		navCmd := func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			return m, tea.Batch(handoffCmd, navCmd)
 		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		return m, navCmd
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
@@ -718,17 +727,29 @@ func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// Go back to list selection
+		// Going back one level within the Play screen (staying here, not leaving).
+		// Stop the player — if the user picked a new station from a different
+		// list they'll start fresh; ContinueOnNavigate handoff only applies when
+		// leaving the screen entirely.
+		if m.player != nil && m.player.IsPlaying() {
+			_ = m.player.Stop()
+		}
 		m.state = playStateListSelection
 		m.stations = nil
 		m.stationItems = nil
 		m.stationListModel = list.Model{}
 		return m, nil
 	case "0":
-		// Return to main menu (Level 2+ shortcut)
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
+		// Leave the Play screen entirely — hand off (with fresh player) or stop.
+		navCmd := func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			return m, tea.Batch(handoffCmd, navCmd)
 		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		return m, navCmd
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
@@ -757,48 +778,29 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// navigateBackCmd returns the appropriate command when the user presses Esc
-// during playback. When ContinueOnNavigate is on it hands the player off to
-// App and returns to the station-selection list; otherwise it stops the player
-// first.
-func (m PlayModel) navigateBackCmd() tea.Cmd {
-	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
-		// Hand off to App — music keeps playing.
-		station := m.selectedStation
-		return func() tea.Msg {
-			return handoffPlaybackMsg{
-				player:       m.player,
-				station:      station,
-				contextLabel: "Favorites",
-			}
+// handOffPlayer hands m.player to App and installs a fresh player on the
+// model, so App owns the running stream while PlayModel has a clean player
+// ready for the next selection. Returns the handoff command and the updated
+// model (the caller must use the returned model, not the original).
+func (m PlayModel) handOffPlayer() (PlayModel, tea.Cmd) {
+	station := m.selectedStation
+	oldPlayer := m.player
+	// Give the model a brand-new player so the old one is exclusively owned
+	// by App. Any subsequent Stop() via stopActivePlaybackMsg won't touch the
+	// player that PlayModel will use for the next station.
+	newP := player.NewMPVPlayer()
+	if m.metadataManager != nil {
+		newP.SetMetadataManager(m.metadataManager)
+	}
+	m.player = newP
+	cmd := func() tea.Msg {
+		return handoffPlaybackMsg{
+			player:       oldPlayer,
+			station:      station,
+			contextLabel: "Favorites",
 		}
 	}
-	// Default: stop the player, return to station list.
-	if err := m.player.Stop(); err != nil {
-		m.err = fmt.Errorf("failed to stop playback: %w", err)
-	}
-	return nil
-}
-
-// navigateToMainCmd returns the appropriate command when the user presses 0
-// during playback. When ContinueOnNavigate is on it hands the player off to
-// App; otherwise it stops the player first.
-func (m PlayModel) navigateToMainCmd() tea.Cmd {
-	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
-		station := m.selectedStation
-		return func() tea.Msg {
-			return handoffPlaybackMsg{
-				player:       m.player,
-				station:      station,
-				contextLabel: "Favorites",
-			}
-		}
-	}
-	// Default: stop the player, then navigate.
-	if m.player != nil {
-		_ = m.player.Stop()
-	}
-	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+	return m, cmd
 }
 
 // updatePlaying handles input during playback
@@ -835,18 +837,42 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.String() == "esc" {
-			cmd := m.navigateBackCmd()
+			// Return to station list. With ContinueOnNavigate ON, hand the
+			// player off to App and install a fresh player on the model so
+			// the next station selection doesn't share the same MPVPlayer
+			// pointer (stopActivePlaybackMsg would kill it prematurely).
+			if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+				m, handoffCmd := m.handOffPlayer()
+				m.state = playStateStationSelection
+				m.selectedStation = nil
+				m.trackHistory = []string{}
+				return m, handoffCmd
+			}
+			// ContinueOnNavigate off — stop the player.
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
 			m.state = playStateStationSelection
 			m.selectedStation = nil
 			m.trackHistory = []string{}
-			if cmd != nil {
-				return m, cmd
-			}
 			return m, nil
 		} else {
+			// Press 0: leave the screen entirely. Hand off (with fresh player)
+			// or stop, then navigate to main menu.
+			navCmd := func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+			if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+				m, handoffCmd := m.handOffPlayer()
+				m.selectedStation = nil
+				m.trackHistory = []string{}
+				return m, tea.Batch(handoffCmd, navCmd)
+			}
+			// ContinueOnNavigate off — stop and navigate.
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
 			m.selectedStation = nil
 			m.trackHistory = []string{}
-			return m, m.navigateToMainCmd()
+			return m, navCmd
 		}
 	case "f":
 		return m, m.saveToQuickFavorites()

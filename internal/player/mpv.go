@@ -1,103 +1,4 @@
-
 package player
-
-import (
-       "bufio"
-       "encoding/json"
-       "errors"
-       "fmt"
-       "net"
-       "net/url"
-       "os"
-       "os/exec"
-       "path/filepath"
-       "runtime"
-       "strings"
-       "sync"
-       "sync/atomic"
-       "time"
-
-       "github.com/shinokada/tera/v3/internal/api"
-       "github.com/shinokada/tera/v3/internal/storage"
-)
-
-// PlayWithVolume starts playing a radio station with a specific volume (overrides station.Volume)
-func (p *MPVPlayer) PlayWithVolume(station *api.Station, volume int) error {
-       p.mu.Lock()
-       defer p.mu.Unlock()
-
-       // Stop any existing playback
-       if p.playing {
-	       _ = p.stopInternal()
-       }
-
-       // Check if mpv is available
-       if _, err := exec.LookPath("mpv"); err != nil {
-	       return fmt.Errorf("mpv not found in PATH. Please install mpv: %w", err)
-       }
-
-       // Clamp volume to valid range (0-100)
-       if volume < 0 {
-	       volume = 0
-       }
-       if volume > 100 {
-	       volume = 100
-       }
-       p.volume = volume
-
-       // Create unique socket path for IPC (platform-specific)
-       if runtime.GOOS == "windows" {
-	       p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+os.Getpid()%50000)
-       } else {
-	       p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
-	       _ = os.Remove(p.socketPath)
-       }
-
-       connConfig, err := storage.LoadConnectionConfig()
-       if err != nil {
-	       connConfig = storage.DefaultConnectionConfig()
-       }
-
-       args := []string{
-	       "--no-video",
-	       "--no-terminal",
-	       "--really-quiet",
-	       fmt.Sprintf("--volume=%d", volume),
-	       fmt.Sprintf("--input-ipc-server=%s", p.socketPath),
-       }
-       if connConfig.AutoReconnect {
-	       args = append(args, "--loop-playlist=force")
-	       args = append(args,
-		       fmt.Sprintf("--stream-lavf-o=reconnect_streamed=1,reconnect_delay_max=%d", connConfig.ReconnectDelay),
-	       )
-       }
-       // Add caching/buffering based on config (reuse from Play)
-       if connConfig.BufferSize > 0 {
-	       args = append(args, fmt.Sprintf("--cache=%d", connConfig.BufferSize))
-       }
-
-       // Build and start the mpv process
-       streamURL := station.URLResolved
-       if streamURL == "" {
-	       streamURL = station.URL
-       }
-       if streamURL == "" {
-	       return errors.New("station URL is empty")
-       }
-       p.cmd = exec.Command("mpv", append(args, streamURL)...)
-       if err := p.cmd.Start(); err != nil {
-	       return fmt.Errorf("failed to start mpv: %w", err)
-       }
-       p.playing = true
-       p.paused = false
-       p.station = station
-       // Optionally: start metadata manager, IPC, etc. (reuse from Play)
-       if p.metadataManager != nil {
-	       _ = p.metadataManager.StartPlay(station)
-       }
-       // ... (other setup as in Play)
-       return nil
-}
 
 import (
 	"bufio"
@@ -119,6 +20,20 @@ import (
 	"github.com/shinokada/tera/v3/internal/storage"
 )
 
+// PlayWithVolume starts playing a radio station with a specific volume.
+// It is a thin wrapper around Play that temporarily overrides the station's
+// volume field, ensuring full IPC/monitor setup identical to Play.
+func (p *MPVPlayer) PlayWithVolume(station *api.Station, volume int) error {
+	// Clone the station so we don't mutate the caller's value.
+	cloned := *station
+	cloned.Volume = &volume
+	return p.Play(&cloned)
+}
+
+// playerInstanceCounter provides a process-wide unique ID for each MPVPlayer
+// so that concurrent instances never collide on the same IPC socket path.
+var playerInstanceCounter atomic.Uint64
+
 // MPVPlayer manages the MPV process for playing radio streams
 type MPVPlayer struct {
 	cmd             *exec.Cmd
@@ -130,6 +45,7 @@ type MPVPlayer struct {
 	lastVolume      int // Volume before mute
 	mu              sync.Mutex
 	stopCh          chan struct{}
+	instanceID      uint64                   // Unique ID for this player instance (socket path)
 	socketPath      string                   // IPC socket path for runtime control
 	conn            net.Conn                 // Connection to IPC socket
 	connReader      *bufio.Reader            // Buffered reader for newline-delimited IPC responses
@@ -147,6 +63,7 @@ func NewMPVPlayer() *MPVPlayer {
 		volume:     100, // Default volume
 		lastVolume: 100,
 		stopCh:     make(chan struct{}),
+		instanceID: playerInstanceCounter.Add(1),
 	}
 }
 
@@ -178,14 +95,18 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		volumeToUse = 100
 	}
 
-	// Create unique socket path for IPC (platform-specific)
+	// Create unique socket path for IPC (platform-specific).
+	// Use both PID and per-instance ID so that multiple concurrent MPVPlayer
+	// instances within the same process never share a socket path — which
+	// would cause one player's Stop() to remove the other player's socket.
 	if runtime.GOOS == "windows" {
-		// Windows: Use TCP socket for IPC (more reliable than named pipes)
-		p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+os.Getpid()%50000)
+		// Windows: Use TCP socket for IPC (more reliable than named pipes).
+		// Incorporate instanceID to guarantee a unique port per instance.
+		p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+(os.Getpid()*1000+int(p.instanceID))%50000)
 	} else {
 		// Unix/Linux/macOS use Unix sockets
-		p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
-		// Remove any existing socket file (Unix only)
+		p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d-%d.sock", os.Getpid(), p.instanceID))
+		// Remove any stale socket file from a previous Play() call on this instance
 		_ = os.Remove(p.socketPath)
 	}
 
@@ -621,12 +542,22 @@ func (p *MPVPlayer) stopInternal() error {
 	}
 
 	if p.cmd != nil && p.cmd.Process != nil {
-		// Send termination signal
-		// On Windows, Process.Kill() should work, but we add a timeout
-		if err := p.cmd.Process.Kill(); err != nil {
-			// Process may have already exited
-			if !errors.Is(err, os.ErrProcessDone) {
-				return fmt.Errorf("failed to stop mpv: %w", err)
+		if runtime.GOOS == "windows" {
+			// On Windows, mpv installed via package managers (e.g. scoop) uses a
+			// shim executable that spawns the real mpv as a child process.
+			// Process.Kill() only terminates the shim, leaving the real mpv running
+			// as an orphan. taskkill with /T kills the entire process tree so all
+			// descendant processes (including the real mpv) are terminated.
+			_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", p.cmd.Process.Pid)).Run()
+			// Also call Kill to ensure the Go process handle is cleaned up.
+			_ = p.cmd.Process.Kill()
+		} else {
+			// Send termination signal
+			if err := p.cmd.Process.Kill(); err != nil {
+				// Process may have already exited
+				if !errors.Is(err, os.ErrProcessDone) {
+					return fmt.Errorf("failed to stop mpv: %w", err)
+				}
 			}
 		}
 
@@ -640,11 +571,7 @@ func (p *MPVPlayer) stopInternal() error {
 		case <-done:
 			// Process exited cleanly
 		case <-time.After(2 * time.Second):
-			// Process didn't exit in time, force kill on Windows
-			if runtime.GOOS == "windows" {
-				// Use taskkill as last resort on Windows
-				_ = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", p.cmd.Process.Pid)).Run()
-			}
+			// Timeout: process did not exit within grace period
 		}
 	}
 

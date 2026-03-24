@@ -62,16 +62,9 @@ type TagPlaylistsModel struct {
 	deleteConfirm bool // true = waiting for second 'd' to confirm playlist deletion
 
 	// Create / edit wizard
-	isEditing    bool   // true = editing existing playlist
-	editName     string // original name (for edit/delete-then-recreate)
-	step         createStep
-	inputBuffer  string          // typed playlist name
-	allTags      []string        // all known tags for selection
-	tagCursor    int             // cursor in tag selector
-	selectedTags map[string]bool // which tags are checked
-
-	// Match mode toggle (create step 3)
-	matchMode string // "any" or "all"
+	isEditing bool   // true = editing existing playlist
+	editName  string // original name (for edit/delete-then-recreate)
+	// Removed unused function viewConfirmStop
 
 	// Station detail view
 	selectedPlaylist *playlistEntry
@@ -91,6 +84,14 @@ type TagPlaylistsModel struct {
 	height          int
 	// Play options (injected by App)
 	playOptsCfg config.PlayOptionsConfig
+
+	// Fields for create/edit wizard and tag selection
+	matchMode    string
+	selectedTags map[string]bool
+	inputBuffer  string
+	allTags      []string
+	tagCursor    int
+	step         createStep
 }
 
 // NewTagPlaylistsModel creates a Tag Playlists model.
@@ -113,6 +114,10 @@ func NewTagPlaylistsModel(
 		player:           player.NewMPVPlayer(),
 		matchMode:        "any",
 		selectedTags:     make(map[string]bool),
+		inputBuffer:      "",
+		allTags:          make([]string, 0),
+		tagCursor:        0,
+		step:             createStepName,
 		width:            80,
 		height:           24,
 	}
@@ -573,13 +578,16 @@ func (m TagPlaylistsModel) navigateBackCmd() tea.Cmd {
 func (m TagPlaylistsModel) navigateToMainCmd() tea.Cmd {
 	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
 		station := m.selectedStation
-		return func() tea.Msg {
-			return handoffPlaybackMsg{
-				player:       m.player,
-				station:      station,
-				contextLabel: "Tag Playlists",
-			}
-		}
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Tag Playlists",
+				}
+			},
+			func() tea.Msg { return backToMainMsg{} },
+		)
 	}
 	// Default: stop the player, then navigate.
 	if m.player != nil {
@@ -612,8 +620,10 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 			m.state = tagPlaylistsStateConfirmStop
 			return m, nil
 		}
+		// Build cmd before clearing selectedStation.
+		cmd := m.navigateToMainCmd()
 		m.selectedStation = nil
-		return m, m.navigateToMainCmd()
+		return m, cmd
 	case " ":
 		if m.player != nil {
 			if err := m.player.TogglePause(); err == nil {
@@ -679,13 +689,6 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 }
 
 // viewConfirmStop renders the confirmation prompt for stopping playback.
-func (m TagPlaylistsModel) viewConfirmStop() string {
-	return RenderPageWithBottomHelp(PageLayout{
-		Title:   "Confirm Stop Playback",
-		Content: "Are you sure you want to stop playback?\n\n[y] Yes    [n/Esc] No",
-		Help:    "y: Yes    n/Esc: No",
-	}, m.height)
-}
 
 func (m TagPlaylistsModel) handleRatingInput(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
 	m.ratingMode = false
