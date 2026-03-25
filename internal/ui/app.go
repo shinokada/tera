@@ -312,6 +312,9 @@ func (a *App) Cleanup() {
 			} else if a.quickFavPlayer != nil {
 				lastVol = a.quickFavPlayer.GetVolume()
 			}
+			if lastVol > 100 {
+				lastVol = 100
+			}
 			if lastVol > 0 {
 				a.playOptsCfg.LastUsedVolume = lastVol
 				_ = storage.SavePlayOptionsConfigToUnified(a.playOptsCfg)
@@ -1571,9 +1574,13 @@ func (a *App) View() string {
 // when a handoff just occurred (the screen handed its player to App before
 // navigating away). Stopping it here would kill the still-running stream, so
 // we skip any player that is identical to activePlayer.
+//
+// quickFavPlayer is app-level, not screen-owned, so it is excluded from this
+// list. Calling Stop() on an idle quickFavPlayer sets killed=true and blocks
+// subsequent Quick Play; stopAllPlayback() handles it when a full teardown is
+// needed.
 func (a *App) stopScreenPlayers() {
 	for _, p := range []*player.MPVPlayer{
-		a.quickFavPlayer,
 		a.playScreen.player,
 		a.searchScreen.player,
 		a.luckyScreen.player,
