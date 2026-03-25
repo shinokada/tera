@@ -101,6 +101,9 @@ type App struct {
 	sleepDuration time.Duration // duration the user set (for the summary)
 	dataPath      string        // path for persisting sleep timer config
 	sleepSummary  SleepSummaryModel
+	// Quick Play Favorites viewport
+	qfViewOffset    int // first QF entry index visible on screen
+	qfVisibleWindow int // last-known number of QF rows that fit on screen
 	// Recently Played viewport
 	rpViewOffset    int // first RP entry index visible on screen
 	rpVisibleWindow int // last-known number of RP rows that fit on screen
@@ -705,6 +708,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.loadRecentlyPlayed()
 			a.unifiedMenuIndex = 0
 			a.numberBuffer = ""
+			a.qfViewOffset = 0
 			a.rpViewOffset = 0
 			return a, nil
 		}
@@ -831,6 +835,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.loadRecentlyPlayed()
 		a.unifiedMenuIndex = 0
 		a.numberBuffer = ""
+		a.qfViewOffset = 0
 		a.rpViewOffset = 0
 		return a, nil
 	}
@@ -1229,6 +1234,7 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex > 0 {
 				a.unifiedMenuIndex--
+				a.updateQFViewOffset(a.qfVisibleWindow)
 				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
@@ -1236,6 +1242,7 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex < totalItems-1 {
 				a.unifiedMenuIndex++
+				a.updateQFViewOffset(a.qfVisibleWindow)
 				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
@@ -1647,6 +1654,50 @@ func (a *App) saveStationVolume(station *api.Station) {
 	a.loadQuickFavorites()
 }
 
+// updateQFViewOffset adjusts qfViewOffset so the currently selected QF entry
+// is always visible in the clipped window. Call this after changing unifiedMenuIndex.
+func (a *App) updateQFViewOffset(visibleCount ...int) {
+	qfCount := len(a.quickFavorites)
+	if qfCount == 0 {
+		a.qfViewOffset = 0
+		return
+	}
+
+	win := qfCount
+	if len(visibleCount) > 0 && visibleCount[0] > 0 {
+		win = visibleCount[0]
+	}
+
+	// Cursor position inside the QF list (negative = cursor is not in QF section)
+	qfCursor := a.unifiedMenuIndex - mainMenuItemCount
+	if qfCursor < 0 {
+		a.qfViewOffset = 0
+		return
+	}
+	if qfCursor >= qfCount {
+		qfCursor = qfCount - 1
+	}
+
+	// Scroll down
+	if qfCursor >= a.qfViewOffset+win {
+		a.qfViewOffset = qfCursor - win + 1
+	}
+	// Scroll up
+	if qfCursor < a.qfViewOffset {
+		a.qfViewOffset = qfCursor
+	}
+	// Clamp
+	if a.qfViewOffset < 0 {
+		a.qfViewOffset = 0
+	}
+	if a.qfViewOffset > qfCount-win {
+		a.qfViewOffset = qfCount - win
+		if a.qfViewOffset < 0 {
+			a.qfViewOffset = 0
+		}
+	}
+}
+
 // updateRPViewOffset adjusts rpViewOffset so the currently selected RP entry
 // is always visible in the clipped window. Call this after changing unifiedMenuIndex.
 func (a *App) updateRPViewOffset(visibleCount ...int) {
@@ -1755,21 +1806,75 @@ func (a *App) viewMainMenu() string {
 		content.WriteString("\n")
 	}
 
-	// Add quick play favorites if available (also part of unified navigation)
+	// Add quick play favorites if available (also part of unified navigation).
+	// The list is viewport-clipped so it never pushes the menu off-screen on
+	// small terminals (e.g. tmux panes). The calculation mirrors the RP section.
 	if len(a.quickFavorites) > 0 {
+		// ── viewport calculation ────────────────────────────────────────────
+		// Lines already committed: header + chrome (title/subtitle/blank) +
+		// menu items + now-playing block + blank + QF header + scroll indicators
+		// + RP section (if non-empty) + volume display + footer.
+		headerLines := visibleLineCount(renderHeader())
+		p := getPadding()
+		const (
+			chromeLines   = 5 // same as RP calculation
+			footerLines   = 2 // 1 margin + 1 help bar
+			qfHeaderLines = 2 // blank + "─── Quick Play Favorites ───"
+		)
+		menuLinesQF := mainMenuItemCount
+		if a.playingFromMain && a.playingStation != nil {
+			menuLinesQF += 2
+		} else if a.activeStation != nil {
+			menuLinesQF += 2
+		}
+		// Reserve lines for RP section if it will be shown.
+		rpReserve := 0
+		if len(a.recentlyPlayed) > 0 {
+			// At minimum: blank + RP header + 1 entry + possible scroll indicators
+			rpReserve = 4
+		}
+		volumeLines := 0
+		if a.volumeDisplay != "" {
+			volumeLines = 2
+		}
+		fixed := headerLines + chromeLines + menuLinesQF + qfHeaderLines + rpReserve + volumeLines + footerLines + p.PageVertical
+		visibleQF := a.height - fixed
+		if len(a.quickFavorites) > visibleQF {
+			// Reserve space for both scroll indicators.
+			visibleQF -= 2
+		}
+		if visibleQF < 1 {
+			visibleQF = 1
+		}
+		if visibleQF > len(a.quickFavorites) {
+			visibleQF = len(a.quickFavorites)
+		}
+
+		// Cache window size and sync viewport (same pattern as RP).
+		a.qfVisibleWindow = visibleQF
+		a.updateQFViewOffset(visibleQF)
+
 		content.WriteString("\n")
 		content.WriteString(quickFavoritesStyle().Render("─── Quick Play Favorites ───"))
 		content.WriteString("\n")
 
+		// Scroll indicator: entries hidden above.
+		if a.qfViewOffset > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↑ %d more (↑/k to scroll)", a.qfViewOffset)))
+			content.WriteString("\n")
+		}
+
 		menuItemCount := len(menuItems)
-		for i, station := range a.quickFavorites {
-			// Use numbers 10+ for quick favorites (no limit)
+		endQF := a.qfViewOffset + visibleQF
+		if endQF > len(a.quickFavorites) {
+			endQF = len(a.quickFavorites)
+		}
+		for i := a.qfViewOffset; i < endQF; i++ {
+			station := a.quickFavorites[i]
 			shortcut := fmt.Sprintf("%d", 10+i)
 
-			// Build station info line
 			var stationInfo strings.Builder
 			stationInfo.WriteString(station.TrimName())
-
 			if station.Country != "" {
 				stationInfo.WriteString(" • ")
 				stationInfo.WriteString(station.Country)
@@ -1788,12 +1893,7 @@ func (a *App) viewMainMenu() string {
 				prefix = "> "
 			}
 
-			// Build the line content
-			lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
-
-			// Highlight if this is the playing station
 			if a.playingFromMain && a.playingStation != nil && a.playingStation.StationUUID == station.StationUUID {
-				// Playing station - show with play icon
 				playingLine := fmt.Sprintf("%s%s. ▶ %s", prefix, shortcut, stationInfo.String())
 				if unifiedIdx == a.unifiedMenuIndex {
 					content.WriteString(selectedItemStyle().Render(playingLine))
@@ -1801,13 +1901,20 @@ func (a *App) viewMainMenu() string {
 					content.WriteString(normalItemStyle().Render(playingLine))
 				}
 			} else {
-				// Normal station
+				lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
 				if unifiedIdx == a.unifiedMenuIndex {
 					content.WriteString(selectedItemStyle().Render(lineContent))
 				} else {
 					content.WriteString(normalItemStyle().Render(lineContent))
 				}
 			}
+			content.WriteString("\n")
+		}
+
+		// Scroll indicator: entries hidden below.
+		hiddenBelowQF := len(a.quickFavorites) - endQF
+		if hiddenBelowQF > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↓ %d more (↓/j to scroll)", hiddenBelowQF)))
 			content.WriteString("\n")
 		}
 	}
@@ -1835,7 +1942,15 @@ func (a *App) viewMainMenu() string {
 		}
 		qfLines := 0
 		if len(a.quickFavorites) > 0 {
-			qfLines = 2 + len(a.quickFavorites) // blank + header + items
+			// QF is now viewport-clipped; use the cached visible window size.
+			// Add 2 for potential scroll indicators (conservative upper bound).
+			qfLines = 2 + a.qfVisibleWindow // blank + header + visible items
+			if a.qfViewOffset > 0 {
+				qfLines++ // top scroll indicator
+			}
+			if len(a.quickFavorites) > a.qfViewOffset+a.qfVisibleWindow {
+				qfLines++ // bottom scroll indicator
+			}
 		}
 		volumeLines := 0
 		if a.volumeDisplay != "" {
