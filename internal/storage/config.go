@@ -45,25 +45,32 @@ func LoadAppearanceConfigFromUnified() (AppearanceConfig, error) {
 	}, nil
 }
 
-// SaveAppearanceConfigToUnified saves appearance settings to unified config.
-// NOTE: This performs non-atomic read-modify-write. Currently safe because Bubble Tea's Update loop is single-threaded, but would need a mutex if concurrent config modifications are added in the future.
-func SaveAppearanceConfigToUnified(appearance AppearanceConfig) error {
+// updateUnifiedConfig loads the unified config, applies update, and saves it.
+// All Save*ToUnified helpers use this to avoid repeating the load/mutate/save
+// pattern. NOTE: Performs a non-atomic read-modify-write; safe within Bubble
+// Tea's single-threaded Update loop.
+func updateUnifiedConfig(update func(*config.Config)) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
-
-	cfg.UI.Appearance.HeaderMode = string(appearance.Header.Mode)
-	cfg.UI.Appearance.CustomText = appearance.Header.CustomText
-	cfg.UI.Appearance.AsciiArt = appearance.Header.AsciiArt
-	cfg.UI.Appearance.HeaderAlign = appearance.Header.Alignment
-	cfg.UI.Appearance.HeaderWidth = appearance.Header.Width
-	cfg.UI.Appearance.HeaderColor = appearance.Header.Color
-	cfg.UI.Appearance.HeaderBold = appearance.Header.Bold
-	cfg.UI.Appearance.PaddingTop = appearance.Header.PaddingTop
-	cfg.UI.Appearance.PaddingBottom = appearance.Header.PaddingBottom
-
+	update(cfg)
 	return config.Save(cfg)
+}
+
+// SaveAppearanceConfigToUnified saves appearance settings to unified config.
+func SaveAppearanceConfigToUnified(appearance AppearanceConfig) error {
+	return updateUnifiedConfig(func(cfg *config.Config) {
+		cfg.UI.Appearance.HeaderMode = string(appearance.Header.Mode)
+		cfg.UI.Appearance.CustomText = appearance.Header.CustomText
+		cfg.UI.Appearance.AsciiArt = appearance.Header.AsciiArt
+		cfg.UI.Appearance.HeaderAlign = appearance.Header.Alignment
+		cfg.UI.Appearance.HeaderWidth = appearance.Header.Width
+		cfg.UI.Appearance.HeaderColor = appearance.Header.Color
+		cfg.UI.Appearance.HeaderBold = appearance.Header.Bold
+		cfg.UI.Appearance.PaddingTop = appearance.Header.PaddingTop
+		cfg.UI.Appearance.PaddingBottom = appearance.Header.PaddingBottom
+	})
 }
 
 // LoadConnectionConfigFromUnified loads connection settings from unified config
@@ -82,16 +89,11 @@ func LoadConnectionConfigFromUnified() (ConnectionConfig, error) {
 
 // SaveConnectionConfigToUnified saves connection settings to unified config
 func SaveConnectionConfigToUnified(conn ConnectionConfig) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	cfg.Network.AutoReconnect = conn.AutoReconnect
-	cfg.Network.ReconnectDelay = conn.ReconnectDelay
-	cfg.Network.BufferSizeMB = conn.StreamBufferMB
-
-	return config.Save(cfg)
+	return updateUnifiedConfig(func(cfg *config.Config) {
+		cfg.Network.AutoReconnect = conn.AutoReconnect
+		cfg.Network.ReconnectDelay = conn.ReconnectDelay
+		cfg.Network.BufferSizeMB = conn.StreamBufferMB
+	})
 }
 
 // LoadShuffleConfigFromUnified loads shuffle settings from unified config
@@ -120,27 +122,19 @@ func LoadBlocklistConfigFromUnified() (config.BlocklistConfig, error) {
 
 // SaveBlocklistConfigToUnified saves blocklist settings to unified config
 func SaveBlocklistConfigToUnified(bl config.BlocklistConfig) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	cfg.Blocklist = bl
-	return config.Save(cfg)
+	return updateUnifiedConfig(func(cfg *config.Config) {
+		cfg.Blocklist = bl
+	})
 }
 
 // SaveShuffleConfigToUnified saves shuffle settings to unified config
 func SaveShuffleConfigToUnified(shuffle ShuffleConfig) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	cfg.Shuffle.AutoAdvance = shuffle.AutoAdvance
-	cfg.Shuffle.IntervalMinutes = shuffle.IntervalMinutes
-	cfg.Shuffle.RememberHistory = shuffle.RememberHistory
-	cfg.Shuffle.MaxHistory = shuffle.MaxHistory
-
-	return config.Save(cfg)
+	return updateUnifiedConfig(func(cfg *config.Config) {
+		cfg.Shuffle.AutoAdvance = shuffle.AutoAdvance
+		cfg.Shuffle.IntervalMinutes = shuffle.IntervalMinutes
+		cfg.Shuffle.RememberHistory = shuffle.RememberHistory
+		cfg.Shuffle.MaxHistory = shuffle.MaxHistory
+	})
 }
 
 // LoadPlayHistoryConfigFromUnified loads play history settings from unified config.
@@ -153,15 +147,10 @@ func LoadPlayHistoryConfigFromUnified() (config.PlayHistoryConfig, error) {
 }
 
 // SavePlayHistoryConfigToUnified saves play history settings to unified config.
-// NOTE: Performs non-atomic read-modify-write; safe within Bubble Tea's
-// single-threaded Update loop.
 func SavePlayHistoryConfigToUnified(ph config.PlayHistoryConfig) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	cfg.PlayHistory = ph
-	return config.Save(cfg)
+	return updateUnifiedConfig(func(cfg *config.Config) {
+		cfg.PlayHistory = ph
+	})
 }
 
 // LoadPlayOptionsConfigFromUnified loads play options settings from unified config.
@@ -174,15 +163,10 @@ func LoadPlayOptionsConfigFromUnified() (config.PlayOptionsConfig, error) {
 }
 
 // SavePlayOptionsConfigToUnified saves play options settings to unified config.
-// NOTE: Performs non-atomic read-modify-write; safe within Bubble Tea's
-// single-threaded Update loop.
 func SavePlayOptionsConfigToUnified(po config.PlayOptionsConfig) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	cfg.PlayOptions = po
-	return config.Save(cfg)
+	return updateUnifiedConfig(func(cfg *config.Config) {
+		cfg.PlayOptions = po
+	})
 }
 
 // CheckAndMigrateV2Config checks for v2 config and migrates if found

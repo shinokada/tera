@@ -530,11 +530,21 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 	case "0":
+		// Phase 5: gate on ConfirmStop before navigating away.
+		if m.playOptsCfg.ConfirmStop {
+			m.state = searchStateConfirmStop
+			return m, nil
+		}
 		// Hand off (with fresh player) or stop, then go to main menu.
 		m, cmd := m.navigateToMainCmd()
 		m.selectedStation = nil
 		return m, cmd
 	case "esc":
+		// Phase 5: gate on ConfirmStop before navigating away.
+		if m.playOptsCfg.ConfirmStop {
+			m.state = searchStateConfirmStop
+			return m, nil
+		}
 		// Go back to results. With ContinueOnNavigate ON, hand the player off
 		// to App and install a fresh player so the next station selection
 		// doesn't share the same MPVPlayer pointer.

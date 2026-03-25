@@ -68,7 +68,6 @@ func TestMPVPlayer_GetCurrentStation(t *testing.T) {
 	station := player.GetCurrentStation()
 	if station == nil {
 		t.Fatal("Expected current station to be set")
-		return
 	}
 
 	if station.StationUUID != "test-123" {

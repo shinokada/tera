@@ -220,6 +220,8 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTagInput(msg)
 		case luckyStateManageTags:
 			return m.updateManageTags(msg)
+		case luckyStateConfirmStop:
+			return m.updateConfirmStop(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -2135,6 +2137,31 @@ func (m *LuckyModel) reloadSearchHistory() {
 		history = storage.NewSearchHistoryStore()
 	}
 	m.searchHistory = history
+}
+
+// updateConfirmStop handles key input during the confirm-stop prompt (Phase 5).
+// 'y'/1 stops playback and returns to the input screen;
+// 'n'/2/Esc cancels and resumes playback.
+func (m LuckyModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y", "1":
+		// Stop playback and return to input
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.state = luckyStateInput
+		m.inputMode = true
+		m.textInput.Focus()
+		m.selectedStation = nil
+		m.reloadSearchHistory()
+		m.rebuildMenuWithHistory()
+		return m, nil
+	case "n", "N", "2", "esc":
+		// Cancel — return to playing
+		m.state = luckyStatePlaying
+		return m, nil
+	}
+	return m, nil
 }
 
 // viewConfirmStop renders the ConfirmStop prompt for LuckyModel (Phase 5)

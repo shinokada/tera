@@ -299,6 +299,22 @@ func (a *App) Cleanup() {
 			a.sleepTimer.Cancel()
 			a.sleepTimer = nil
 		}
+
+		// Phase 5: Save LastUsedVolume before stopping players so the
+		// GetVolume() calls below reach live players, not nil pointers.
+		if a.playOptsCfg.StartVolumeMode == "last_used" {
+			var lastVol int
+			if a.activePlayer != nil {
+				lastVol = a.activePlayer.GetVolume()
+			} else if a.quickFavPlayer != nil {
+				lastVol = a.quickFavPlayer.GetVolume()
+			}
+			if lastVol > 0 {
+				a.playOptsCfg.LastUsedVolume = lastVol
+				_ = storage.SavePlayOptionsConfigToUnified(a.playOptsCfg)
+			}
+		}
+
 		if a.activePlayer != nil {
 			_ = a.activePlayer.Stop()
 			a.activePlayer = nil
@@ -338,20 +354,6 @@ func (a *App) Cleanup() {
 		// Close tags manager to stop background goroutine and flush pending changes
 		if a.tagsManager != nil {
 			_ = a.tagsManager.Close()
-		}
-
-		// Phase 5: Save LastUsedVolume if needed
-		if a.playOptsCfg.StartVolumeMode == "last_used" {
-			var lastVol int
-			if a.activePlayer != nil {
-				lastVol = a.activePlayer.GetVolume()
-			} else if a.quickFavPlayer != nil {
-				lastVol = a.quickFavPlayer.GetVolume()
-			}
-			if lastVol > 0 {
-				a.playOptsCfg.LastUsedVolume = lastVol
-				_ = storage.SavePlayOptionsConfigToUnified(a.playOptsCfg)
-			}
 		}
 	})
 }
