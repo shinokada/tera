@@ -1,15 +1,26 @@
 package storage
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/shinokada/tera/v3/internal/config"
 )
 
+// redirectConfigHome redirects all config-directory env vars to a fresh temp
+// directory so tests never read from or write to the real user config.
+func redirectConfigHome(t *testing.T) {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, ".config"))
+	t.Setenv("APPDATA", filepath.Join(root, "AppData", "Roaming"))
+}
+
 func TestLoadPlayOptionsConfigFromUnified(t *testing.T) {
-	// Redirect HOME to a temp dir so the test never touches the real config.
+	// Redirect all config-dir env vars so the test never touches the real config.
 	// config.Load() will auto-create a default config under the redirected dir.
-	t.Setenv("HOME", t.TempDir())
+	redirectConfigHome(t)
 
 	po, err := LoadPlayOptionsConfigFromUnified()
 	if err != nil {
@@ -38,8 +49,8 @@ func TestLoadPlayOptionsConfigFromUnified(t *testing.T) {
 }
 
 func TestSavePlayOptionsConfigToUnified(t *testing.T) {
-	// Redirect HOME to a temp dir so the test never touches the real config.
-	t.Setenv("HOME", t.TempDir())
+	// Redirect all config-dir env vars so the test never touches the real config.
+	redirectConfigHome(t)
 
 	custom := config.PlayOptionsConfig{
 		ContinueOnNavigate: true,

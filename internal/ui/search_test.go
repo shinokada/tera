@@ -483,12 +483,6 @@ func TestWindowResize(t *testing.T) {
 	}
 }
 
-func TestQuickFavoritesLoading(t *testing.T) {
-	// Test removed: quickFavoritesLoadedMsg and related logic no longer exist
-
-	// quickFavoritesLoadedMsg and related logic removed
-}
-
 func TestRenderStationDetails(t *testing.T) {
 	station := api.Station{
 		StationUUID: "test-1",

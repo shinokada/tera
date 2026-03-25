@@ -19,7 +19,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎨 **Themes** - Choose from predefined themes or customize via unified config
 - 💤 **Sleep Timer** - Set a timer to stop playback automatically
 - 🔄 **Update Checker** - Get notified when a new version is available
-- 🎵 **Continue on Navigate** - Keep listening while browsing: station keeps playing as you explore other screens, with a Now Playing bar showing on every page
+- 🎵 **Continue on Navigate** - Keep listening while browsing: station keeps playing as you explore other screens, with a Now Playing bar showing on every non-player screen
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 - ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
 - 🖥️ **Command-Line Play** - Play stations directly from the terminal without opening the TUI
@@ -481,7 +481,7 @@ When **Continue on Navigate** is enabled, a playing station keeps streaming as y
 
 **Enable / Disable:**
 1. Press `-` from the main menu → Settings
-2. Select **3. Play Options**
+2. Select **5. Play Options**
 3. Toggle **Continue on Navigate** on or off
 
 ### Appearance Settings

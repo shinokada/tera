@@ -13,7 +13,8 @@ import (
 // Before the fix, mostPlayedStateConfirmStop was missing from the Update
 // switch, so 'y' would do nothing and 'n'/'esc' would do nothing.
 func TestMostPlayedConfirmStopRouted(t *testing.T) {
-	m := NewMostPlayedModel(nil, "/tmp/favorites", blocklist.NewManager("/tmp/blocklist.json"))
+	tmpDir := t.TempDir()
+	m := NewMostPlayedModel(nil, tmpDir+"/favorites", blocklist.NewManager(tmpDir+"/blocklist.json"))
 	m.playOptsCfg = config.PlayOptionsConfig{ConfirmStop: true}
 
 	// 'n' / 'esc' should return to playing state
@@ -47,7 +48,8 @@ func TestMostPlayedConfirmStopRouted(t *testing.T) {
 // the user presses Esc or '0' during playback, the model transitions to the
 // confirm-stop state rather than stopping immediately.
 func TestMostPlayedConfirmStopTriggered(t *testing.T) {
-	m := NewMostPlayedModel(nil, "/tmp/favorites", blocklist.NewManager("/tmp/blocklist.json"))
+	tmpDir := t.TempDir()
+	m := NewMostPlayedModel(nil, tmpDir+"/favorites", blocklist.NewManager(tmpDir+"/blocklist.json"))
 	m.playOptsCfg = config.PlayOptionsConfig{ConfirmStop: true}
 
 	for _, key := range []string{"esc", "0"} {
@@ -70,7 +72,8 @@ func TestMostPlayedConfirmStopTriggered(t *testing.T) {
 // TestTopRatedConfirmStopRouted verifies that key presses in topRatedStateConfirmStop
 // are properly handled.
 func TestTopRatedConfirmStopRouted(t *testing.T) {
-	m := NewTopRatedModel(nil, nil, nil, "/tmp/favorites", blocklist.NewManager("/tmp/blocklist.json"))
+	tmpDir := t.TempDir()
+	m := NewTopRatedModel(nil, nil, nil, tmpDir+"/favorites", blocklist.NewManager(tmpDir+"/blocklist.json"))
 	m.playOptsCfg = config.PlayOptionsConfig{ConfirmStop: true}
 
 	// 'n' / 'esc' should return to playing state
@@ -100,7 +103,8 @@ func TestTopRatedConfirmStopRouted(t *testing.T) {
 // TestTopRatedConfirmStopTriggered verifies that when ConfirmStop is ON,
 // Esc or '0' during playback transitions to the confirm-stop state.
 func TestTopRatedConfirmStopTriggered(t *testing.T) {
-	m := NewTopRatedModel(nil, nil, nil, "/tmp/favorites", blocklist.NewManager("/tmp/blocklist.json"))
+	tmpDir := t.TempDir()
+	m := NewTopRatedModel(nil, nil, nil, tmpDir+"/favorites", blocklist.NewManager(tmpDir+"/blocklist.json"))
 	m.playOptsCfg = config.PlayOptionsConfig{ConfirmStop: true}
 
 	for _, key := range []string{"esc", "0"} {

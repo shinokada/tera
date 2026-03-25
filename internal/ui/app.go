@@ -1263,9 +1263,8 @@ func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
 		if a.playOptsCfg.ContinueOnNavigate && a.quickFavPlayer != nil {
 			// Hand the main-menu player off to activePlayer so it survives
 			// stopScreenPlayers() when the destination screen is initialized.
-			if a.activePlayer != nil && a.activePlayer != a.quickFavPlayer {
-				_ = a.activePlayer.Stop()
-			}
+			// (a.activePlayer is guaranteed nil by the outer condition, so no
+			// stop-before-replace is needed here.)
 			a.activePlayer = a.quickFavPlayer
 			a.activeStation = a.playingStation
 			a.activeContextLabel = "Quick Play"
