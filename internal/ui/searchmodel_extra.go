@@ -39,6 +39,7 @@ func NewSearchModel(apiClient *api.Client, favoritePath, dataPath string, blockl
 		advancedInputs:   advInputs,
 		textInput:        textIn,
 		newListInput:     newListIn,
+		helpModel:        components.NewHelpModel(components.CreatePlayingHelp()),
 	}
 	m.reloadSearchHistory()
 	return m

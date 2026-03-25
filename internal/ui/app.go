@@ -1677,7 +1677,9 @@ func (a *App) updateQFViewOffset(visibleCount ...int) {
 		return
 	}
 	if qfCursor >= qfCount {
-		qfCursor = qfCount - 1
+		// Cursor is below the QF section (in RP or beyond). Preserve the current
+		// scroll position so the QF list doesn't jump while user navigates RP.
+		return
 	}
 
 	// Scroll down
@@ -1847,6 +1849,10 @@ func (a *App) viewMainMenu() string {
 		}
 		if visibleQF < 1 {
 			visibleQF = 1
+		}
+		// If the user has set a display row cap, honour it (mirrors RP behaviour).
+		if a.playHistoryCfg.DisplayRows > 0 && visibleQF > a.playHistoryCfg.DisplayRows {
+			visibleQF = a.playHistoryCfg.DisplayRows
 		}
 		if visibleQF > len(a.quickFavorites) {
 			visibleQF = len(a.quickFavorites)
