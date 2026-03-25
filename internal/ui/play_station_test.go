@@ -283,7 +283,8 @@ func TestPlayModel_View_NoStations(t *testing.T) {
 }
 
 func TestNoStationsView(t *testing.T) {
-	view := noStationsView("Test List")
+	m := PlayModel{}
+	view := m.noStationsView("Test List")
 
 	if view == "" {
 		t.Error("Expected non-empty view")

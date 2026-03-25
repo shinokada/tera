@@ -270,7 +270,8 @@ func TestPlayListItem(t *testing.T) {
 
 func TestErrorView(t *testing.T) {
 	err := os.ErrNotExist
-	view := errorView(err)
+	m := PlayModel{}
+	view := m.errorView(err)
 
 	if view == "" {
 		t.Error("Expected non-empty error view")

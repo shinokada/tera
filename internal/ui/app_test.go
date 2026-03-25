@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -1039,63 +1040,56 @@ func TestContinueOnNavigate_NewStationStopsHandedOff(t *testing.T) {
 //             stopScreenPlayers() even when ContinueOnNavigate was ON.
 // Fix:        executeMenuAction hands quickFavPlayer off to activePlayer
 //             (and replaces it with a fresh idle player) when
-//             ContinueOnNavigate is ON and quickFavPlayer.IsPlaying().
+//             ContinueOnNavigate is ON.  IsPlaying() is NOT checked because
+//             Play() is called asynchronously — the user can navigate before
+//             the cmd goroutine runs, making IsPlaying() a race condition.
 // ---------------------------------------------------------------------------
 
 // TestBug1_QFPlaying_NavigateToPlayScreen_PreservesStream verifies that when
-// a Quick Play Favorite is playing and the user navigates to Play from
-// Favorites, the stream is handed off to activePlayer and keeps running
-// (stopScreenPlayers must not kill it).
+// a Quick Play Favorite was selected (playingFromMain=true, playingStation set)
+// and the user navigates, executeMenuAction hands quickFavPlayer off to
+// activePlayer — even when IsPlaying() is still false (async Play() timing).
 func TestBug1_QFPlaying_NavigateToPlayScreen_PreservesStream(t *testing.T) {
 	app := newContinueOnNavigateApp()
 
 	station := newTestStation("uuid-qf", "Quick FM")
 	app.playingStation = station
 	app.playingFromMain = true
+	// activePlayer is nil — this is a fresh QF selection from main menu.
 
-	// Mark quickFavPlayer as playing by faking the playing state via
-	// a fresh player (IsPlaying returns false for never-started players;
-	// we validate the handoff logic path using a custom stub below).
-	// Because we can't start a real MPV process in unit tests, we verify
-	// the executeMenuAction handoff logic indirectly: after the action the
-	// activePlayer pointer must differ from the new quickFavPlayer pointer,
-	// proving a swap happened.
 	originalQFP := app.quickFavPlayer
 
-	// Simulate IsPlaying() == true by temporarily wrapping the condition:
-	// We call the handoff path directly as executeMenuAction would see it.
-	// Since we can't start mpv in tests, we test the guard condition by
-	// asserting that when IsPlaying is false the handoff is NOT done
-	// (i.e. activePlayer stays nil).
 	_, _ = app.executeMenuAction(0) // Play from Favorites
 
-	// quickFavPlayer.IsPlaying() is false (no real mpv), so the handoff
-	// block is skipped — but quickFavPlayer must be the same object (not
-	// swapped with a new one) and activePlayer must remain nil.
-	if app.activePlayer != nil {
-		t.Error("activePlayer should remain nil when quickFavPlayer is not actually playing")
+	// The handoff should happen even though IsPlaying() is false (async):
+	// activePlayer must be set to the original quickFavPlayer.
+	if app.activePlayer != originalQFP {
+		t.Error("activePlayer should be set to the original quickFavPlayer after handoff")
 	}
-	if app.quickFavPlayer != originalQFP {
-		t.Error("quickFavPlayer should not be replaced when it was not playing")
+	if app.quickFavPlayer == originalQFP {
+		t.Error("quickFavPlayer should be replaced with a fresh idle player after handoff")
 	}
 	if app.playingFromMain {
 		t.Error("playingFromMain should be cleared by executeMenuAction")
 	}
 }
 
-// TestBug1_QFNotPlaying_NavigateToPlayScreen_NoHandoff verifies the guard:
-// if quickFavPlayer is not playing (IsPlaying==false) executeMenuAction must
-// NOT promote it to activePlayer, leaving activePlayer nil.
-func TestBug1_QFNotPlaying_NavigateToPlayScreen_NoHandoff(t *testing.T) {
+// TestBug1_QFNotPlaying_NavigateToPlayScreen_HandoffHappens verifies that the
+// handoff happens even when quickFavPlayer.IsPlaying() == false.  This is the
+// key async-timing fix: Play() is called in a cmd goroutine, so IsPlaying()
+// may be false at the moment executeMenuAction is called.
+func TestBug1_QFNotPlaying_NavigateToPlayScreen_HandoffHappens(t *testing.T) {
 	app := newContinueOnNavigateApp()
 	app.playingStation = newTestStation("uuid-qf", "Quick FM")
 	app.playingFromMain = true
-	// quickFavPlayer.IsPlaying() == false (never started)
+	// quickFavPlayer.IsPlaying() == false (never started — async timing)
+	originalQFP := app.quickFavPlayer
 
 	_, _ = app.executeMenuAction(0)
 
-	if app.activePlayer != nil {
-		t.Error("activePlayer must not be set when quickFavPlayer was not playing")
+	// Handoff must still happen so the station keeps playing when the cmd runs.
+	if app.activePlayer != originalQFP {
+		t.Error("activePlayer must be set to quickFavPlayer even when IsPlaying()==false (async case)")
 	}
 }
 
@@ -1173,7 +1167,9 @@ func TestBug2_StopScreenPlayers_SkipsActivePlayer(t *testing.T) {
 
 // TestBug2_NavigateMostPlayedToTopRated_PreservesActivePlayer is an
 // end-to-end regression test: simulate the full sequence
-//   Most Played plays → handoff → navigate to Top Rated
+//
+//	Most Played plays → handoff → navigate to Top Rated
+//
 // and assert activePlayer survives the navigateMsg handler.
 func TestBug2_NavigateMostPlayedToTopRated_PreservesActivePlayer(t *testing.T) {
 	app := newContinueOnNavigateApp()
@@ -1247,5 +1243,212 @@ func TestHandoffPlaybackMsg_StopsPreviousPlayer(t *testing.T) {
 	// pointer was replaced is sufficient — the code called Stop() on it.
 	if app.activePlayer == oldPlayer {
 		t.Error("activePlayer should not still be the old player")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// x key: global kill binding for ContinueOnNavigate sessions
+//
+// When ContinueOnNavigate is ON, a station may keep playing while the user
+// browses other screens.  The `x` key stops all playback from any screen.
+// ---------------------------------------------------------------------------
+
+// TestXKey_StopsActiveStation verifies that pressing `x` clears activeStation
+// and activePlayer when a ContinueOnNavigate handoff is in progress.
+func TestXKey_StopsActiveStation(t *testing.T) {
+	app := newContinueOnNavigateApp()
+	app.activeStation = newTestStation("uuid-x", "Test Radio")
+	app.activePlayer = player.NewMPVPlayer()
+	app.activeContextLabel = "Most Played"
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if app.activeStation != nil {
+		t.Error("x key should clear activeStation")
+	}
+	if app.activePlayer != nil {
+		t.Error("x key should clear activePlayer")
+	}
+}
+
+// TestXKey_StopsPlayingFromMain verifies that pressing `x` clears
+// playingFromMain and playingStation when a Quick Play station is active.
+func TestXKey_StopsPlayingFromMain(t *testing.T) {
+	app := newContinueOnNavigateApp()
+	app.playingFromMain = true
+	app.playingStation = newTestStation("uuid-qf", "QF Radio")
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if app.playingFromMain {
+		t.Error("x key should clear playingFromMain")
+	}
+	if app.playingStation != nil {
+		t.Error("x key should clear playingStation")
+	}
+}
+
+// TestXKey_NoOpWhenNothingPlaying verifies that pressing `x` when no station
+// is playing neither panics nor mutates playback state.
+func TestXKey_NoOpWhenNothingPlaying(t *testing.T) {
+	app := newTestApp()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if app.activeStation != nil {
+		t.Error("x key should not set activeStation when nothing is playing")
+	}
+	if app.playingFromMain {
+		t.Error("x key should not set playingFromMain when nothing is playing")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// buildNowPlayingBannerText — Now Playing bar shown on non-player screens
+// ---------------------------------------------------------------------------
+
+// TestBuildNowPlayingBannerText_ContainsXStopHint verifies that the banner
+// includes the "x: Stop" keyboard hint so users know how to kill playback.
+func TestBuildNowPlayingBannerText_ContainsXStopHint(t *testing.T) {
+	app := newContinueOnNavigateApp()
+	app.activeStation = newTestStation("uuid-radio", "Jazz FM")
+	app.activeContextLabel = "Favorites"
+
+	banner := app.buildNowPlayingBannerText()
+
+	if !strings.Contains(banner, "x: Stop") {
+		t.Errorf("banner should contain 'x: Stop', got: %q", banner)
+	}
+}
+
+// TestBuildNowPlayingBannerText_EmptyWhenNoStation verifies that the banner is
+// empty when no station is being tracked at the app level.
+func TestBuildNowPlayingBannerText_EmptyWhenNoStation(t *testing.T) {
+	app := newTestApp()
+
+	banner := app.buildNowPlayingBannerText()
+
+	if banner != "" {
+		t.Errorf("banner should be empty when no station is active, got: %q", banner)
+	}
+}
+
+// TestBuildNowPlayingBannerText_ContainsStationName verifies that the banner
+// shows the name of the currently playing station.
+func TestBuildNowPlayingBannerText_ContainsStationName(t *testing.T) {
+	app := newContinueOnNavigateApp()
+	app.activeStation = newTestStation("uuid-radio", "Jazz FM")
+
+	banner := app.buildNowPlayingBannerText()
+
+	if !strings.Contains(banner, "Jazz FM") {
+		t.Errorf("banner should contain station name 'Jazz FM', got: %q", banner)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// playQuickFavorite / playRecentStation — stop handed-off activePlayer
+//
+// Bug: after a ContinueOnNavigate handoff, activePlayer kept streaming while
+// a new Quick Play or Recently Played station started — two mpv processes.
+// Fix: both helpers stop and clear activePlayer when it differs from
+//      quickFavPlayer.
+// ---------------------------------------------------------------------------
+
+// TestPlayQuickFavorite_StopsHandedOffActivePlayer verifies that if a player
+// was handed off via ContinueOnNavigate (activePlayer != quickFavPlayer),
+// calling playQuickFavorite stops and nils that player.
+func TestPlayQuickFavorite_StopsHandedOffActivePlayer(t *testing.T) {
+	app := newContinueOnNavigateApp()
+
+	// Simulate a ContinueOnNavigate handoff from a player screen.
+	handedOff := player.NewMPVPlayer()
+	app.activePlayer = handedOff
+	app.activeStation = newTestStation("uuid-handed", "Handed Off FM")
+	app.activeContextLabel = "Most Played"
+
+	// Add a quick favorite to play (required for playQuickFavorite to proceed).
+	app.quickFavorites = []api.Station{
+		{StationUUID: "uuid-qf", Name: "Quick FM"},
+	}
+
+	_, _ = app.playQuickFavorite(0)
+
+	if app.activePlayer != nil {
+		t.Error("playQuickFavorite should stop and clear the handed-off activePlayer")
+	}
+	if app.activeStation != nil {
+		t.Error("playQuickFavorite should clear activeStation set by the handoff")
+	}
+}
+
+// TestPlayQuickFavorite_ReplacesFreshPlayer is a regression test for the bug
+// where selecting from Quick Play made no sound.
+//
+// Root cause: Stop() on an idle quickFavPlayer set killed=true. The subsequent
+// async Play() saw killed=true and silently refused to start mpv.
+// Fix: both helpers now replace quickFavPlayer with a fresh instance whose
+// killed flag is false, so Play() is always allowed to proceed.
+func TestPlayQuickFavorite_ReplacesFreshPlayer(t *testing.T) {
+	app := newContinueOnNavigateApp()
+	original := app.quickFavPlayer // idle (never started)
+
+	app.quickFavorites = []api.Station{
+		{StationUUID: "uuid-qf", Name: "Quick FM"},
+	}
+
+	_, cmd := app.playQuickFavorite(0)
+
+	// A fresh player must have been installed so that the async Play() cmd
+	// is not blocked by the old player's killed flag.
+	if app.quickFavPlayer == original {
+		t.Error("playQuickFavorite should replace quickFavPlayer with a fresh instance")
+	}
+	// The returned cmd must not be nil — a nil cmd means no Play was scheduled.
+	if cmd == nil {
+		t.Error("playQuickFavorite should return a non-nil cmd to start playback")
+	}
+}
+
+// TestPlayRecentStation_StopsHandedOffActivePlayer verifies that if a player
+// was handed off via ContinueOnNavigate, calling playRecentStation stops and
+// nils that player so the new station plays exclusively.
+func TestPlayRecentStation_StopsHandedOffActivePlayer(t *testing.T) {
+	app := newContinueOnNavigateApp()
+
+	// Simulate a ContinueOnNavigate handoff from a player screen.
+	handedOff := player.NewMPVPlayer()
+	app.activePlayer = handedOff
+	app.activeStation = newTestStation("uuid-handed", "Handed Off FM")
+	app.activeContextLabel = "Most Played"
+
+	// Add a recently played entry to play.
+	app.recentlyPlayed = makeRecentlyPlayed("Recent FM")
+
+	_, _ = app.playRecentStation(0)
+
+	if app.activePlayer != nil {
+		t.Error("playRecentStation should stop and clear the handed-off activePlayer")
+	}
+	if app.activeStation != nil {
+		t.Error("playRecentStation should clear activeStation set by the handoff")
+	}
+}
+
+// TestPlayRecentStation_ReplacesFreshPlayer is a regression test for the same
+// bug as TestPlayQuickFavorite_ReplacesFreshPlayer, but for Recently Played.
+func TestPlayRecentStation_ReplacesFreshPlayer(t *testing.T) {
+	app := newContinueOnNavigateApp()
+	original := app.quickFavPlayer // idle (never started)
+
+	app.recentlyPlayed = makeRecentlyPlayed("Recent FM")
+
+	_, cmd := app.playRecentStation(0)
+
+	if app.quickFavPlayer == original {
+		t.Error("playRecentStation should replace quickFavPlayer with a fresh instance")
+	}
+	if cmd == nil {
+		t.Error("playRecentStation should return a non-nil cmd to start playback")
 	}
 }

@@ -86,12 +86,13 @@ type TagPlaylistsModel struct {
 	playOptsCfg config.PlayOptionsConfig
 
 	// Fields for create/edit wizard and tag selection
-	matchMode    string
-	selectedTags map[string]bool
-	inputBuffer  string
-	allTags      []string
-	tagCursor    int
-	step         createStep
+	matchMode     string
+	selectedTags  map[string]bool
+	inputBuffer   string
+	allTags       []string
+	tagCursor     int
+	step          createStep
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // NewTagPlaylistsModel creates a Tag Playlists model.
@@ -815,7 +816,7 @@ func (m TagPlaylistsModel) viewTagInput() string {
 		sb.WriteString("\n\n")
 	}
 	sb.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: sb.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -824,7 +825,7 @@ func (m TagPlaylistsModel) viewTagInput() string {
 
 // viewManageTags renders the ManageTags dialog overlay.
 func (m TagPlaylistsModel) viewManageTags() string {
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Manage Tags",
 		Content: m.manageTags.View(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
@@ -861,7 +862,7 @@ func (m TagPlaylistsModel) viewList() string {
 
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Tag Playlists",
 		Content: sb.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Play stations • n: New • e: Edit • d: Delete (confirm) • Esc/m: Back",
@@ -896,7 +897,7 @@ func (m TagPlaylistsModel) viewCreateName(title string) string {
 		sb.WriteString("\n")
 		sb.WriteString(errorStyle().Render(m.saveMessage))
 	}
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: sb.String(),
 		Help:    "Enter: Next step • Esc: Cancel",
@@ -942,7 +943,7 @@ func (m TagPlaylistsModel) viewCreateTags(title string) string {
 		sb.WriteString(errorStyle().Render(m.saveMessage))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: sb.String(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • n: Next step • Esc: Back",
@@ -974,7 +975,7 @@ func (m TagPlaylistsModel) viewCreateMatchMode(title string) string {
 	preview := m.previewCount()
 	fmt.Fprintf(&sb, "\n\n%s", infoStyle().Render(fmt.Sprintf("Preview: %d station(s) match", preview)))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: sb.String(),
 		Help:    "←→/h/l/Space: Toggle • Enter: Save • Esc: Back",
@@ -1039,7 +1040,7 @@ func (m TagPlaylistsModel) viewDetail() string {
 
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   fmt.Sprintf("🎵 %s", m.selectedPlaylist.name),
 		Content: sb.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back",
@@ -1102,9 +1103,18 @@ func (m TagPlaylistsModel) viewPlaying() string {
 	}
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),
 		Help:    "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back",
 	}, m.height)
+}
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m TagPlaylistsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

@@ -19,6 +19,7 @@ A terminal-based internet radio player powered by [Radio Browser](https://www.ra
 - 🎨 **Themes** - Choose from predefined themes or customize via unified config
 - 💤 **Sleep Timer** - Set a timer to stop playback automatically
 - 🔄 **Update Checker** - Get notified when a new version is available
+- 🎵 **Continue on Navigate** - Keep listening while browsing: station keeps playing as you explore other screens, with a Now Playing bar showing on every page
 - ⌨️ **Keyboard-driven** - Full navigation without a mouse
 - ❓ **Context Help** - Press `?` anytime to see available keyboard shortcuts
 - 🖥️ **Command-Line Play** - Play stations directly from the terminal without opening the TUI
@@ -155,13 +156,13 @@ tera play <source> [args] [--duration <duration>]
 
 ### Sources
 
-| Full form | Short alias | Args | Description |
-| --- | --- | --- | --- |
-| `favorites` | `fav` | `[list-name] [n]` | Play nth station from a favorites list |
-| `recent` | `rec` | `[n]` | Play the nth most recently played station |
-| `top-rated` | `top` | `[n]` | Play the nth highest-rated station |
-| `most-played` | `most` | `[n]` | Play the nth most-played station |
-| `lucky` | — | `<keyword ...>` | Play a random station matching keyword(s) |
+| Full form     | Short alias | Args              | Description                               |
+| ------------- | ----------- | ----------------- | ----------------------------------------- |
+| `favorites`   | `fav`       | `[list-name] [n]` | Play nth station from a favorites list    |
+| `recent`      | `rec`       | `[n]`             | Play the nth most recently played station |
+| `top-rated`   | `top`       | `[n]`             | Play the nth highest-rated station        |
+| `most-played` | `most`      | `[n]`             | Play the nth most-played station          |
+| `lucky`       | —           | `<keyword ...>`   | Play a random station matching keyword(s) |
 
 `[list-name]` defaults to `My-favorites`. `[n]` defaults to `1` (first item, 1-based).
 
@@ -461,6 +462,7 @@ Access app configuration from the main menu (option `-`):
 
 - **Theme / Colors** - Switch between predefined themes or customize colors
 - **Appearance** - Customize header display (text, ASCII art, alignment, colors, padding)
+- **Play Options** - Control playback behaviour while navigating (see below)
 - **Connection Settings** - Auto-reconnect and buffering for unstable networks (4G/GPRS)
 - **Shuffle Settings** - Configure shuffle mode behavior (auto-advance, history size)
 - **History** - Search history and Recently Played display settings (size, display rows, reset)
@@ -468,6 +470,19 @@ Access app configuration from the main menu (option `-`):
 - **About TERA** - See version, installation method, and update command
 
 The Settings menu automatically detects how you installed TERA (Homebrew, Go, Scoop, Winget, etc.) and shows the appropriate update command.
+
+### Play Options (Continue on Navigate)
+
+When **Continue on Navigate** is enabled, a playing station keeps streaming as you move to other screens:
+
+- A **♫ Now Playing** bar appears above the footer on every non-player screen, showing the station name, star rating, context, and a reminder to press `x` to stop.
+- Press `x` from **any screen** to stop playback immediately.
+- Selecting a new Quick Play or Recently Played station automatically stops the previous one first — no double playback.
+
+**Enable / Disable:**
+1. Press `-` from the main menu → Settings
+2. Select **3. Play Options**
+3. Toggle **Continue on Navigate** on or off
 
 ### Appearance Settings
 
@@ -740,15 +755,16 @@ You can edit this file directly or use the Settings menu.
 
 ### Global Navigation
 
-| Key         | Action        |
-| ----------- | ------------- |
-| `↑↓` / `jk` | Navigate      |
-| `g` / `G`   | Top / End     |
-| `Enter`     | Select / Play |
-| `Esc`       | Back / Stop   |
-| `0`         | Main Menu     |
-| `?`         | Help          |
-| `Ctrl+C`    | Quit          |
+| Key         | Action                                          |
+| ----------- | ----------------------------------------------- |
+| `↑↓` / `jk` | Navigate                                        |
+| `g` / `G`   | Top / End                                       |
+| `Enter`     | Select / Play                                   |
+| `Esc`       | Back / Stop                                     |
+| `0`         | Main Menu                                       |
+| `x`         | Stop Continue-on-Navigate playback (any screen) |
+| `?`         | Help                                            |
+| `Ctrl+C`    | Quit                                            |
 
 ### Main Menu
 
@@ -956,6 +972,8 @@ pkill mpv
 
 ### Multiple stations playing at once
 TERA should prevent this, but if it happens:
+- Press `x` from any screen to stop Continue-on-Navigate playback
+- Or kill all mpv processes:
 ```sh
 killall mpv
 # or on Linux

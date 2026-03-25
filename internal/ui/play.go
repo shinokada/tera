@@ -79,7 +79,8 @@ type PlayModel struct {
 	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
 	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
 	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	playOptsCfg   config.PlayOptionsConfig
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -1253,7 +1254,7 @@ func (m PlayModel) View() string {
 	}
 
 	if m.err != nil {
-		return errorView(m.err)
+		return m.errorView(m.err)
 	}
 
 	switch m.state {
@@ -1272,7 +1273,7 @@ func (m PlayModel) View() string {
 	case playStateManageTags:
 		return m.viewManageTags()
 	case playStateSleepTimer:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "💤 Sleep Timer",
 			Content: m.sleepTimerDialog.View(),
 			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
@@ -1296,7 +1297,7 @@ func (m PlayModel) viewConfirmStop() string {
 	}
 	content.WriteString("Are you sure you want to stop playback?\n")
 	content.WriteString(infoStyle().Render("Press y/1 to stop, n/2/Esc to cancel."))
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Confirm Stop",
 		Content: content.String(),
 		Help:    "y/1: Stop • n/2/Esc: Cancel",
@@ -1311,7 +1312,7 @@ func (m PlayModel) viewListSelection() string {
 	}
 
 	if len(m.lists) == 0 {
-		return noListsView()
+		return m.noListsView()
 	}
 
 	var content strings.Builder
@@ -1331,7 +1332,7 @@ func (m PlayModel) viewListSelection() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: "Select a Favorite List",
 		Content:  content.String(),
@@ -1439,7 +1440,7 @@ func (m PlayModel) viewPlaying() string {
 	}
 
 	helpText := "Space: Pause • f: Fav • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
 		Help:    helpText,
@@ -1456,7 +1457,7 @@ func (m PlayModel) sleepTimerCountdown() string {
 // The ManageTags component renders the station name in its own header,
 // so no prepend is needed here.
 func (m PlayModel) viewManageTags() string {
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Manage Tags",
 		Content: m.manageTags.View(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
@@ -1471,7 +1472,7 @@ func (m PlayModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -1486,7 +1487,7 @@ func (m PlayModel) viewStationSelection() string {
 	}
 
 	if len(m.stations) == 0 {
-		return noStationsView(m.selectedList)
+		return m.noStationsView(m.selectedList)
 	}
 
 	var content strings.Builder
@@ -1506,7 +1507,7 @@ func (m PlayModel) viewStationSelection() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • g/G: Top/End • /: Filter • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
@@ -1514,14 +1515,14 @@ func (m PlayModel) viewStationSelection() string {
 }
 
 // noStationsView renders the view when a list is empty
-func noStationsView(listName string) string {
+func (m PlayModel) noStationsView(listName string) string {
 	var content strings.Builder
 
 	content.WriteString(infoStyle().Render("This list is empty!"))
 	content.WriteString("\n\n")
 	content.WriteString("Add stations to this list using Search or List Management.")
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: fmt.Sprintf("List: %s", listName),
 		Content:  content.String(),
@@ -1530,14 +1531,14 @@ func noStationsView(listName string) string {
 }
 
 // noListsView renders the view when no lists are available
-func noListsView() string {
+func (m PlayModel) noListsView() string {
 	var content strings.Builder
 
 	content.WriteString(errorStyle().Render("No favorite lists found!"))
 	content.WriteString("\n\n")
 	content.WriteString("Create your first list using the List Management menu.")
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
 		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
@@ -1545,8 +1546,8 @@ func noListsView() string {
 }
 
 // errorView renders an error message
-func errorView(err error) string {
-	return RenderPage(PageLayout{
+func (m PlayModel) errorView(err error) string {
+	return m.renderPage(PageLayout{
 		Title:   "Error",
 		Content: errorStyle().Render(err.Error()),
 		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
@@ -1573,7 +1574,7 @@ func (m PlayModel) viewSavePrompt() string {
 	content.WriteString("2) Return to station list")
 
 	// Use the consistent page template
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save Station?",
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2/Esc: No",
@@ -1605,7 +1606,7 @@ func (m PlayModel) viewDeleteConfirm() string {
 	content.WriteString(infoStyle().Render("This action cannot be undone."))
 
 	// Use the consistent page template
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "⚠️  Confirm Delete",
 		Content: content.String(),
 		Help:    "y: Yes, delete • n/Esc: No, cancel",
@@ -1682,4 +1683,20 @@ func (m PlayModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// renderPage injects the now-playing bar when the model's own player is not
+// actively playing (so viewPlaying is unaffected).
+func (m PlayModel) renderPage(layout PageLayout) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPage(layout)
+}
+
+func (m PlayModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

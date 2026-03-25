@@ -53,7 +53,7 @@ const (
 type overwriteSource int
 
 const (
-	overwriteSourceZip  overwriteSource = iota
+	overwriteSourceZip overwriteSource = iota
 	overwriteSourceGist
 )
 
@@ -113,16 +113,16 @@ type GistModel struct {
 	gistDescription string
 	createPublic    bool
 	// text input
-	textInput    textinput.Model
+	textInput textinput.Model
 	// Phase 3: backup/sync
-	checklist      components.ChecklistModel
-	syncPrefs      storage.SyncPrefs
-	backupManager  *storage.BackupManager
-	gistSyncMgr    *storage.GistSyncManager
-	pendingZipPath string          // zip path set after path prompt
-	pendingPrefs   storage.SyncPrefs // prefs confirmed before conflict check
-	overwritePaths []string          // files that would be clobbered
-	overwriteSrc   overwriteSource
+	checklist        components.ChecklistModel
+	syncPrefs        storage.SyncPrefs
+	backupManager    *storage.BackupManager
+	gistSyncMgr      *storage.GistSyncManager
+	pendingZipPath   string            // zip path set after path prompt
+	pendingPrefs     storage.SyncPrefs // prefs confirmed before conflict check
+	overwritePaths   []string          // files that would be clobbered
+	overwriteSrc     overwriteSource
 	pendingGist      *gist.Gist // gist fetched during restore-from-URL flow
 	gistFetchPending bool       // true while a URL fetch is in flight
 	gistFetchSeq     uint64     // incremented on each new fetch; matched against msg.requestID to discard stale results
@@ -133,6 +133,7 @@ type GistModel struct {
 	height         int
 	token          string
 	quitting       bool
+	nowPlayingBar  string // set by App when ContinueOnNavigate is active
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -1093,7 +1094,7 @@ func (m GistModel) View() string {
 
 	switch m.state {
 	case gistStateMenu:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Sync & Backup",
 			Subtitle: "Select an Option",
 			Content:  m.viewMenuWithSections() + "\n" + m.renderMessage(),
@@ -1101,7 +1102,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateCreateVisibility:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Create Favorites Gist",
 			Subtitle: "Choose Visibility",
 			Content:  m.visibilityMenu.View() + "\n" + m.renderMessage(),
@@ -1113,7 +1114,7 @@ func (m GistModel) View() string {
 		if m.createPublic {
 			vis = "Public"
 		}
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Create Favorites Gist",
 			Subtitle: fmt.Sprintf("Enter Gist Name (%s)", vis),
 			Content:  fmt.Sprintf("Name/description for your gist:\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
@@ -1121,7 +1122,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateCreate:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Create Favorites Gist",
 			Subtitle: "Uploading…",
 			Content:  "Creating gist, please wait…\n\n" + m.renderMessage(),
@@ -1129,7 +1130,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateRestoreGistURL:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Restore All Data from Gist",
 			Subtitle: "Paste a gist URL or ID",
 			Content: fmt.Sprintf(
@@ -1143,7 +1144,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateImportURL:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Import Favorites from URL",
 			Subtitle: "Paste a public gist URL or ID",
 			Content: fmt.Sprintf(
@@ -1168,7 +1169,7 @@ func (m GistModel) View() string {
 		if len(m.gists) == 0 {
 			content = "No gists available.\n\nCreate a favorites gist first."
 		}
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    action,
 			Subtitle: "Select a Gist",
 			Content:  content + "\n" + m.renderMessage(),
@@ -1176,7 +1177,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateTokenMenu:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Token Management",
 			Subtitle: "Manage your GitHub Token",
 			Content:  m.tokenMenuList.View() + "\n" + m.renderMessage(),
@@ -1184,7 +1185,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateTokenSetup:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Setup Token",
 			Subtitle: "Paste your GitHub Token",
 			Content:  fmt.Sprintf("Token will be hidden for security.\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
@@ -1208,7 +1209,7 @@ func (m GistModel) View() string {
 				}
 			}
 		}
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Current Token",
 			Subtitle: "View Token Status",
 			Content:  fmt.Sprintf("Token: %s%s", masked, sourceInfo) + "\n\n" + m.renderMessage(),
@@ -1216,7 +1217,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateUpdateInput:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Update Favorites Gist",
 			Subtitle: "Enter new description",
 			Content:  fmt.Sprintf("Current: %s\n\nNew Description:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
@@ -1224,7 +1225,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateDeleteConfirm:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Delete Favorites Gist",
 			Subtitle: "Confirm Deletion",
 			Content:  fmt.Sprintf("Delete gist?\n%s\n\nType 'yes' to confirm:\n%s", m.selectedGist.Description, m.textInput.View()) + "\n\n" + m.renderMessage(),
@@ -1233,7 +1234,7 @@ func (m GistModel) View() string {
 
 	case gistStateTokenDelete:
 		masked := gist.GetMaskedToken(m.token)
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Delete Token",
 			Subtitle: "⚠️  WARNING",
 			Content:  fmt.Sprintf("This will delete your stored GitHub token!\n\nToken: %s\n\nType 'yes' to confirm:\n%s", masked, m.textInput.View()) + "\n\n" + m.renderMessage(),
@@ -1244,14 +1245,14 @@ func (m GistModel) View() string {
 
 	case gistStateExportChecklist, gistStateRestoreZipChecklist,
 		gistStateSyncGistChecklist, gistStateRestoreGistChecklist:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "Sync & Backup",
 			Content: m.checklist.View() + m.renderMessage(),
 			Help:    m.checklist.HelpText(),
 		}, h)
 
 	case gistStateExportPath:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Export Backup",
 			Subtitle: "Save location",
 			Content: fmt.Sprintf(
@@ -1263,7 +1264,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateRestoreZipPath:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Restore from Backup",
 			Subtitle: "Zip file location",
 			Content:  fmt.Sprintf("Enter path to the backup zip:\n\n%s", m.textInput.View()) + "\n\n" + m.renderMessage(),
@@ -1272,7 +1273,7 @@ func (m GistModel) View() string {
 
 	case gistStateOverwriteWarn:
 		paths := strings.Join(m.overwritePaths, "\n  ")
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:    "Overwrite Warning",
 			Subtitle: "⚠️  The following files already exist:",
 			Content:  fmt.Sprintf("  %s\n\nPress Enter to overwrite, Esc to cancel.", paths) + "\n\n" + m.renderMessage(),
@@ -1280,7 +1281,7 @@ func (m GistModel) View() string {
 		}, h)
 
 	case gistStateSyncProgress:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "Sync & Backup",
 			Content: "Working…\n\n" + m.renderMessage(),
 		}, h)
@@ -1578,4 +1579,10 @@ func openBrowser(url string) error {
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 	return cmd.Start()
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m GistModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }

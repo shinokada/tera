@@ -60,6 +60,7 @@ type ConnectionSettingsModel struct {
 	message          string
 	messageIsSuccess bool
 	messageTime      int
+	nowPlayingBar    string // set by App when ContinueOnNavigate is active
 }
 
 // NewConnectionSettingsModel creates a new connection settings model
@@ -425,7 +426,7 @@ func (m ConnectionSettingsModel) viewMenu() string {
 		content.WriteString(infoStyle().Render("ℹ️  Helps maintain stable playback on unstable networks (4G/GPRS)"))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
@@ -456,7 +457,7 @@ func (m ConnectionSettingsModel) viewDelay() string {
 	content.WriteString("\n\n")
 	content.WriteString(infoStyle().Render("Shorter delays reconnect faster but may strain weak connections"))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-7: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
@@ -491,8 +492,14 @@ func (m ConnectionSettingsModel) viewBuffer() string {
 	content.WriteString("\n\n")
 	content.WriteString(infoStyle().Render("Larger buffers handle longer signal drops but use more memory"))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-8: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m ConnectionSettingsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }

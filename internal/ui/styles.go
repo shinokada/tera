@@ -230,10 +230,11 @@ func renderHeader() string {
 
 // PageLayout represents a consistent page layout structure
 type PageLayout struct {
-	Title    string // Main title (optional)
-	Subtitle string // Subtitle (optional)
-	Content  string // Main content area
-	Help     string // Help text at bottom
+	Title      string // Main title (optional)
+	Subtitle   string // Subtitle (optional)
+	Content    string // Main content area
+	NowPlaying string // Now-playing bar shown above the help text (optional)
+	Help       string // Help text at bottom
 }
 
 // RenderPage renders a page with consistent layout using the template
@@ -242,9 +243,17 @@ func RenderPage(layout PageLayout) string {
 	// Assemble page content using shared helper
 	content := assemblePageContent(layout)
 
+	// Add now-playing bar above help text (if provided)
+	if layout.NowPlaying != "" {
+		if layout.Content != "" {
+			content += "\n"
+		}
+		content += layout.NowPlaying + "\n"
+	}
+
 	// Add help text (if provided)
 	if layout.Help != "" {
-		if layout.Content != "" {
+		if layout.Content != "" && layout.NowPlaying == "" {
 			content += "\n"
 		}
 		content += helpStyle().Render(layout.Help)
@@ -315,17 +324,27 @@ func RenderPageWithBottomHelp(layout PageLayout, terminalHeight int) string {
 	p := getPadding()
 	totalUsed := teraHeaderLines + contentLines + p.PageVertical // padding from docStyleNoTopPadding
 
-	// Calculate remaining space for help text to be at bottom
-	// Reserve 1 line for help text itself
-	remainingLines := terminalHeight - totalUsed - 1
+	// Calculate remaining space for help text to be at bottom.
+	// Reserve 1 line for help text + 1 line for now-playing bar if present.
+	nowPlayingLineCount := 0
+	if layout.NowPlaying != "" {
+		nowPlayingLineCount = 1
+	}
+	remainingLines := terminalHeight - totalUsed - 1 - nowPlayingLineCount
 	if remainingLines < 0 {
 		remainingLines = 0
 	}
 
-	// Add spacing to push help text to bottom
+	// Add spacing to push now-playing + help text to bottom
 	var b strings.Builder
 	b.WriteString(content)
 	for i := 0; i < remainingLines; i++ {
+		b.WriteString("\n")
+	}
+
+	// Now-playing bar above help text (if provided)
+	if layout.NowPlaying != "" {
+		b.WriteString(layout.NowPlaying)
 		b.WriteString("\n")
 	}
 

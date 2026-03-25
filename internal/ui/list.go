@@ -31,17 +31,18 @@ const (
 
 // ListManagementModel represents the list management screen
 type ListManagementModel struct {
-	state        listManagementState
-	favoritePath string
-	lists        []string
-	listModel    list.Model
-	textInput    textinput.Model
-	selectedList string
-	err          error
-	message      string
-	messageTime  int
-	width        int
-	height       int
+	state         listManagementState
+	favoritePath  string
+	lists         []string
+	listModel     list.Model
+	textInput     textinput.Model
+	selectedList  string
+	err           error
+	message       string
+	messageTime   int
+	width         int
+	height        int
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // NewListManagementModel creates a new list management model
@@ -678,7 +679,7 @@ func (m ListManagementModel) viewMenu() string {
 
 	content.WriteString(m.listModel.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
 	}, m.height)
@@ -704,7 +705,7 @@ func (m ListManagementModel) viewCreate() string {
 		content.WriteString(errorStyle().Render(m.message))
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Create New List",
 		Content: content.String(),
 		Help:    "Enter: Create • Esc: Back • Ctrl+C: Quit",
@@ -733,7 +734,7 @@ func (m ListManagementModel) viewDelete() string {
 		content.WriteString(errorStyle().Render(m.message))
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Delete List",
 		Content: content.String(),
 		Help:    "Enter: Continue • Esc: Back • Ctrl+C: Quit",
@@ -761,7 +762,7 @@ func (m ListManagementModel) viewSelectListToDelete() string {
 		maxNum = 9
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
 	}, m.height)
@@ -777,7 +778,7 @@ func (m ListManagementModel) viewConfirmDelete() string {
 
 	content.WriteString("This action cannot be undone.")
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Confirm Deletion",
 		Content: content.String(),
 		Help:    "y: Yes, Delete • n/Esc: Cancel",
@@ -806,7 +807,7 @@ func (m ListManagementModel) viewEdit() string {
 		content.WriteString(errorStyle().Render(m.message))
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Edit List Name",
 		Content: content.String(),
 		Help:    "Enter: Continue • Esc: Back • Ctrl+C: Quit",
@@ -834,7 +835,7 @@ func (m ListManagementModel) viewSelectListToEdit() string {
 		maxNum = 9
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    fmt.Sprintf("↑↓/jk: Navigate • Enter: Select • 1-%d: Quick select • Esc: Back • Ctrl+C: Quit", maxNum),
 	}, m.height)
@@ -851,7 +852,7 @@ func (m ListManagementModel) viewEnterNewName() string {
 		content.WriteString(errorStyle().Render(m.message))
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:    "Edit List Name",
 		Subtitle: fmt.Sprintf("Renaming: %s", m.selectedList),
 		Content:  content.String(),
@@ -877,11 +878,23 @@ func (m ListManagementModel) viewShowAll() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "All Favorite Lists",
 		Content: content.String(),
 		Help:    "Esc: Back • Ctrl+C: Quit",
 	}, m.height)
+}
+
+// renderPage wraps RenderPage injecting the active now-playing bar.
+func (m ListManagementModel) renderPage(layout PageLayout) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPage(layout)
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m ListManagementModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }
 
 // Messages

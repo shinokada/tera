@@ -34,25 +34,26 @@ const (
 
 // BlocklistModel represents the blocklist screen
 type BlocklistModel struct {
-	state                blocklistState
-	manager              *blocklist.Manager
-	mainMenu             list.Model
-	rulesMenu            list.Model
-	listModel            list.Model
-	rulesListModel       list.Model
-	stations             []blocklist.BlockedStation
-	rules                []blocklist.BlockRule
-	selectedRuleIndex    int
-	pendingRuleType      blocklist.BlockRuleType
-	pendingRuleValue     string
-	previousState        blocklistState
-	textInput            textinput.Model
-	message              string
-	messageTime          int
-	err                  error
-	width                int
-	height               int
-	showBlockedInSearch  bool // current setting value
+	state               blocklistState
+	manager             *blocklist.Manager
+	mainMenu            list.Model
+	rulesMenu           list.Model
+	listModel           list.Model
+	rulesListModel      list.Model
+	stations            []blocklist.BlockedStation
+	rules               []blocklist.BlockRule
+	selectedRuleIndex   int
+	pendingRuleType     blocklist.BlockRuleType
+	pendingRuleValue    string
+	previousState       blocklistState
+	textInput           textinput.Model
+	message             string
+	messageTime         int
+	err                 error
+	width               int
+	height              int
+	showBlockedInSearch bool   // current setting value
+	nowPlayingBar       string // set by App when ContinueOnNavigate is active
 }
 
 // blocklistItem wraps a BlockedStation for list.Item interface
@@ -571,7 +572,7 @@ func (m BlocklistModel) viewMainMenu() string {
 
 	content.WriteString(m.mainMenu.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
 	}, m.height)
@@ -643,7 +644,7 @@ func (m BlocklistModel) viewSearchVisibility() string {
 		content.WriteString("  2) n — Keep hiding blocked stations from search\n")
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🔍 Search Visibility",
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2: No • Esc: Back",
@@ -665,7 +666,7 @@ func (m BlocklistModel) viewRulesMenu() string {
 
 	content.WriteString(m.rulesMenu.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-4: Quick select • Esc: Back • Ctrl+C: Quit",
 	}, m.height)
@@ -694,7 +695,7 @@ func (m BlocklistModel) viewBlockedStations() string {
 		content.WriteString(m.listModel.View())
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:    "Blocked Stations",
 		Subtitle: subtitle,
 		Content:  content.String(),
@@ -710,7 +711,7 @@ func (m BlocklistModel) viewConfirmClear() string {
 	fmt.Fprintf(&content, "Clear all %d blocked stations?\n\n", count)
 	content.WriteString(errorStyle().Render("⚠ This cannot be undone!"))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Confirm Clear",
 		Content: content.String(),
 		Help:    "y: Yes, clear all • n/Esc: No, cancel",
@@ -730,7 +731,7 @@ func (m BlocklistModel) viewPlaceholder(title string) string {
 		content.WriteString(infoStyle().Render(m.message))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: content.String(),
 		Help:    "Esc: Back",
@@ -859,7 +860,7 @@ func (m BlocklistModel) viewBlockByCountry() string {
 
 	content.WriteString(m.textInput.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Block by Country",
 		Content: content.String(),
 		Help:    "Enter: Add rule • Esc: Back",
@@ -884,7 +885,7 @@ func (m BlocklistModel) viewBlockByLanguage() string {
 
 	content.WriteString(m.textInput.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Block by Language",
 		Content: content.String(),
 		Help:    "Enter: Add rule • Esc: Back",
@@ -909,7 +910,7 @@ func (m BlocklistModel) viewBlockByTag() string {
 
 	content.WriteString(m.textInput.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Block by Tag",
 		Content: content.String(),
 		Help:    "Enter: Add rule • Esc: Back",
@@ -938,7 +939,7 @@ func (m BlocklistModel) viewActiveRules() string {
 		content.WriteString(m.rulesListModel.View())
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:    "🚫 Active Block Rules",
 		Subtitle: subtitle,
 		Content:  content.String(),
@@ -959,7 +960,7 @@ func (m BlocklistModel) viewConfirmDeleteRule() string {
 		content.WriteString("No rule selected")
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Confirm Delete Rule",
 		Content: content.String(),
 		Help:    "y: Yes, delete • n/Esc: No, cancel",
@@ -984,7 +985,7 @@ func (m BlocklistModel) viewConfirmAddRule() string {
 		content.WriteString(infoStyle().Render("This will block all stations with this tag/genre."))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Confirm Add Rule",
 		Content: content.String(),
 		Help:    "y: Yes, add rule • n/Esc: No, cancel",
@@ -1009,4 +1010,10 @@ type blockRuleAddedMsg struct {
 
 type blockRuleErrorMsg struct {
 	err error
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m BlocklistModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }

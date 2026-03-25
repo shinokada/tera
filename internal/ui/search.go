@@ -183,6 +183,7 @@ type SearchModel struct {
 	showBlockedInSearch bool
 	spinner             spinner.Model
 	// ...existing code...
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // executeSearchType transitions to the appropriate search state for the given menu index (0-based).
@@ -865,7 +866,7 @@ func (m SearchModel) View() string {
 		content.WriteString(m.getSearchTypeDescription())
 		content.WriteString("\n\n")
 		content.WriteString(m.textInput.View())
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "🔍 Search Radio Stations",
 			Content: content.String(),
 			Help:    "Enter: Search • Esc: Back • Ctrl+C: Quit",
@@ -875,7 +876,7 @@ func (m SearchModel) View() string {
 		var content strings.Builder
 		content.WriteString(m.spinner.View())
 		content.WriteString(" Searching for stations...")
-		return RenderPage(PageLayout{
+		return m.renderPage(PageLayout{
 			Title:   "🔍 Searching...",
 			Content: content.String(),
 			Help:    "",
@@ -914,7 +915,7 @@ func (m SearchModel) View() string {
 				}
 			}
 
-			return RenderPage(PageLayout{
+			return m.renderPage(PageLayout{
 				Title:   "🔍 No Results",
 				Content: criteria.String(),
 				Help:    "Esc: Back to search menu",
@@ -935,7 +936,7 @@ func (m SearchModel) View() string {
 			}
 		}
 
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Content: content.String(),
 			Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
 		}, m.height)
@@ -1006,7 +1007,7 @@ func (m SearchModel) View() string {
 			content.WriteString(highlightStyle().Render(timerInfo))
 		}
 		helpText := "Space: Pause • f: Fav • s: List • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "🎵 Now Playing",
 			Content: content.String(),
 			Help:    helpText,
@@ -1030,20 +1031,20 @@ func (m SearchModel) View() string {
 			sb.WriteString("\n\n")
 		}
 		sb.WriteString(m.manageTags.View())
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "🏷 Manage Tags",
 			Content: sb.String(),
 			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
 		}, m.height)
 	case searchStateSleepTimer:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "💤 Sleep Timer",
 			Content: m.sleepTimerDialog.View(),
 			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
 		}, m.height)
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Content: "Unknown state",
 		Help:    "",
 	})
@@ -1057,7 +1058,7 @@ func (m SearchModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -1133,7 +1134,7 @@ func (m SearchModel) renderStationInfo() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "📻 Station Information",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Quick select • Esc: Back • q: Quit",
@@ -1153,7 +1154,7 @@ func (m SearchModel) renderSavePrompt() string {
 	content.WriteString("1) ⭐ Add to Quick Favorites\n")
 	content.WriteString("2) Return to search results")
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save Station?",
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2/Esc: No • q: Quit",
@@ -1186,7 +1187,7 @@ func (m SearchModel) viewSelectList() string {
 		content.WriteString("Loading lists...")
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save to List",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • n: New list • Esc: Cancel",
@@ -1212,7 +1213,7 @@ func (m SearchModel) viewNewListInput() string {
 	// Text input
 	content.WriteString(m.newListInput.View())
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Create New List",
 		Content: content.String(),
 		Help:    "Enter: Save • Esc: Cancel",
@@ -1278,7 +1279,7 @@ func (m SearchModel) renderSearchMenu() string {
 
 	helpText := "↑↓/jk: Navigate • Enter: Select • 1-6+Enter: Search • 10,11,12...: History • Esc: Back • Ctrl+C: Quit"
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
@@ -1636,7 +1637,7 @@ func (m SearchModel) viewAdvancedForm() string {
 
 	helpText := "Tab/↑↓: Navigate all fields • Space/←→: Toggle sort • 1/2/3: Select bitrate • Enter: Search • Esc: Cancel"
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
@@ -1722,4 +1723,20 @@ func (m SearchModel) undoLastBlock() tea.Cmd {
 		}
 		return undoBlockFailedMsg{}
 	}
+}
+
+// renderPage injects the now-playing bar when the model's own player is not
+// actively playing (so viewPlaying is unaffected).
+func (m SearchModel) renderPage(layout PageLayout) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPage(layout)
+}
+
+func (m SearchModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

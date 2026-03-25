@@ -91,7 +91,8 @@ type MostPlayedModel struct {
 	listItems      []list.Item
 	listModel      list.Model
 	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	playOptsCfg   config.PlayOptionsConfig
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // mostPlayedStationItem wraps a station with metadata for the list
@@ -810,7 +811,7 @@ func (m MostPlayedModel) viewList() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played Stations",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • g/G: Top/End • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
@@ -893,7 +894,7 @@ func (m MostPlayedModel) viewPlaying() string {
 	}
 
 	helpText := "p: Pause • s: Stop • r: Rate • t: Tag • f: Fav • 0: Main Menu • ?: Help • Esc: Back"
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played - Now Playing",
 		Content: content.String(),
 		Help:    helpText,
@@ -908,7 +909,7 @@ func (m MostPlayedModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -925,7 +926,7 @@ func (m MostPlayedModel) viewSavePrompt() string {
 	content.WriteString("[L] Choose from list\n")
 	content.WriteString("[N] Cancel")
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "💾 Save Station",
 		Content: content.String(),
 		Help:    "Y: My-favorites • L: Choose list • N: Cancel",
@@ -956,7 +957,7 @@ func (m MostPlayedModel) viewConfirmStop() string {
 	content.WriteString("Are you sure you want to stop playback?\n\n")
 	content.WriteString("y: Yes, stop\n")
 	content.WriteString("n/Esc: No, keep playing\n")
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Confirm Stop",
 		Content: content.String(),
 		Help:    "y: Yes • n/Esc: No",
@@ -969,9 +970,18 @@ func (m MostPlayedModel) viewSelectList() string {
 	content.WriteString("Select a list:\n\n")
 	content.WriteString(m.listModel.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📁 Select List",
 		Content: content.String(),
 		Help:    "↑↓: Navigate • Enter: Select • Esc: Cancel",
 	}, m.height)
+}
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m MostPlayedModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

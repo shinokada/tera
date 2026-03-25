@@ -88,7 +88,8 @@ type LuckyModel struct {
 	// Input focus mode: true = typing in Genre/keyword, false = history navigation
 	inputMode bool
 	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	playOptsCfg   config.PlayOptionsConfig
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // Messages for lucky screen
@@ -1331,7 +1332,7 @@ func (m LuckyModel) View() string {
 			sb.WriteString("\n\n")
 		}
 		sb.WriteString(m.manageTags.View())
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "🏷 Manage Tags",
 			Content: sb.String(),
 			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
@@ -1422,7 +1423,7 @@ func (m LuckyModel) viewInput() string {
 
 	helpText := luckyHelpInputFooter
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
@@ -1448,7 +1449,7 @@ func (m LuckyModel) viewSearching() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "I Feel Lucky",
 		Content: content.String(),
 		Help:    "Please wait...",
@@ -1534,7 +1535,7 @@ func (m LuckyModel) viewPlaying() string {
 	}
 
 	helpText := luckyHelpPlayingFooter
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
 		Help:    helpText,
@@ -1574,7 +1575,7 @@ func (m LuckyModel) viewSavePrompt() string {
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save Station?",
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2/Esc: No",
@@ -1607,7 +1608,7 @@ func (m LuckyModel) viewSelectList() string {
 		content.WriteString("Loading lists...")
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save to List",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • n: New list • Esc: Cancel",
@@ -1633,7 +1634,7 @@ func (m LuckyModel) viewNewListInput() string {
 	// Text input
 	content.WriteString(m.newListInput.View())
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Create New List",
 		Content: content.String(),
 		Help:    "Enter: Save • Esc: Cancel",
@@ -1648,7 +1649,7 @@ func (m LuckyModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -2068,7 +2069,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
 	help := luckyHelpShuffleFooter
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: content.String(),
 		Help:    help,
@@ -2148,9 +2149,25 @@ func (m LuckyModel) viewConfirmStop() string {
 	}
 	content.WriteString("Are you sure you want to stop playback?\n")
 	content.WriteString(infoStyle().Render("Press y/1 to stop, n/2/Esc to cancel."))
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Confirm Stop",
 		Content: content.String(),
 		Help:    "y/1: Stop • n/2/Esc: Cancel",
 	})
+}
+
+// renderPage injects the now-playing bar when the model's own player is not
+// actively playing (so viewPlaying is unaffected).
+func (m LuckyModel) renderPage(layout PageLayout) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPage(layout)
+}
+
+func (m LuckyModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

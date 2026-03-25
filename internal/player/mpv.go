@@ -38,6 +38,7 @@ var playerInstanceCounter atomic.Uint64
 type MPVPlayer struct {
 	cmd             *exec.Cmd
 	playing         bool
+	killed          bool // set by Stop() on a not-yet-playing player to reject a late Play()
 	paused          bool // Pause state
 	station         *api.Station
 	volume          int // Current volume (0-100)
@@ -71,6 +72,12 @@ func NewMPVPlayer() *MPVPlayer {
 func (p *MPVPlayer) Play(station *api.Station) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// If Stop() was called before Play() ran (race between async cmd and
+	// navigation), honour the stop request and refuse to start.
+	if p.killed {
+		return nil
+	}
 
 	// Stop any existing playback
 	if p.playing {
@@ -497,6 +504,9 @@ func (p *MPVPlayer) Stop() error {
 	defer p.mu.Unlock()
 
 	if !p.playing {
+		// Not yet playing — mark as killed so any in-flight Play() cmd
+		// that arrives after this Stop() will not start the player.
+		p.killed = true
 		return nil
 	}
 
@@ -523,6 +533,7 @@ func (p *MPVPlayer) cleanupResourcesLocked() {
 	close(p.stopCh)
 
 	p.playing = false
+	p.killed = false // reset so the player instance may be reused after a full stop
 	p.paused = false
 	p.station = nil
 	p.cmd = nil

@@ -126,7 +126,8 @@ type TopRatedModel struct {
 	listItems      []list.Item
 	listModel      list.Model
 	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	playOptsCfg   config.PlayOptionsConfig
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // topRatedStationItem wraps a station with rating for the list
@@ -881,10 +882,19 @@ func (m TopRatedModel) View() string {
 		helpText = "s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
+}
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m TopRatedModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }
 
 // Phase 5: Confirm stop prompt view

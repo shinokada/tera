@@ -79,7 +79,8 @@ type BrowseTagsModel struct {
 	width           int
 	height          int
 	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	playOptsCfg   config.PlayOptionsConfig
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // NewBrowseTagsModel creates a Browse by Tag model.
@@ -576,7 +577,7 @@ func (m BrowseTagsModel) View() string {
 
 // viewManageTags renders the ManageTags dialog overlay.
 func (m BrowseTagsModel) viewManageTags() string {
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Manage Tags",
 		Content: m.manageTags.View(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
@@ -591,7 +592,7 @@ func (m BrowseTagsModel) viewTagInput() string {
 		sb.WriteString("\n\n")
 	}
 	sb.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: sb.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -622,7 +623,7 @@ func (m BrowseTagsModel) viewTagList() string {
 
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Browse by Tag",
 		Content: sb.String(),
 		Help:    "↑↓/jk: Navigate • Enter: View stations • d: Delete tag (confirm) • Esc/m: Back",
@@ -672,7 +673,7 @@ func (m BrowseTagsModel) viewDetail() string {
 
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   fmt.Sprintf("🏷 Tag: %s", m.selectedTag),
 		Content: sb.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back",
@@ -735,9 +736,18 @@ func (m BrowseTagsModel) viewPlaying() string {
 	renderSaveMessage(&sb, m.saveMessage)
 
 	helpText := "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back"
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),
 		Help:    helpText,
 	}, m.height)
+}
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m BrowseTagsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }
