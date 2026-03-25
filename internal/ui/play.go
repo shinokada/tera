@@ -1675,20 +1675,34 @@ type trackHistoryMsg struct {
 func (m PlayModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "1":
+		// Always reset state so the model is clean when reused.
+		m.state = playStateStationSelection
 		// User confirmed stop: navigate based on what triggered the prompt.
 		if m.confirmStopTarget == "main" {
+			navCmd := func() tea.Msg { return backToMainMsg{} }
+			if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+				m, handoffCmd := m.handOffPlayer()
+				m.selectedStation = nil
+				m.trackHistory = []string{}
+				return m, tea.Batch(handoffCmd, navCmd)
+			}
 			if m.player != nil {
 				_ = m.player.Stop()
 			}
 			m.selectedStation = nil
 			m.trackHistory = []string{}
-			return m, func() tea.Msg { return backToMainMsg{} }
+			return m, navCmd
 		}
-		// Default: return to station selection
+		// Default: return to station selection (hand off or stop).
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			m.selectedStation = nil
+			m.trackHistory = []string{}
+			return m, handoffCmd
+		}
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
-		m.state = playStateStationSelection
 		m.selectedStation = nil
 		m.trackHistory = []string{}
 		return m, nil

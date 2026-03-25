@@ -124,7 +124,9 @@ func TestMPVPlayer_KilledPlayer_IgnoresPlay(t *testing.T) {
 	p := NewMPVPlayer()
 
 	// Mark the player as killed (Stop() called before async Play() ran).
-	_ = p.Stop()
+	if err := p.Stop(); err != nil {
+		t.Fatalf("Stop() should not fail while preparing killed state: %v", err)
+	}
 
 	station := &api.Station{
 		StationUUID: "test-killed",

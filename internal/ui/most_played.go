@@ -940,12 +940,14 @@ func (m MostPlayedModel) viewSavePrompt() string {
 func (m MostPlayedModel) handleConfirmStopInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	switch msg.String() {
 	case "y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = mostPlayedStateList
 		var cmd tea.Cmd
-		if m.confirmStopTarget == "main" {
+		if target == "main" {
 			cmd = m.navigateToMainCmd()
 		} else {
 			cmd = m.navigateBackCmd()
-			m.state = mostPlayedStateList
 		}
 		m.selectedStation = nil
 		if cmd != nil {

@@ -102,11 +102,16 @@ func (m SearchModel) performSearch(query string) tea.Cmd {
 	}
 }
 
-// loadAvailableLists is a stub to fix build errors. Implement as needed.
+// loadAvailableLists loads all available favorite list names from storage.
 func (m SearchModel) loadAvailableLists() tea.Cmd {
-	// TODO: implement actual logic
-	return nil
-
+	return func() tea.Msg {
+		store := storage.NewStorage(m.favoritePath)
+		lists, err := store.GetAllLists(context.Background())
+		if err != nil {
+			return saveToListFailedMsg{err: fmt.Errorf("failed to load lists: %w", err)}
+		}
+		return listsLoadedMsg{lists: lists}
+	}
 }
 
 // searchState represents the current state in the search screen
@@ -183,7 +188,8 @@ type SearchModel struct {
 	showBlockedInSearch bool
 	spinner             spinner.Model
 	// ...existing code...
-	nowPlayingBar string // set by App when ContinueOnNavigate is active
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
 }
 
 // executeSearchType transitions to the appropriate search state for the given menu index (0-based).
@@ -235,10 +241,25 @@ func (m SearchModel) executeSearchType(idx int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// saveToList is a stub to fix build errors. Implement as needed.
+// saveToList saves the currently selected station to the named favorite list.
 func (m SearchModel) saveToList(listName string) tea.Cmd {
-	// TODO: implement actual logic
-	return nil
+	return func() tea.Msg {
+		if m.selectedStation == nil {
+			return saveToListFailedMsg{err: fmt.Errorf("no station selected")}
+		}
+		store := storage.NewStorage(m.favoritePath)
+		err := store.AddStation(context.Background(), listName, *m.selectedStation)
+		if err != nil {
+			if err == storage.ErrDuplicateStation {
+				return saveToListFailedMsg{err: err, isDuplicate: true}
+			}
+			return saveToListFailedMsg{err: err}
+		}
+		return saveToListSuccessMsg{
+			listName:    listName,
+			stationName: m.selectedStation.TrimName(),
+		}
+	}
 }
 
 // selectByNumber handles selection by number input (1-6 for search types, 10+ for history)
@@ -532,6 +553,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "0":
 		// Phase 5: gate on ConfirmStop before navigating away.
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
 			m.state = searchStateConfirmStop
 			return m, nil
 		}
@@ -542,6 +564,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Phase 5: gate on ConfirmStop before navigating away.
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
 			m.state = searchStateConfirmStop
 			return m, nil
 		}
@@ -1051,6 +1074,13 @@ func (m SearchModel) View() string {
 			Title:   "💤 Sleep Timer",
 			Content: m.sleepTimerDialog.View(),
 			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
+		}, m.height)
+
+	case searchStateConfirmStop:
+		return m.renderPageWithBottomHelp(PageLayout{
+			Title:   "⚠ Confirm Stop",
+			Content: "Stop playback and leave this screen?\n\ny/1: Yes, stop\nn/2/Esc: No, keep playing",
+			Help:    "y/1: Yes • n/2/Esc: No",
 		}, m.height)
 	}
 

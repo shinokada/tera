@@ -297,6 +297,40 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tickEverySecond()
+
+	case listsLoadedMsg:
+		m.availableLists = msg.lists
+		items := make([]list.Item, len(msg.lists))
+		for i, name := range msg.lists {
+			items[i] = playListItem{name: name}
+		}
+		listHeight := m.height - 10
+		if listHeight < 4 {
+			listHeight = 4
+		}
+		delegate := createStyledDelegate()
+		m.listModel = list.New(items, delegate, m.width, listHeight)
+		m.listModel.SetShowTitle(false)
+		m.listModel.SetShowStatusBar(false)
+		m.listModel.SetFilteringEnabled(false)
+		m.listModel.SetShowHelp(false)
+		return m, nil
+
+	case saveToListSuccessMsg:
+		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to %s", msg.stationName, msg.listName)
+		m.saveMessageTime = messageDisplayShort
+		m.state = searchStatePlaying
+		return m, tickEverySecond()
+
+	case saveToListFailedMsg:
+		if msg.isDuplicate {
+			m.saveMessage = "Already in this list"
+		} else {
+			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
+		}
+		m.saveMessageTime = messageDisplayShort
+		m.state = searchStatePlaying
+		return m, tickEverySecond()
 	}
 
 	// Pass through to list models for navigation
@@ -430,17 +464,32 @@ func (m SearchModel) handleResultsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleConfirmStopKey handles the confirm-stop prompt (Phase 5).
+// Routes confirmation through navigateToMainCmd / handOffPlayer so that
+// ContinueOnNavigate handoff is honoured, and resets state so the model is
+// clean when reused.
 func (m SearchModel) handleConfirmStopKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "y", "Y":
-		// Stop and navigate back
+	case "y", "Y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = searchStateResults
+		if target == "main" {
+			m, cmd := m.navigateToMainCmd()
+			m.selectedStation = nil
+			return m, cmd
+		}
+		// "back" — return to results (hand off or stop).
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			m.selectedStation = nil
+			return m, handoffCmd
+		}
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
-		m.state = searchStateResults
 		return m, nil
-	case "n", "N", "esc":
+	case "n", "N", "2", "esc":
 		// Resume / stay
 		m.state = searchStatePlaying
 		return m, nil

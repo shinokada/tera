@@ -126,9 +126,10 @@ type TopRatedModel struct {
 	listItems      []list.Item
 	listModel      list.Model
 	// Play options (injected by App)
-	playOptsCfg       config.PlayOptionsConfig
-	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
-	nowPlayingBar     string // set by App when ContinueOnNavigate is active
+	playOptsCfg        config.PlayOptionsConfig
+	confirmStopTarget  string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar      string // set by App when ContinueOnNavigate is active
+	pendingResolveUUID string // UUID of the in-flight GetByUUID lookup; cleared on resolution
 }
 
 // topRatedStationItem wraps a station with rating for the list
@@ -263,11 +264,19 @@ func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
 			m.saveMessage = "Could not resolve station URL"
 			m.saveMessageSuccess = false
 			m.saveMessageTime = 3
+			m.pendingResolveUUID = ""
 			return m, tickEverySecond()
 		}
-		// Update the cache so future plays don't need a lookup
+		// Discard stale responses (user changed selection or navigated away).
+		if m.pendingResolveUUID != msg.station.StationUUID {
+			return m, nil
+		}
+		m.pendingResolveUUID = ""
+		// Update the cache so future plays don't need a lookup.
 		if m.ratingsManager != nil {
-			_ = m.ratingsManager.SetRating(msg.station, m.ratingsManager.GetRating(msg.station.StationUUID).Rating)
+			if r := m.ratingsManager.GetRating(msg.station.StationUUID); r != nil {
+				_ = m.ratingsManager.SetRating(msg.station, r.Rating)
+			}
 		}
 		return m.playStation(*msg.station)
 
@@ -407,9 +416,15 @@ func (m TopRatedModel) playStation(st api.Station) (TopRatedModel, tea.Cmd) {
 	// to the Batch would race and kill the just-started stream if handoff is
 	// processed first.
 	if m.playOptsCfg.ContinueOnNavigate {
+		oldPlayer := m.player
+		newP := player.NewMPVPlayer()
+		if m.metadataManager != nil {
+			newP.SetMetadataManager(m.metadataManager)
+		}
+		m.player = newP
 		return m, func() tea.Msg {
 			return handoffPlaybackMsg{
-				player:       m.player,
+				player:       oldPlayer,
 				station:      &st,
 				contextLabel: "Top Rated",
 			}
@@ -454,6 +469,7 @@ func (m TopRatedModel) handleListInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) 
 				}
 				// URL missing — look it up live from the API
 				uuid := item.station.StationUUID
+				m.pendingResolveUUID = uuid
 				m.saveMessage = "Looking up station…"
 				m.saveMessageSuccess = true
 				m.saveMessageTime = 5
@@ -662,12 +678,14 @@ func (m TopRatedModel) handleConfirmStopInput(msg tea.KeyMsg) (TopRatedModel, te
 	key := msg.String()
 	switch key {
 	case "y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = topRatedStateList
 		var cmd tea.Cmd
-		if m.confirmStopTarget == "main" {
+		if target == "main" {
 			cmd = m.navigateToMainCmd()
 		} else {
 			cmd = m.navigateBackCmd()
-			m.state = topRatedStateList
 		}
 		m.selectedStation = nil
 		if cmd != nil {

@@ -606,7 +606,7 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 	}
 	switch msg.String() {
 	case "esc":
-		if m.playOptsCfg.ConfirmStop {
+		if m.playOptsCfg.ConfirmStop && !m.playOptsCfg.ContinueOnNavigate {
 			m.confirmStopTarget = "back"
 			m.state = tagPlaylistsStateConfirmStop
 			return m, nil
@@ -621,7 +621,7 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 			return m, cmd
 		}
 	case "0":
-		if m.playOptsCfg.ConfirmStop {
+		if m.playOptsCfg.ConfirmStop && !m.playOptsCfg.ContinueOnNavigate {
 			m.confirmStopTarget = "main"
 			m.state = tagPlaylistsStateConfirmStop
 			return m, nil
@@ -711,12 +711,18 @@ func (m TagPlaylistsModel) viewConfirmStop() string {
 func (m TagPlaylistsModel) handleConfirmStopInput(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
 	switch msg.String() {
 	case "y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
 		var cmd tea.Cmd
-		if m.confirmStopTarget == "main" {
+		if target == "main" {
+			m.state = tagPlaylistsStateList
 			cmd = m.navigateToMainCmd()
 		} else {
-			cmd = m.navigateBackCmd()
 			m.state = tagPlaylistsStateDetail
+			cmd = m.navigateBackCmd()
+			if m.selectedPlaylist != nil {
+				m.loadDetailStations()
+			}
 		}
 		m.selectedStation = nil
 		if cmd != nil {
@@ -808,7 +814,7 @@ func (m TagPlaylistsModel) startPlayback() tea.Cmd {
 	}
 	station := *m.selectedStation
 	startVol := m.playOptsCfg.DefaultVolume
-	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+	if m.playOptsCfg.StartVolumeMode == "last_used" {
 		startVol = m.playOptsCfg.LastUsedVolume
 	}
 	if station.Volume != nil {
@@ -1154,7 +1160,7 @@ func (m TagPlaylistsModel) viewPlaying() string {
 // renderPageWithBottomHelp injects the now-playing bar when the model's own
 // player is not actively playing (so viewPlaying is unaffected).
 func (m TagPlaylistsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
-	if m.player == nil || !m.player.IsPlaying() {
+	if m.state != tagPlaylistsStatePlaying && m.state != tagPlaylistsStateConfirmStop {
 		layout.NowPlaying = m.nowPlayingBar
 	}
 	return RenderPageWithBottomHelp(layout, height)

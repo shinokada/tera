@@ -88,8 +88,9 @@ type LuckyModel struct {
 	// Input focus mode: true = typing in Genre/keyword, false = history navigation
 	inputMode bool
 	// Play options (injected by App)
-	playOptsCfg   config.PlayOptionsConfig
-	nowPlayingBar string // set by App when ContinueOnNavigate is active
+	playOptsCfg       config.PlayOptionsConfig
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
 }
 
 // Messages for lucky screen
@@ -853,6 +854,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Phase 5: Confirm before stopping
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
 			m.state = luckyStateConfirmStop
 			return m, nil
 		}
@@ -884,6 +886,7 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "0":
 		// Phase 5: Confirm before stopping
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
 			m.state = luckyStateConfirmStop
 			return m, nil
 		}
@@ -1705,6 +1708,12 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc":
+		// Phase 5: gate on ConfirmStop before navigating away.
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
+			m.state = luckyStateConfirmStop
+			return m, nil
+		}
 		// Stop shuffle and playback (or hand off), return to I Feel Lucky input.
 		if m.shuffleManager != nil {
 			m.shuffleManager.Stop()
@@ -1724,15 +1733,23 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "0":
+		// Phase 5: gate on ConfirmStop before navigating away.
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
+			m.state = luckyStateConfirmStop
+			return m, nil
+		}
 		// Return to main menu (or hand off and navigate).
+		// Build cmd before clearing selectedStation so ContinueOnNavigate handoff works.
 		if m.shuffleManager != nil {
 			m.shuffleManager.Stop()
 		}
+		cmd := m.navigateToMainCmd()
 		m.selectedStation = nil
 		m.state = luckyStateInput
 		m.shuffleEnabled = false
 		m.shuffleManager = nil
-		return m, m.navigateToMainCmd()
+		return m, cmd
 	case "h":
 		// Stop shuffle but keep playing current station
 		if m.shuffleManager != nil {
@@ -2140,16 +2157,39 @@ func (m *LuckyModel) reloadSearchHistory() {
 }
 
 // updateConfirmStop handles key input during the confirm-stop prompt (Phase 5).
-// 'y'/1 stops playback and returns to the input screen;
-// 'n'/2/Esc cancels and resumes playback.
+// Routes confirmation through navigateToMainCmd / navigateBackCmd so that
+// ContinueOnNavigate handoff is honoured, and resets state so the model is
+// clean when reused.
 func (m LuckyModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y", "1":
-		// Stop playback and return to input
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = luckyStateInput
+		if target == "main" {
+			cmd := m.navigateToMainCmd()
+			m.selectedStation = nil
+			if cmd != nil {
+				return m, cmd
+			}
+			return m, nil
+		}
+		// "back" — mirror the direct Esc path: hand off (or stop) and return
+		// to the input screen. With ContinueOnNavigate ON, navigate straight
+		// to main so the user never lands on input with a nil selectedStation.
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			station := m.selectedStation
+			m.selectedStation = nil
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{player: m.player, station: station, contextLabel: "Lucky"}
+				},
+				func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+			)
+		}
 		if m.player != nil {
 			_ = m.player.Stop()
 		}
-		m.state = luckyStateInput
 		m.inputMode = true
 		m.textInput.Focus()
 		m.selectedStation = nil
