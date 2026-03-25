@@ -41,6 +41,41 @@ type tagStat struct {
 }
 
 // viewConfirmStop renders the confirmation prompt for stopping playback.
+func (m BrowseTagsModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString("Are you sure you want to stop playback?\n\n")
+	content.WriteString("y: Yes, stop\n")
+	content.WriteString("n/Esc: No, keep playing\n")
+	return m.renderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y: Yes • n/Esc: No",
+	}, m.height)
+}
+
+// handleConfirmStopInput handles key input during the confirm-stop prompt.
+func (m BrowseTagsModel) handleConfirmStopInput(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd) {
+	switch msg.String() {
+	case "y", "1":
+		// Execute the navigation that was originally requested.
+		var cmd tea.Cmd
+		if m.confirmStopTarget == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+			m.state = browseTagsStateDetail
+		}
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case "n", "2", "esc":
+		m.state = browseTagsStatePlaying
+		return m, nil
+	}
+	return m, nil
+}
 
 // BrowseTagsModel is the model for the "Browse by Tag" screen.
 type BrowseTagsModel struct {
@@ -79,8 +114,9 @@ type BrowseTagsModel struct {
 	width           int
 	height          int
 	// Play options (injected by App)
-	playOptsCfg   config.PlayOptionsConfig
-	nowPlayingBar string // set by App when ContinueOnNavigate is active
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // NewBrowseTagsModel creates a Browse by Tag model.
@@ -203,6 +239,8 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 			var cmd tea.Cmd
 			m.manageTags, cmd = m.manageTags.Update(msg)
 			return m, cmd
+		case browseTagsStateConfirmStop:
+			return m.handleConfirmStopInput(msg)
 		}
 
 	case browseTagsResolvedMsg:
@@ -392,6 +430,7 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 	switch msg.String() {
 	case "esc":
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
 			m.state = browseTagsStateConfirmStop
 			return m, nil
 		}
@@ -405,6 +444,7 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 		}
 	case "0":
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
 			m.state = browseTagsStateConfirmStop
 			return m, nil
 		}
@@ -571,6 +611,8 @@ func (m BrowseTagsModel) View() string {
 		return m.viewTagInput()
 	case browseTagsStateManageTags:
 		return m.viewManageTags()
+	case browseTagsStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 	return ""
 }

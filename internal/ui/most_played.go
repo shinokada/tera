@@ -91,8 +91,9 @@ type MostPlayedModel struct {
 	listItems      []list.Item
 	listModel      list.Model
 	// Play options (injected by App)
-	playOptsCfg   config.PlayOptionsConfig
-	nowPlayingBar string // set by App when ContinueOnNavigate is active
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // mostPlayedStationItem wraps a station with metadata for the list
@@ -495,6 +496,7 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 	case "q", "esc", "m":
 		// Phase 5: Confirm before stopping
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
 			m.state = mostPlayedStateConfirmStop
 			return m, nil
 		}
@@ -571,6 +573,7 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 	case "0":
 		// Phase 5: Confirm before stopping
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
 			m.state = mostPlayedStateConfirmStop
 			return m, nil
 		}
@@ -937,8 +940,13 @@ func (m MostPlayedModel) viewSavePrompt() string {
 func (m MostPlayedModel) handleConfirmStopInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	switch msg.String() {
 	case "y", "1":
-		cmd := m.navigateBackCmd()
-		m.state = mostPlayedStateList
+		var cmd tea.Cmd
+		if m.confirmStopTarget == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+			m.state = mostPlayedStateList
+		}
 		m.selectedStation = nil
 		if cmd != nil {
 			return m, cmd

@@ -79,8 +79,9 @@ type PlayModel struct {
 	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
 	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
 	// Play options (injected by App)
-	playOptsCfg   config.PlayOptionsConfig
-	nowPlayingBar string // set by App when ContinueOnNavigate is active
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -834,6 +835,11 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "0":
 		// Phase 5: ConfirmStop prompt
 		if m.playOptsCfg.ConfirmStop {
+			if msg.String() == "0" {
+				m.confirmStopTarget = "main"
+			} else {
+				m.confirmStopTarget = "back"
+			}
 			m.state = playStateConfirmStop
 			return m, nil
 		}
@@ -1669,7 +1675,16 @@ type trackHistoryMsg struct {
 func (m PlayModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "1":
-		// User confirmed stop: stop playback and return to station selection
+		// User confirmed stop: navigate based on what triggered the prompt.
+		if m.confirmStopTarget == "main" {
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+			m.selectedStation = nil
+			m.trackHistory = []string{}
+			return m, func() tea.Msg { return backToMainMsg{} }
+		}
+		// Default: return to station selection
 		if m.player != nil {
 			_ = m.player.Stop()
 		}

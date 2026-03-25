@@ -1587,10 +1587,20 @@ func (a *App) stopScreenPlayers() {
 }
 
 // stopAllPlayback stops mpv on every screen that may be playing.
+// App-level players (activePlayer, quickFavPlayer) are stopped unconditionally.
+// Screen-owned players are only stopped when actively playing; calling Stop()
+// on an idle player sets killed=true which would block the next PlayWithVolume
+// call on that screen.
 func (a *App) stopAllPlayback() {
+	// App-level players: always stop so ContinueOnNavigate state is cleared.
+	if a.activePlayer != nil {
+		_ = a.activePlayer.Stop()
+	}
+	if a.quickFavPlayer != nil {
+		_ = a.quickFavPlayer.Stop()
+	}
+	// Screen-owned players: only stop when actually playing.
 	for _, p := range []*player.MPVPlayer{
-		a.activePlayer,
-		a.quickFavPlayer,
 		a.playScreen.player,
 		a.searchScreen.player,
 		a.luckyScreen.player,
@@ -1599,7 +1609,7 @@ func (a *App) stopAllPlayback() {
 		a.tagPlaylistsScreen.player,
 		a.browseTagsScreen.player,
 	} {
-		if p != nil {
+		if p != nil && p.IsPlaying() {
 			_ = p.Stop()
 		}
 	}

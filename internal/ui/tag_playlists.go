@@ -83,7 +83,8 @@ type TagPlaylistsModel struct {
 	width           int
 	height          int
 	// Play options (injected by App)
-	playOptsCfg config.PlayOptionsConfig
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
 
 	// Fields for create/edit wizard and tag selection
 	matchMode     string
@@ -161,6 +162,8 @@ func (m TagPlaylistsModel) Update(msg tea.Msg) (TagPlaylistsModel, tea.Cmd) {
 			var cmd tea.Cmd
 			m.manageTags, cmd = m.manageTags.Update(msg)
 			return m, cmd
+		case tagPlaylistsStateConfirmStop:
+			return m.handleConfirmStopInput(msg)
 		}
 
 	case tickMsg:
@@ -604,6 +607,7 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 	switch msg.String() {
 	case "esc":
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
 			m.state = tagPlaylistsStateConfirmStop
 			return m, nil
 		}
@@ -618,6 +622,7 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 		}
 	case "0":
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
 			m.state = tagPlaylistsStateConfirmStop
 			return m, nil
 		}
@@ -690,6 +695,40 @@ func (m TagPlaylistsModel) updatePlaying(msg tea.KeyMsg) (TagPlaylistsModel, tea
 }
 
 // viewConfirmStop renders the confirmation prompt for stopping playback.
+func (m TagPlaylistsModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString("Are you sure you want to stop playback?\n\n")
+	content.WriteString("y: Yes, stop\n")
+	content.WriteString("n/Esc: No, keep playing\n")
+	return m.renderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y: Yes • n/Esc: No",
+	}, m.height)
+}
+
+// handleConfirmStopInput handles key input during the confirm-stop prompt.
+func (m TagPlaylistsModel) handleConfirmStopInput(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
+	switch msg.String() {
+	case "y", "1":
+		var cmd tea.Cmd
+		if m.confirmStopTarget == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+			m.state = tagPlaylistsStateDetail
+		}
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case "n", "2", "esc":
+		m.state = tagPlaylistsStatePlaying
+		return m, nil
+	}
+	return m, nil
+}
 
 func (m TagPlaylistsModel) handleRatingInput(msg tea.KeyMsg) (TagPlaylistsModel, tea.Cmd) {
 	m.ratingMode = false
@@ -804,6 +843,8 @@ func (m TagPlaylistsModel) View() string {
 		return m.viewTagInput()
 	case tagPlaylistsStateManageTags:
 		return m.viewManageTags()
+	case tagPlaylistsStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 	return ""
 }

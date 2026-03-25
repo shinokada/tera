@@ -126,8 +126,9 @@ type TopRatedModel struct {
 	listItems      []list.Item
 	listModel      list.Model
 	// Play options (injected by App)
-	playOptsCfg   config.PlayOptionsConfig
-	nowPlayingBar string // set by App when ContinueOnNavigate is active
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // topRatedStationItem wraps a station with rating for the list
@@ -400,15 +401,19 @@ func (m TopRatedModel) playStation(st api.Station) (TopRatedModel, tea.Cmd) {
 	}
 	m.selectedStation = &st
 	m.state = topRatedStatePlaying
-	// Handoff playback to App so global state is updated and Now Playing works
+	// Handoff playback to App so global state is updated and Now Playing works.
+	// When ContinueOnNavigate is ON, send only handoffPlaybackMsg — its handler
+	// already stops any previous activePlayer, so adding stopActivePlaybackMsg
+	// to the Batch would race and kill the just-started stream if handoff is
+	// processed first.
 	if m.playOptsCfg.ContinueOnNavigate {
-		return m, tea.Batch(stopCmd, func() tea.Msg {
+		return m, func() tea.Msg {
 			return handoffPlaybackMsg{
 				player:       m.player,
 				station:      &st,
 				contextLabel: "Top Rated",
 			}
-		})
+		}
 	}
 	return m, stopCmd
 }
@@ -607,6 +612,7 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 	case "q", "esc", "m":
 		// Phase 5: Confirm before stopping
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
 			m.state = topRatedStateConfirmStop
 			return m, nil
 		}
@@ -622,6 +628,7 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 	case "0":
 		// Phase 5: Confirm before stopping
 		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
 			m.state = topRatedStateConfirmStop
 			return m, nil
 		}
@@ -655,13 +662,17 @@ func (m TopRatedModel) handleConfirmStopInput(msg tea.KeyMsg) (TopRatedModel, te
 	key := msg.String()
 	switch key {
 	case "y", "1":
-		// Stop playback and return to list
-		if m.player != nil {
-			_ = m.player.Stop()
+		var cmd tea.Cmd
+		if m.confirmStopTarget == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+			m.state = topRatedStateList
 		}
-		m.state = topRatedStateList
-		m.saveMessage = "Stopped playback"
-		m.saveMessageTime = 2
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case "n", "2", "esc":
 		// Cancel stop, return to playing
@@ -859,6 +870,11 @@ func (m TopRatedModel) View() string {
 	case topRatedStateSelectList:
 		content.WriteString("Select list to save to:\n\n")
 		content.WriteString(m.listModel.View())
+
+	case topRatedStateConfirmStop:
+		content.WriteString("Are you sure you want to stop playback?\n\n")
+		content.WriteString("y: Yes, stop\n")
+		content.WriteString("n/Esc: No, keep playing\n")
 	}
 
 	// Show save message
