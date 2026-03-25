@@ -125,7 +125,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case playbackStartedMsg:
-		if m.saveMessageTime <= 0 {
+		if m.saveMessageTime <= 0 && !m.sleepTimerActive {
 			return m, tickEverySecond()
 		}
 		return m, nil
@@ -156,11 +156,15 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			name = msg.station.TrimName()
 		}
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", name)
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Refresh the in-memory favorites cache so subsequent duplicate checks
 		// and save prompts reflect the station just added.
 		m.reloadQuickFavorites()
 		m.reloadSearchHistory()
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case saveFailedMsg:
@@ -169,12 +173,16 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -183,7 +191,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -211,20 +219,36 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.resultsList.SetItems(items)
 			}
-			return m, tickEverySecond()
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
+			if startTick {
+				return m, tickEverySecond()
+			}
+			return m, nil
 		}
 		m.saveMessage = msg.message
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case undoBlockSuccessMsg:
 		m.saveMessage = "✓ Block undone"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case components.TagSubmittedMsg:
@@ -240,7 +264,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
 				m.refreshResultsTagPills(m.selectedStation.StationUUID)
 			}
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
 			m.state = searchStatePlaying
 			if startTick {
@@ -269,7 +293,7 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
 				m.refreshResultsTagPills(m.selectedStation.StationUUID)
 			}
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
 			m.state = searchStatePlaying
 			if startTick {
@@ -286,7 +310,12 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.SleepTimerSelectedMsg:
 		m.state = searchStatePlaying
 		m.sleepTimerActive = true
-		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+		// Start the tick if the countdown wasn't already keeping it alive
+		activateCmd := func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+		if m.saveMessageTime <= 0 {
+			return m, tea.Batch(tickEverySecond(), activateCmd)
+		}
+		return m, activateCmd
 
 	case components.SleepTimerCancelledMsg:
 		m.state = searchStatePlaying
@@ -297,9 +326,14 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.saveMessageTime--
 			if m.saveMessageTime == 0 {
 				m.saveMessage = ""
+				return m, nil
 			}
+			return m, tickEverySecond()
 		}
-		return m, tickEverySecond()
+		if m.sleepTimerActive {
+			return m, tickEverySecond()
+		}
+		return m, nil
 
 	case listsLoadedMsg:
 		m.availableLists = msg.lists
@@ -321,9 +355,13 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveToListSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to %s", msg.stationName, msg.listName)
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		m.state = searchStatePlaying
-		return m, tickEverySecond()
+		if startTick {
+			return m, tickEverySecond()
+		}
+		return m, nil
 
 	case saveToListFailedMsg:
 		if msg.isDuplicate {
@@ -331,9 +369,13 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		m.state = searchStatePlaying
-		return m, tickEverySecond()
+		if startTick {
+			return m, tickEverySecond()
+		}
+		return m, nil
 	}
 
 	// Pass through to list models for navigation
@@ -456,7 +498,10 @@ func (m SearchModel) handleResultsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation = &station
 			m.state = searchStatePlaying
 			if m.player != nil {
-				return m, m.playStation(station)
+				return m, tea.Batch(
+					func() tea.Msg { return stopActivePlaybackMsg{} },
+					m.playStation(station),
+				)
 			}
 			return m, nil
 		}

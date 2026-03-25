@@ -374,9 +374,8 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		// Only start tick if not already running (saveMessageTime == 0 means no tick;
-		// messageDisplayPersistent means persistent/rating prompt with no tick dispatched yet)
-		if m.saveMessageTime <= 0 {
+		// Only start tick if not already running
+		if m.saveMessageTime <= 0 && !m.sleepTimerActive {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
 		return m, m.pollTrackHistory()
@@ -411,7 +410,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case saveFailedMsg:
@@ -420,7 +423,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case deleteSuccessMsg:
@@ -433,7 +440,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Start tick to show the message and trigger UI refresh to show voted status
 		if startTick {
@@ -443,7 +450,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Start tick to show the message and trigger UI refresh
 		if startTick {
@@ -480,16 +487,25 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.selectedStation = nil
 
-			return m, tickEverySecond()
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
+			if startTick {
+				return m, tickEverySecond()
+			}
+			return m, nil
 		} else {
 			// Already blocked
 			m.saveMessage = msg.message
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
 		}
 		return m, nil
 
 	case undoBlockSuccessMsg:
 		m.saveMessage = "✓ Block undone"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Update blocked status in list
 		if m.stationListModel.Items() != nil {
@@ -506,11 +522,18 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.stationListModel.SetItems(items)
 		}
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case components.TagSubmittedMsg:
@@ -528,7 +551,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
 				m.refreshStationTagPills(m.selectedStation.StationUUID)
 			}
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
 			m.state = playStatePlaying
 			if startTick {
@@ -557,7 +580,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
 				m.refreshStationTagPills(m.selectedStation.StationUUID)
 			}
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
 			m.state = playStatePlaying
 			if startTick {
@@ -575,7 +598,12 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// User confirmed a duration in the dialog
 		m.state = playStatePlaying
 		m.sleepTimerActive = true
-		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+		// Start the tick if the countdown wasn't already keeping it alive
+		activateCmd := func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+		if m.saveMessageTime <= 0 {
+			return m, tea.Batch(tickEverySecond(), activateCmd)
+		}
+		return m, activateCmd
 
 	case components.SleepTimerCancelledMsg:
 		m.state = playStatePlaying
@@ -631,7 +659,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = ""
 			}
 		}
-		return m, tickEverySecond()
+		// Only re-schedule if there is still something to update
+		if m.saveMessageTime > 0 || m.sleepTimerActive {
+			return m, tickEverySecond()
+		}
+		return m, nil
 
 	case trackHistoryMsg:
 		m.trackHistory = msg.tracks
@@ -885,7 +917,11 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.saveToQuickFavorites()
 	case "s":
 		m.saveMessage = "Save to list feature coming soon"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 	case "v":
 		return m, m.voteForStation()
@@ -896,7 +932,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -909,7 +945,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -926,7 +962,7 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation.SetVolume(vol)
 			m.saveStationVolume(m.selectedStation)
 		}
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()

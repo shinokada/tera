@@ -608,7 +608,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -622,7 +622,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -640,7 +640,7 @@ func (m SearchModel) handlePlayerUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation.SetVolume(vol)
 			m.saveStationVolume(m.selectedStation)
 		}
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
@@ -790,7 +790,11 @@ func (m SearchModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Rating failed: %v", err)
 		}
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 	}
 
@@ -801,7 +805,11 @@ func (m SearchModel) handleRatingModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		} else {
 			m.saveMessage = "✓ Rating removed"
 		}
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 	}
 
