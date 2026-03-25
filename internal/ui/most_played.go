@@ -462,6 +462,19 @@ func (m MostPlayedModel) navigateBackCmd() tea.Cmd {
 	return nil
 }
 
+// relinquishPlayer installs a fresh idle player on the model after m.player
+// has been handed off to App via handoffPlaybackMsg. Call this at every site
+// that invokes navigateBackCmd or navigateToMainCmd with ContinueOnNavigate on
+// so that subsequent station selections do not reuse the app-owned pointer.
+func (m MostPlayedModel) relinquishPlayer() MostPlayedModel {
+	newP := player.NewMPVPlayer()
+	if m.metadataManager != nil {
+		newP.SetMetadataManager(m.metadataManager)
+	}
+	m.player = newP
+	return m
+}
+
 // navigateToMainCmd returns the appropriate command when the user presses 0
 // during playback. When ContinueOnNavigate is on it hands the player off to
 // App; otherwise it stops the player first.
@@ -502,6 +515,9 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		}
 		// Stop (or hand off) playback and return to list.
 		cmd := m.navigateBackCmd()
+		if m.playOptsCfg.ContinueOnNavigate && cmd != nil {
+			m = m.relinquishPlayer()
+		}
 		m.state = mostPlayedStateList
 		m.selectedStation = nil
 		if cmd != nil {
@@ -579,6 +595,9 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		}
 		// Build cmd before clearing selectedStation.
 		cmd := m.navigateToMainCmd()
+		if m.playOptsCfg.ContinueOnNavigate && cmd != nil {
+			m = m.relinquishPlayer()
+		}
 		m.state = mostPlayedStateList
 		m.selectedStation = nil
 		return m, cmd
@@ -948,6 +967,9 @@ func (m MostPlayedModel) handleConfirmStopInput(msg tea.KeyMsg) (MostPlayedModel
 			cmd = m.navigateToMainCmd()
 		} else {
 			cmd = m.navigateBackCmd()
+		}
+		if m.playOptsCfg.ContinueOnNavigate && cmd != nil {
+			m = m.relinquishPlayer()
 		}
 		m.selectedStation = nil
 		if cmd != nil {

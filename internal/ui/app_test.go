@@ -700,8 +700,8 @@ func TestHandoffPlaybackMsg_SetsActivePlayer(t *testing.T) {
 	if app.activeContextLabel != "Top Rated" {
 		t.Errorf("activeContextLabel should be 'Top Rated', got %q", app.activeContextLabel)
 	}
-	if !app.playingFromMain {
-		t.Error("playingFromMain should be true after handoff")
+	if app.playingFromMain {
+		t.Error("playingFromMain must NOT be set by a screen handoff; activeStation is the source of truth")
 	}
 }
 
@@ -1095,8 +1095,8 @@ func TestBug1_QFNotPlaying_NavigateToPlayScreen_HandoffHappens(t *testing.T) {
 
 // TestBug1_HandoffMsg_SetsPlayingFromMain_DoesNotBreakSubsequentNavigate
 // verifies the regression introduced during the Bug 1 fix: receiving a
-// handoffPlaybackMsg sets playingFromMain=true, but if quickFavPlayer is not
-// actually playing the subsequent executeMenuAction must NOT kill activePlayer.
+// handoffPlaybackMsg must NOT set playingFromMain; a bug in executeMenuAction
+// previously killed activePlayer when quickFavPlayer was idle.
 func TestBug1_HandoffMsg_SetsPlayingFromMain_DoesNotBreakSubsequentNavigate(t *testing.T) {
 	app := newContinueOnNavigateApp()
 
@@ -1108,9 +1108,10 @@ func TestBug1_HandoffMsg_SetsPlayingFromMain_DoesNotBreakSubsequentNavigate(t *t
 		station:      station,
 		contextLabel: "Favorites",
 	})
-	// handoffPlaybackMsg sets playingFromMain=true.
-	if !app.playingFromMain {
-		t.Fatal("precondition: playingFromMain should be true after handoffPlaybackMsg")
+	// handoffPlaybackMsg must NOT set playingFromMain; activeStation is the
+	// source of truth for the handed-off stream.
+	if app.playingFromMain {
+		t.Fatal("playingFromMain must not be set by a screen handoff")
 	}
 	if app.activePlayer != handedOff {
 		t.Fatal("precondition: activePlayer should be the handed-off player")

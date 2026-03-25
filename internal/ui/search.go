@@ -163,7 +163,7 @@ type SearchModel struct {
 	// ...existing code...
 	sleepTimerActive    bool
 	sleepTimerDialog    components.SleepTimerDialog
-	sleepCountdown      int
+	sleepCountdown      string
 	advancedInputs      []textinput.Model
 	advancedFocusIdx    int
 	advancedBitrate     string
@@ -1336,6 +1336,16 @@ func (m *SearchModel) reloadSearchHistory() {
 	m.rebuildMenuWithHistory()
 }
 
+// reloadQuickFavorites reloads the My-favorites station list from disk so that
+// duplicate detection in saveToQuickFavorites and handlePlaybackStopped stays
+// current within the same Search session.
+func (m *SearchModel) reloadQuickFavorites() {
+	store := storage.NewStorage(m.favoritePath)
+	if list, err := store.LoadList(context.Background(), "My-favorites"); err == nil {
+		m.quickFavorites = list.Stations
+	}
+}
+
 // rebuildMenuWithHistory rebuilds the menu list to include history items
 func (m *SearchModel) rebuildMenuWithHistory() {
 	// Base menu items
@@ -1740,10 +1750,7 @@ func (m *SearchModel) refreshResultsTagPills(stationUUID string) {
 // sleepTimerCountdown returns a formatted countdown string when a sleep timer
 // is active, or an empty string. The App refreshes sleepCountdown on every tick.
 func (m SearchModel) sleepTimerCountdown() string {
-	if m.sleepCountdown > 0 {
-		return formatSleepCountdown(fmt.Sprintf("%d", m.sleepCountdown))
-	}
-	return ""
+	return formatSleepCountdown(m.sleepCountdown)
 }
 
 // undoLastBlock undoes the last block operation

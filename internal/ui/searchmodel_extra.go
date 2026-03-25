@@ -156,7 +156,9 @@ func (m SearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", name)
 		m.saveMessageTime = messageDisplayShort
-		// Refresh quickFavorites list
+		// Refresh the in-memory favorites cache so subsequent duplicate checks
+		// and save prompts reflect the station just added.
+		m.reloadQuickFavorites()
 		m.reloadSearchHistory()
 		return m, nil
 

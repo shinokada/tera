@@ -246,8 +246,9 @@ type topRatedLoadedMsg struct{}
 
 // topRatedResolvedMsg is sent when a UUID lookup completes
 type topRatedResolvedMsg struct {
-	station *api.Station
-	err     error
+	requestedUUID string
+	station       *api.Station
+	err           error
 }
 
 func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
@@ -261,11 +262,17 @@ func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
 
 	case topRatedResolvedMsg:
 		if msg.err != nil || msg.station == nil {
-			m.saveMessage = "Could not resolve station URL"
-			m.saveMessageSuccess = false
-			m.saveMessageTime = 3
-			m.pendingResolveUUID = ""
-			return m, tickEverySecond()
+			// Only clear pendingResolveUUID when this response matches the
+			// current pending request; stale failures must not clobber a
+			// newer in-flight lookup.
+			if msg.requestedUUID == m.pendingResolveUUID {
+				m.saveMessage = "Could not resolve station URL"
+				m.saveMessageSuccess = false
+				m.saveMessageTime = 3
+				m.pendingResolveUUID = ""
+				return m, tickEverySecond()
+			}
+			return m, nil
 		}
 		// Discard stale responses (user changed selection or navigated away).
 		if m.pendingResolveUUID != msg.station.StationUUID {
@@ -410,26 +417,10 @@ func (m TopRatedModel) playStation(st api.Station) (TopRatedModel, tea.Cmd) {
 	}
 	m.selectedStation = &st
 	m.state = topRatedStatePlaying
-	// Handoff playback to App so global state is updated and Now Playing works.
-	// When ContinueOnNavigate is ON, send only handoffPlaybackMsg — its handler
-	// already stops any previous activePlayer, so adding stopActivePlaybackMsg
-	// to the Batch would race and kill the just-started stream if handoff is
-	// processed first.
-	if m.playOptsCfg.ContinueOnNavigate {
-		oldPlayer := m.player
-		newP := player.NewMPVPlayer()
-		if m.metadataManager != nil {
-			newP.SetMetadataManager(m.metadataManager)
-		}
-		m.player = newP
-		return m, func() tea.Msg {
-			return handoffPlaybackMsg{
-				player:       oldPlayer,
-				station:      &st,
-				contextLabel: "Top Rated",
-			}
-		}
-	}
+	// Stop any app-level handed-off player so it doesn't overlap.
+	// The live player (m.player) stays with this screen; the handoff to App
+	// happens later when the user navigates away via navigateBackCmd /
+	// navigateToMainCmd, keeping volume/pause/status controls correct.
 	return m, stopCmd
 }
 
@@ -478,7 +469,7 @@ func (m TopRatedModel) handleListInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) 
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					st, err := client.GetByUUID(ctx, uuid)
-					return topRatedResolvedMsg{station: st, err: err}
+					return topRatedResolvedMsg{requestedUUID: uuid, station: st, err: err}
 				})
 			}
 		}

@@ -503,6 +503,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Sync running timer state so Z cancels rather than reopens the dialog.
 			a.searchScreen.sleepTimerActive = a.sleepTimer != nil
+			// Seed quickFavorites so duplicate detection works from first use.
+			a.searchScreen.quickFavorites = a.quickFavorites
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -746,7 +748,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.playScreen.sleepTimerActive = false
 		a.playScreen.sleepCountdown = ""
 		a.searchScreen.sleepTimerActive = false
-		a.searchScreen.sleepCountdown = 0
+		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
 	case sleepTimerExtendMsg:
@@ -764,9 +766,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		a.playScreen.sleepCountdown = countdown
-		// countdown should be int, not string
-		// If countdown is string, convert to int as needed
-		// a.searchScreen.sleepCountdown = countdown
+		a.searchScreen.sleepCountdown = countdown
 		// fall through — don't return; let the screen-routing below forward it
 
 	case sleepExpiredMsg:
@@ -787,14 +787,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.playScreen.sleepTimerActive = false
 			a.playScreen.sleepCountdown = ""
 			a.searchScreen.sleepTimerActive = false
-			a.searchScreen.sleepCountdown = 0
+			a.searchScreen.sleepCountdown = ""
 			return a, nil
 		}
 		a.screen = screenSleepSummary
 		a.playScreen.sleepTimerActive = false
 		a.playScreen.sleepCountdown = ""
 		a.searchScreen.sleepTimerActive = false
-		a.searchScreen.sleepCountdown = 0
+		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
 	case handoffPlaybackMsg:
@@ -806,11 +806,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.activePlayer = msg.player
 		a.activeStation = msg.station
 		a.activeContextLabel = msg.contextLabel
-		// Set these so Now Playing bar and controls work from main menu
-		a.playingFromMain = true
-		if msg.station != nil {
-			a.playingStation = msg.station
-		}
 		a.broadcastNowPlayingBar()
 		return a, nil
 

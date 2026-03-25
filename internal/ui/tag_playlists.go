@@ -820,12 +820,16 @@ func (m TagPlaylistsModel) startPlayback() tea.Cmd {
 	if station.Volume != nil {
 		startVol = *station.Volume
 	}
-	return func() tea.Msg {
-		if err := m.player.PlayWithVolume(&station, startVol); err != nil {
-			return playbackErrorMsg{err}
-		}
-		return playbackStartedMsg{}
-	}
+	return tea.Batch(
+		// Stop any app-level handed-off player before starting the new stream.
+		func() tea.Msg { return stopActivePlaybackMsg{} },
+		func() tea.Msg {
+			if err := m.player.PlayWithVolume(&station, startVol); err != nil {
+				return playbackErrorMsg{err}
+			}
+			return playbackStartedMsg{}
+		},
+	)
 }
 
 // ---------------------------------------------------------------------------
