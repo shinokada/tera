@@ -54,6 +54,7 @@ func TestMetadataManager(t *testing.T) {
 		metadata := mgr.GetMetadata(stationUUID)
 		if metadata == nil {
 			t.Fatal("Expected metadata, got nil")
+			return
 		}
 
 		if metadata.PlayCount != 1 {
@@ -91,6 +92,7 @@ func TestMetadataManager(t *testing.T) {
 		metadata := mgr.GetMetadata(stationUUID)
 		if metadata == nil {
 			t.Fatal("Expected metadata, got nil")
+			return
 		}
 
 		if metadata.PlayCount != 3 {
@@ -115,6 +117,7 @@ func TestMetadataManager(t *testing.T) {
 		metadata := mgr.GetMetadata(stationUUID)
 		if metadata == nil {
 			t.Fatal("Expected metadata, got nil")
+			return
 		}
 
 		// Should only count as 1 play since same station
@@ -142,6 +145,7 @@ func TestMetadataManager(t *testing.T) {
 		metadata := mgr.GetMetadata(stationUUID)
 		if metadata == nil {
 			t.Fatal("Expected metadata, got nil")
+			return
 		}
 
 		// Duration should be > 0
@@ -171,6 +175,7 @@ func TestMetadataManager(t *testing.T) {
 
 		if meta1 == nil || meta2 == nil {
 			t.Fatal("Expected metadata for both stations")
+			return
 		}
 
 		if meta1.PlayCount != 1 {
@@ -307,6 +312,7 @@ func TestMetadataManager(t *testing.T) {
 			metadata := mgr.GetMetadata(stationUUID)
 			if metadata == nil {
 				t.Fatal("Expected metadata to persist, got nil")
+				return
 			}
 
 			if metadata.PlayCount != 1 {

@@ -20,6 +20,7 @@ type Config struct {
 	Shuffle     ShuffleConfig     `yaml:"shuffle"`
 	Blocklist   BlocklistConfig   `yaml:"blocklist"`
 	PlayHistory PlayHistoryConfig `yaml:"play_history"`
+	PlayOptions PlayOptionsConfig `yaml:"play_options"`
 }
 
 // PlayerConfig represents player settings
@@ -82,6 +83,28 @@ type ShuffleConfig struct {
 	IntervalMinutes int  `yaml:"interval_minutes"` // Minutes between auto-advance
 	RememberHistory bool `yaml:"remember_history"`
 	MaxHistory      int  `yaml:"max_history"` // Number of stations to remember
+}
+
+// PlayOptionsConfig holds playback behaviour settings (Settings > Play Options).
+type PlayOptionsConfig struct {
+	ContinueOnNavigate bool   `yaml:"continue_on_navigate"` // Keep playing when changing screens (default: false)
+	DefaultVolume      int    `yaml:"default_volume"`       // Volume for new stations, range [0, 100] (default: 80)
+	ConfirmStop        bool   `yaml:"confirm_stop"`         // Prompt before stopping playback (default: false)
+	ShowMetadata       bool   `yaml:"show_metadata"`        // Show bitrate/codec/country in play screen (default: true)
+	StartVolumeMode    string `yaml:"start_volume_mode"`    // "default" or "last_used" (default: "default")
+	LastUsedVolume     int    `yaml:"last_used_volume"`     // Persisted on exit when StartVolumeMode=="last_used", range [0, 100]
+}
+
+// DefaultPlayOptionsConfig returns a PlayOptionsConfig with sensible defaults.
+func DefaultPlayOptionsConfig() PlayOptionsConfig {
+	return PlayOptionsConfig{
+		ContinueOnNavigate: false,
+		DefaultVolume:      80,
+		ConfirmStop:        false,
+		ShowMetadata:       true,
+		StartVolumeMode:    "default",
+		LastUsedVolume:     80,
+	}
 }
 
 // PlayHistoryConfig holds Recently Played display settings for the main menu
@@ -158,6 +181,7 @@ func DefaultConfig() Config {
 			MaxHistory:      5,
 		},
 		PlayHistory: DefaultPlayHistoryConfig(),
+		PlayOptions: DefaultPlayOptionsConfig(),
 	}
 }
 
@@ -193,6 +217,11 @@ func (c *Config) Validate() error {
 	// Validate PlayHistory config
 	if err := c.PlayHistory.Validate(); err != nil {
 		errs = append(errs, fmt.Sprintf("play_history: %v", err))
+	}
+
+	// Validate PlayOptions config
+	if err := c.PlayOptions.Validate(); err != nil {
+		errs = append(errs, fmt.Sprintf("play_options: %v", err))
 	}
 
 	if len(errs) > 0 {
@@ -483,6 +512,44 @@ func (p *PlayHistoryConfig) Validate() error {
 	if p.DisplayRows > 10 {
 		p.DisplayRows = 10
 		errs = append(errs, "display_rows must be <= 10, set to 10")
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+// Validate validates PlayOptionsConfig, clamping volumes to [0, 100] and
+// normalising StartVolumeMode to a known value.
+func (p *PlayOptionsConfig) Validate() error {
+	var errs []string
+
+	// DefaultVolume: clamp to [0, 100]
+	if p.DefaultVolume < 0 {
+		p.DefaultVolume = 0
+		errs = append(errs, "default_volume must be >= 0, set to 0")
+	}
+	if p.DefaultVolume > 100 {
+		p.DefaultVolume = 100
+		errs = append(errs, "default_volume must be <= 100, set to 100")
+	}
+
+	// LastUsedVolume: clamp to [0, 100]
+	if p.LastUsedVolume < 0 {
+		p.LastUsedVolume = 0
+		errs = append(errs, "last_used_volume must be >= 0, set to 0")
+	}
+	if p.LastUsedVolume > 100 {
+		p.LastUsedVolume = 100
+		errs = append(errs, "last_used_volume must be <= 100, set to 100")
+	}
+
+	// StartVolumeMode: must be "default" or "last_used"
+	validModes := map[string]bool{"default": true, "last_used": true}
+	if !validModes[p.StartVolumeMode] {
+		p.StartVolumeMode = "default"
+		errs = append(errs, "start_volume_mode must be \"default\" or \"last_used\", set to \"default\"")
 	}
 
 	if len(errs) > 0 {

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -54,6 +55,7 @@ const (
 	mostPlayedStateSavePrompt
 	mostPlayedStateSelectList
 	mostPlayedStateTagInput
+	mostPlayedStateConfirmStop // Phase 5: Confirm before stopping
 )
 
 // MostPlayedModel represents the Most Played screen
@@ -88,6 +90,10 @@ type MostPlayedModel struct {
 	availableLists []string
 	listItems      []list.Item
 	listModel      list.Model
+	// Play options (injected by App)
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // mostPlayedStationItem wraps a station with metadata for the list
@@ -251,6 +257,8 @@ func (m MostPlayedModel) Update(msg tea.Msg) (MostPlayedModel, tea.Cmd) {
 			return m.handleSelectListInput(msg)
 		case mostPlayedStateTagInput:
 			return m.handleTagInputKey(msg)
+		case mostPlayedStateConfirmStop:
+			return m.handleConfirmStopInput(msg)
 		}
 
 	case components.TagSubmittedMsg:
@@ -362,11 +370,8 @@ func (m *MostPlayedModel) refreshStationTagPills(stationUUID string) {
 func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc", "m":
-		// Stop player before returning
-		if m.player != nil && m.player.IsPlaying() {
-			_ = m.player.Stop()
-		}
-		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		// On the list view, Esc/q/m always goes back to the main menu.
+		return m, func() tea.Msg { return backToMainMsg{} }
 
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
@@ -378,14 +383,27 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 		if len(m.stationItems) > 0 {
 			selected := m.stationListModel.SelectedItem()
 			if item, ok := selected.(mostPlayedStationItem); ok {
-				m.selectedStation = &item.station
 				// Check if we have the URL to play
 				if item.station.URLResolved != "" {
-					if err := m.player.Play(&item.station); err != nil {
-						m.err = err
-					} else {
-						m.state = mostPlayedStatePlaying
+					// Phase 5: resolve volume from PlayOptions
+					startVol := m.playOptsCfg.DefaultVolume
+					if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+						startVol = m.playOptsCfg.LastUsedVolume
 					}
+					st := item.station
+					if st.Volume != nil {
+						startVol = *st.Volume
+					}
+					// Stop any app-level handed-off player (e.g. from Play from Favorites
+					// or Search Stations with ContinueOnNavigate on) before starting the new stream.
+					stopCmd := func() tea.Msg { return stopActivePlaybackMsg{} }
+					if err := m.player.PlayWithVolume(&st, startVol); err != nil {
+						m.err = err
+						return m, stopCmd
+					}
+					m.selectedStation = &st
+					m.state = mostPlayedStatePlaying
+					return m, stopCmd
 				} else {
 					m.saveMessage = "Station URL not available (needs lookup)"
 					m.saveMessageSuccess = false
@@ -423,6 +441,64 @@ func (m MostPlayedModel) handleListInput(msg tea.KeyMsg) (MostPlayedModel, tea.C
 	return m, cmd
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m MostPlayedModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Most Played",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// relinquishPlayer installs a fresh idle player on the model after m.player
+// has been handed off to App via handoffPlaybackMsg. Call this at every site
+// that invokes navigateBackCmd or navigateToMainCmd with ContinueOnNavigate on
+// so that subsequent station selections do not reuse the app-owned pointer.
+func (m MostPlayedModel) relinquishPlayer() MostPlayedModel {
+	newP := player.NewMPVPlayer()
+	if m.metadataManager != nil {
+		newP.SetMetadataManager(m.metadataManager)
+	}
+	m.player = newP
+	return m
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m MostPlayedModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Most Played",
+				}
+			},
+			func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+		)
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
 	// Handle rating mode input first
 	if m.ratingMode {
@@ -431,11 +507,22 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 
 	switch msg.String() {
 	case "q", "esc", "m":
-		// Stop playback and return to list
-		if m.player != nil {
-			_ = m.player.Stop()
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
+			m.state = mostPlayedStateConfirmStop
+			return m, nil
+		}
+		// Stop (or hand off) playback and return to list.
+		cmd := m.navigateBackCmd()
+		if m.playOptsCfg.ContinueOnNavigate && cmd != nil {
+			m = m.relinquishPlayer()
 		}
 		m.state = mostPlayedStateList
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 
 	case "s":
@@ -500,12 +587,20 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		}
 
 	case "0":
-		// Return to main menu
-		if m.player != nil {
-			_ = m.player.Stop()
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
+			m.state = mostPlayedStateConfirmStop
+			return m, nil
+		}
+		// Build cmd before clearing selectedStation.
+		cmd := m.navigateToMainCmd()
+		if m.playOptsCfg.ContinueOnNavigate && cmd != nil {
+			m = m.relinquishPlayer()
 		}
 		m.state = mostPlayedStateList
-		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		m.selectedStation = nil
+		return m, cmd
 
 	case "?":
 		m.helpModel.SetSize(m.width, m.height)
@@ -702,6 +797,8 @@ func (m MostPlayedModel) View() string {
 		return m.viewSelectList()
 	case mostPlayedStateTagInput:
 		return m.viewTagInput()
+	case mostPlayedStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 
 	return m.viewList()
@@ -736,7 +833,7 @@ func (m MostPlayedModel) viewList() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played Stations",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • g/G: Top/End • Enter: Play • s: Sort • f: Fav • ?: Help • Esc: Back",
@@ -763,8 +860,17 @@ func (m MostPlayedModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
-
+	if m.playOptsCfg.ShowMetadata {
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
+	} else {
+		// Render only basic info (name, country, etc.)
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			content.WriteString("  ")
+			content.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		content.WriteString("\n")
+	}
 	// Playback status
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
@@ -810,7 +916,7 @@ func (m MostPlayedModel) viewPlaying() string {
 	}
 
 	helpText := "p: Pause • s: Stop • r: Rate • t: Tag • f: Fav • 0: Main Menu • ?: Help • Esc: Back"
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played - Now Playing",
 		Content: content.String(),
 		Help:    helpText,
@@ -825,7 +931,7 @@ func (m MostPlayedModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -842,10 +948,51 @@ func (m MostPlayedModel) viewSavePrompt() string {
 	content.WriteString("[L] Choose from list\n")
 	content.WriteString("[N] Cancel")
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "💾 Save Station",
 		Content: content.String(),
 		Help:    "Y: My-favorites • L: Choose list • N: Cancel",
+	}, m.height)
+}
+
+// handleConfirmStopInput handles key input during the confirm-stop prompt.
+func (m MostPlayedModel) handleConfirmStopInput(msg tea.KeyMsg) (MostPlayedModel, tea.Cmd) {
+	switch msg.String() {
+	case "y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = mostPlayedStateList
+		var cmd tea.Cmd
+		if target == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+		}
+		if m.playOptsCfg.ContinueOnNavigate && cmd != nil {
+			m = m.relinquishPlayer()
+		}
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case "n", "2", "esc":
+		m.state = mostPlayedStatePlaying
+		return m, nil
+	}
+	return m, nil
+}
+
+// Phase 5: Confirm stop prompt view
+func (m MostPlayedModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString("Are you sure you want to stop playback?\n\n")
+	content.WriteString("y: Yes, stop\n")
+	content.WriteString("n/Esc: No, keep playing\n")
+	return m.renderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y: Yes • n/Esc: No",
 	}, m.height)
 }
 
@@ -855,9 +1002,18 @@ func (m MostPlayedModel) viewSelectList() string {
 	content.WriteString("Select a list:\n\n")
 	content.WriteString(m.listModel.View())
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📁 Select List",
 		Content: content.String(),
 		Help:    "↑↓: Navigate • Enter: Select • Esc: Cancel",
 	}, m.height)
+}
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m MostPlayedModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/storage"
 )
@@ -12,6 +14,23 @@ func formatSleepCountdown(countdown string) string {
 		return ""
 	}
 	return "💤 " + countdown
+}
+
+// renderNowPlayingBar returns a single-line now-playing banner for use at the
+// bottom of any screen when ContinueOnNavigate is active and a station is
+// playing at the app level. Returns an empty string when station is nil.
+// Format:  ♫ Jazz FM  [context]  ·  Vol: 80%  ·  Space: Pause  //*: Vol  Esc: Stop
+func renderNowPlayingBar(station *api.Station, contextLabel string, vol int) string {
+	if station == nil {
+		return ""
+	}
+	name := station.TrimName()
+	bar := fmt.Sprintf("♫ %s", name)
+	if contextLabel != "" {
+		bar += fmt.Sprintf("  [%s]", contextLabel)
+	}
+	bar += fmt.Sprintf("  ·  Vol: %d%%  ·  Space: Pause  //*: Vol  Esc: Stop", vol)
+	return successStyle().Render(bar)
 }
 
 // hydrateStations hydrates station metadata for a list of UUIDs from the cache.

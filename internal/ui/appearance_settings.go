@@ -34,6 +34,7 @@ type AppearanceSettingsModel struct {
 	message        string
 	messageTime    int
 	messageSuccess bool
+	nowPlayingBar  string // set by App when ContinueOnNavigate is active
 
 	// Configuration being edited
 	config storage.AppearanceConfig
@@ -568,9 +569,10 @@ func (m AppearanceSettingsModel) View() string {
 	}
 
 	layout := PageLayout{
-		Title:   "Appearance Settings",
-		Content: content,
-		Help:    "Press ? for help • esc/q to go back",
+		Title:      "Appearance Settings",
+		Content:    content,
+		NowPlaying: m.nowPlayingBar,
+		Help:       "Press ? for help • esc/q to go back",
 	}
 
 	// Show help overlay if active

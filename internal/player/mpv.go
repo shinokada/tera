@@ -20,10 +20,25 @@ import (
 	"github.com/shinokada/tera/v3/internal/storage"
 )
 
+// PlayWithVolume starts playing a radio station with a specific volume.
+// It is a thin wrapper around Play that temporarily overrides the station's
+// volume field, ensuring full IPC/monitor setup identical to Play.
+func (p *MPVPlayer) PlayWithVolume(station *api.Station, volume int) error {
+	// Clone the station so we don't mutate the caller's value.
+	cloned := *station
+	cloned.Volume = &volume
+	return p.Play(&cloned)
+}
+
+// playerInstanceCounter provides a process-wide unique ID for each MPVPlayer
+// so that concurrent instances never collide on the same IPC socket path.
+var playerInstanceCounter atomic.Uint64
+
 // MPVPlayer manages the MPV process for playing radio streams
 type MPVPlayer struct {
 	cmd             *exec.Cmd
 	playing         bool
+	killed          bool // set by Stop() on a not-yet-playing player to reject a late Play()
 	paused          bool // Pause state
 	station         *api.Station
 	volume          int // Current volume (0-100)
@@ -31,6 +46,7 @@ type MPVPlayer struct {
 	lastVolume      int // Volume before mute
 	mu              sync.Mutex
 	stopCh          chan struct{}
+	instanceID      uint64                   // Unique ID for this player instance (socket path)
 	socketPath      string                   // IPC socket path for runtime control
 	conn            net.Conn                 // Connection to IPC socket
 	connReader      *bufio.Reader            // Buffered reader for newline-delimited IPC responses
@@ -48,6 +64,7 @@ func NewMPVPlayer() *MPVPlayer {
 		volume:     100, // Default volume
 		lastVolume: 100,
 		stopCh:     make(chan struct{}),
+		instanceID: playerInstanceCounter.Add(1),
 	}
 }
 
@@ -55,6 +72,12 @@ func NewMPVPlayer() *MPVPlayer {
 func (p *MPVPlayer) Play(station *api.Station) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// If Stop() was called before Play() ran (race between async cmd and
+	// navigation), honour the stop request and refuse to start.
+	if p.killed {
+		return nil
+	}
 
 	// Stop any existing playback
 	if p.playing {
@@ -79,14 +102,18 @@ func (p *MPVPlayer) Play(station *api.Station) error {
 		volumeToUse = 100
 	}
 
-	// Create unique socket path for IPC (platform-specific)
+	// Create unique socket path for IPC (platform-specific).
+	// Use both PID and per-instance ID so that multiple concurrent MPVPlayer
+	// instances within the same process never share a socket path — which
+	// would cause one player's Stop() to remove the other player's socket.
 	if runtime.GOOS == "windows" {
-		// Windows: Use TCP socket for IPC (more reliable than named pipes)
-		p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+os.Getpid()%50000)
+		// Windows: Use TCP socket for IPC (more reliable than named pipes).
+		// Incorporate instanceID to guarantee a unique port per instance.
+		p.socketPath = fmt.Sprintf("127.0.0.1:%d", 10000+(os.Getpid()*1000+int(p.instanceID))%50000)
 	} else {
 		// Unix/Linux/macOS use Unix sockets
-		p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d.sock", os.Getpid()))
-		// Remove any existing socket file (Unix only)
+		p.socketPath = filepath.Join(os.TempDir(), fmt.Sprintf("tera-mpv-%d-%d.sock", os.Getpid(), p.instanceID))
+		// Remove any stale socket file from a previous Play() call on this instance
 		_ = os.Remove(p.socketPath)
 	}
 
@@ -477,6 +504,9 @@ func (p *MPVPlayer) Stop() error {
 	defer p.mu.Unlock()
 
 	if !p.playing {
+		// Not yet playing — mark as killed so any in-flight Play() cmd
+		// that arrives after this Stop() will not start the player.
+		p.killed = true
 		return nil
 	}
 
@@ -503,6 +533,7 @@ func (p *MPVPlayer) cleanupResourcesLocked() {
 	close(p.stopCh)
 
 	p.playing = false
+	p.killed = false // reset so the player instance may be reused after a full stop
 	p.paused = false
 	p.station = nil
 	p.cmd = nil
@@ -522,12 +553,22 @@ func (p *MPVPlayer) stopInternal() error {
 	}
 
 	if p.cmd != nil && p.cmd.Process != nil {
-		// Send termination signal
-		// On Windows, Process.Kill() should work, but we add a timeout
-		if err := p.cmd.Process.Kill(); err != nil {
-			// Process may have already exited
-			if !errors.Is(err, os.ErrProcessDone) {
-				return fmt.Errorf("failed to stop mpv: %w", err)
+		if runtime.GOOS == "windows" {
+			// On Windows, mpv installed via package managers (e.g. scoop) uses a
+			// shim executable that spawns the real mpv as a child process.
+			// Process.Kill() only terminates the shim, leaving the real mpv running
+			// as an orphan. taskkill with /T kills the entire process tree so all
+			// descendant processes (including the real mpv) are terminated.
+			_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", p.cmd.Process.Pid)).Run()
+			// Also call Kill to ensure the Go process handle is cleaned up.
+			_ = p.cmd.Process.Kill()
+		} else {
+			// Send termination signal
+			if err := p.cmd.Process.Kill(); err != nil {
+				// Process may have already exited
+				if !errors.Is(err, os.ErrProcessDone) {
+					return fmt.Errorf("failed to stop mpv: %w", err)
+				}
 			}
 		}
 
@@ -541,11 +582,7 @@ func (p *MPVPlayer) stopInternal() error {
 		case <-done:
 			// Process exited cleanly
 		case <-time.After(2 * time.Second):
-			// Process didn't exit in time, force kill on Windows
-			if runtime.GOOS == "windows" {
-				// Use taskkill as last resort on Windows
-				_ = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", p.cmd.Process.Pid)).Run()
-			}
+			// Timeout: process did not exit within grace period
 		}
 	}
 

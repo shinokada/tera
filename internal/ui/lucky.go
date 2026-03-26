@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/shuffle"
 	"github.com/shinokada/tera/v3/internal/storage"
@@ -34,6 +35,7 @@ const (
 	luckyStateNewListInput
 	luckyStateTagInput
 	luckyStateManageTags
+	luckyStateConfirmStop // Phase 5: Confirm before stopping
 )
 
 // Footer help text constants for the I Feel Lucky screen
@@ -85,6 +87,10 @@ type LuckyModel struct {
 	manageTags  components.ManageTags
 	// Input focus mode: true = typing in Genre/keyword, false = history navigation
 	inputMode bool
+	// Play options (injected by App)
+	playOptsCfg       config.PlayOptionsConfig
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
 }
 
 // Messages for lucky screen
@@ -215,6 +221,8 @@ func (m LuckyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTagInput(msg)
 		case luckyStateManageTags:
 			return m.updateManageTags(msg)
+		case luckyStateConfirmStop:
+			return m.updateConfirmStop(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -555,6 +563,27 @@ func (m LuckyModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle escape - return to main menu
 	if key == "esc" {
 		m.numberBuffer = "" // Clear buffer
+		// When ContinueOnNavigate is on and a station is playing, hand the
+		// player off to App so music keeps going, then navigate to main menu.
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			station := m.selectedStation
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{
+						player:       m.player,
+						station:      station,
+						contextLabel: "Lucky",
+					}
+				},
+				func() tea.Msg {
+					return navigateMsg{screen: screenMainMenu}
+				},
+			)
+		}
+		// ContinueOnNavigate off — stop before leaving.
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
 		return m, func() tea.Msg {
 			return navigateMsg{screen: screenMainMenu}
 		}
@@ -757,6 +786,51 @@ func (m LuckyModel) selectHistoryByNumber(num int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m LuckyModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Lucky",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App and navigates to the main menu; otherwise it stops the player first.
+func (m LuckyModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Lucky",
+				}
+			},
+			func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+		)
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 // updatePlaying handles input during playback
 func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle rating mode input first
@@ -778,32 +852,62 @@ func (m LuckyModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
-		// Stop playback and return to I Feel Lucky input
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
+			m.state = luckyStateConfirmStop
 			return m, nil
+		}
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			// Hand off player to App and go straight to main menu so the
+			// user never lands on the input screen with a nil selectedStation
+			// (which would cause the second Esc to stop the player).
+			station := m.selectedStation
+			m.selectedStation = nil
+			m.state = luckyStateInput
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{player: m.player, station: station, contextLabel: "Lucky"}
+				},
+				func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+			)
+		}
+		// ContinueOnNavigate off — stop and return to Lucky input.
+		if m.player != nil {
+			_ = m.player.Stop()
 		}
 		m.state = luckyStateInput
 		m.inputMode = true
 		m.textInput.Focus()
 		m.selectedStation = nil
-		// Reload history from disk so recent search appears
 		m.reloadSearchHistory()
 		m.rebuildMenuWithHistory()
 		return m, nil
 	case "0":
-		// Return to main menu (Level 2+ shortcut)
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
+			m.state = luckyStateConfirmStop
 			return m, nil
+		}
+		// Return to main menu (or hand off and navigate).
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			station := m.selectedStation
+			m.selectedStation = nil
+			m.state = luckyStateInput
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{player: m.player, station: station, contextLabel: "Lucky"}
+				},
+				func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+			)
+		}
+		if m.player != nil {
+			_ = m.player.Stop()
 		}
 		m.selectedStation = nil
 		m.state = luckyStateInput
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
+		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
 	case "f":
 		// Save to Quick Favorites during playback
 		return m, m.saveToQuickFavorites()
@@ -1067,19 +1171,23 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
-		// Filter out blocked stations
-		if m.blocklistManager != nil {
+		// Filter out stations with no stream URL and blocked stations
+		{
 			filtered := make([]api.Station, 0, len(stations))
 			for _, s := range stations {
-				if !m.blocklistManager.IsBlockedByAny(&s) {
-					filtered = append(filtered, s)
+				if s.URLResolved == "" {
+					continue
 				}
+				if m.blocklistManager != nil && m.blocklistManager.IsBlockedByAny(&s) {
+					continue
+				}
+				filtered = append(filtered, s)
 			}
 			stations = filtered
 		}
 
 		if len(stations) == 0 {
-			return luckySearchErrorMsg{err: fmt.Errorf("all stations found for '%s' are blocked", keyword)}
+			return luckySearchErrorMsg{err: fmt.Errorf("no playable stations found for '%s'", keyword)}
 		}
 
 		// Pick a random station (rand is auto-seeded since Go 1.20)
@@ -1090,7 +1198,8 @@ func (m LuckyModel) searchAndPickRandom(keyword string) tea.Cmd {
 	}
 }
 
-// startPlayback initiates playback of the selected station
+// startPlayback initiates playback of the selected station.
+// Phase 5: volume is resolved from PlayOptions (DefaultVolume / StartVolumeMode).
 func (m LuckyModel) startPlayback() tea.Cmd {
 	if m.selectedStation == nil {
 		return func() tea.Msg {
@@ -1098,9 +1207,16 @@ func (m LuckyModel) startPlayback() tea.Cmd {
 		}
 	}
 	station := *m.selectedStation
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return tea.Batch(
 		func() tea.Msg {
-			if err := m.player.Play(&station); err != nil {
+			if err := m.player.PlayWithVolume(&station, startVol); err != nil {
 				return playbackErrorMsg{err}
 			}
 			return playbackStartedMsg{}
@@ -1221,11 +1337,13 @@ func (m LuckyModel) View() string {
 			sb.WriteString("\n\n")
 		}
 		sb.WriteString(m.manageTags.View())
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "🏷 Manage Tags",
 			Content: sb.String(),
 			Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
 		}, m.height)
+	case luckyStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 	return "Unknown state"
 }
@@ -1310,7 +1428,7 @@ func (m LuckyModel) viewInput() string {
 
 	helpText := luckyHelpInputFooter
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
@@ -1336,7 +1454,7 @@ func (m LuckyModel) viewSearching() string {
 		}
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "I Feel Lucky",
 		Content: content.String(),
 		Help:    "Please wait...",
@@ -1351,26 +1469,33 @@ func (m LuckyModel) viewPlaying() string {
 
 	var content strings.Builder
 
-	// Station info with rating
-	// Get rating for display
+	// Station info with rating and metadata (Phase 5: ShowMetadata)
 	var rating int
 	if m.ratingsManager != nil {
 		if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
 			rating = r.Rating
 		}
 	}
-	// Get metadata for display
 	var metadata *storage.StationMetadata
 	if m.metadataManager != nil {
 		metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
 	}
 	voted := m.votedStations != nil && m.votedStations.HasVoted(m.selectedStation.StationUUID)
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
+	if m.playOptsCfg.ShowMetadata {
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, voted, metadata, rating, m.starRenderer))
+	} else {
+		// Render only basic info (name, country, etc.)
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			content.WriteString("  ")
+			content.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		content.WriteString("\n")
+	}
 
 	// Playback status with proper spacing
 	content.WriteString("\n")
 	if m.player.IsPlaying() {
-		// Use the cached track to avoid a blocking IPC socket call in the render path.
 		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.Name) {
 			content.WriteString(successStyle().Render("▶ Now Playing:"))
 			content.WriteString(" ")
@@ -1415,7 +1540,7 @@ func (m LuckyModel) viewPlaying() string {
 	}
 
 	helpText := luckyHelpPlayingFooter
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
 		Help:    helpText,
@@ -1455,7 +1580,7 @@ func (m LuckyModel) viewSavePrompt() string {
 		content.WriteString(msgStyle.Render(m.saveMessage))
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save Station?",
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2/Esc: No",
@@ -1488,7 +1613,7 @@ func (m LuckyModel) viewSelectList() string {
 		content.WriteString("Loading lists...")
 	}
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save to List",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • n: New list • Esc: Cancel",
@@ -1514,7 +1639,7 @@ func (m LuckyModel) viewNewListInput() string {
 	// Text input
 	content.WriteString(m.newListInput.View())
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Create New List",
 		Content: content.String(),
 		Help:    "Enter: Save • Esc: Cancel",
@@ -1529,7 +1654,7 @@ func (m LuckyModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -1583,15 +1708,17 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc":
-		// Stop shuffle and playback, return to I Feel Lucky input
+		// Phase 5: gate on ConfirmStop before navigating away.
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
+			m.state = luckyStateConfirmStop
+			return m, nil
+		}
+		// Stop shuffle and playback (or hand off), return to I Feel Lucky input.
 		if m.shuffleManager != nil {
 			m.shuffleManager.Stop()
 		}
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
-			return m, nil
-		}
+		cmd := m.navigateBackCmd()
 		m.state = luckyStateInput
 		m.inputMode = true
 		m.textInput.Focus()
@@ -1601,24 +1728,28 @@ func (m LuckyModel) updateShufflePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Reload history from disk
 		m.reloadSearchHistory()
 		m.rebuildMenuWithHistory()
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case "0":
-		// Return to main menu
+		// Phase 5: gate on ConfirmStop before navigating away.
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
+			m.state = luckyStateConfirmStop
+			return m, nil
+		}
+		// Return to main menu (or hand off and navigate).
+		// Build cmd before clearing selectedStation so ContinueOnNavigate handoff works.
 		if m.shuffleManager != nil {
 			m.shuffleManager.Stop()
 		}
-		if err := m.player.Stop(); err != nil {
-			m.saveMessage = fmt.Sprintf("✗ Failed to stop playback: %v", err)
-			m.saveMessageTime = messageDisplayLong
-			return m, nil
-		}
+		cmd := m.navigateToMainCmd()
 		m.selectedStation = nil
 		m.state = luckyStateInput
 		m.shuffleEnabled = false
 		m.shuffleManager = nil
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
-		}
+		return m, cmd
 	case "h":
 		// Stop shuffle but keep playing current station
 		if m.shuffleManager != nil {
@@ -1781,19 +1912,23 @@ func (m LuckyModel) searchForShuffle(keyword string) tea.Cmd {
 			return luckySearchErrorMsg{err: fmt.Errorf("no stations found for '%s'", keyword)}
 		}
 
-		// Filter out blocked stations
-		if m.blocklistManager != nil {
+		// Filter out stations with no stream URL and blocked stations
+		{
 			filtered := make([]api.Station, 0, len(stations))
 			for _, s := range stations {
-				if !m.blocklistManager.IsBlockedByAny(&s) {
-					filtered = append(filtered, s)
+				if s.URLResolved == "" {
+					continue
 				}
+				if m.blocklistManager != nil && m.blocklistManager.IsBlockedByAny(&s) {
+					continue
+				}
+				filtered = append(filtered, s)
 			}
 			stations = filtered
 		}
 
 		if len(stations) == 0 {
-			return luckySearchErrorMsg{err: fmt.Errorf("all stations found for '%s' are blocked", keyword)}
+			return luckySearchErrorMsg{err: fmt.Errorf("no playable stations found for '%s'", keyword)}
 		}
 
 		return luckyShuffleSearchResultsMsg{
@@ -1953,7 +2088,7 @@ func (m LuckyModel) viewShufflePlaying() string {
 	title := fmt.Sprintf("🎵 Now Playing (🔀 Shuffle: %s)", m.lastSearchKeyword)
 	help := luckyHelpShuffleFooter
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   title,
 		Content: content.String(),
 		Help:    help,
@@ -2019,4 +2154,87 @@ func (m *LuckyModel) reloadSearchHistory() {
 		history = storage.NewSearchHistoryStore()
 	}
 	m.searchHistory = history
+}
+
+// updateConfirmStop handles key input during the confirm-stop prompt (Phase 5).
+// Routes confirmation through navigateToMainCmd / navigateBackCmd so that
+// ContinueOnNavigate handoff is honoured, and resets state so the model is
+// clean when reused.
+func (m LuckyModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = luckyStateInput
+		if target == "main" {
+			cmd := m.navigateToMainCmd()
+			m.selectedStation = nil
+			if cmd != nil {
+				return m, cmd
+			}
+			return m, nil
+		}
+		// "back" — mirror the direct Esc path: hand off (or stop) and return
+		// to the input screen. With ContinueOnNavigate ON, navigate straight
+		// to main so the user never lands on input with a nil selectedStation.
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			station := m.selectedStation
+			m.selectedStation = nil
+			return m, tea.Batch(
+				func() tea.Msg {
+					return handoffPlaybackMsg{player: m.player, station: station, contextLabel: "Lucky"}
+				},
+				func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+			)
+		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.inputMode = true
+		m.textInput.Focus()
+		m.selectedStation = nil
+		m.reloadSearchHistory()
+		m.rebuildMenuWithHistory()
+		return m, nil
+	case "n", "N", "2", "esc":
+		// Cancel — return to playing
+		m.state = luckyStatePlaying
+		return m, nil
+	}
+	return m, nil
+}
+
+// viewConfirmStop renders the ConfirmStop prompt for LuckyModel (Phase 5)
+func (m LuckyModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString(errorStyle().Render("⚠ Stop Playback?"))
+	content.WriteString("\n\n")
+	if m.selectedStation != nil {
+		content.WriteString("Station: ")
+		content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString("Are you sure you want to stop playback?\n")
+	content.WriteString(infoStyle().Render("Press y/1 to stop, n/2/Esc to cancel."))
+	return m.renderPage(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y/1: Stop • n/2/Esc: Cancel",
+	})
+}
+
+// renderPage injects the now-playing bar when the model's own player is not
+// actively playing (so viewPlaying is unaffected).
+func (m LuckyModel) renderPage(layout PageLayout) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPage(layout)
+}
+
+func (m LuckyModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

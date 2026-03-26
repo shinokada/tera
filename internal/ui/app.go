@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"time"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
@@ -17,7 +19,6 @@ import (
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	internaltimer "github.com/shinokada/tera/v3/internal/timer"
-	"time"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
@@ -78,13 +79,18 @@ type App struct {
 	quickFavPlayer           *player.MPVPlayer
 	playingFromMain          bool
 	playingStation           *api.Station
-	playHistoryCfg           config.PlayHistoryConfig    // cached play history settings
-	recentlyPlayed           []storage.StationWithMetadata // refreshed on each return to main menu
-	numberBuffer             string               // Buffer for multi-digit number input
-	unifiedMenuIndex         int                  // Unified index for navigating both menu and favorites
-	helpModel                components.HelpModel // Help overlay
-	volumeDisplay            string               // Temporary volume display message
-	volumeDisplayFrames      int                  // Countdown for volume display
+	playHistoryCfg           config.PlayHistoryConfig // cached play history settings
+	playOptsCfg              config.PlayOptionsConfig // cached play options settings
+	// Continuous playback (v3.11) — non-nil when a screen has handed off its player
+	activePlayer        *player.MPVPlayer             // app-level player after a handoff
+	activeStation       *api.Station                  // station currently handed off
+	activeContextLabel  string                        // context label from the originating screen
+	recentlyPlayed      []storage.StationWithMetadata // refreshed on each return to main menu
+	numberBuffer        string                        // Buffer for multi-digit number input
+	unifiedMenuIndex    int                           // Unified index for navigating both menu and favorites
+	helpModel           components.HelpModel          // Help overlay
+	volumeDisplay       string                        // Temporary volume display message
+	volumeDisplayFrames int                           // Countdown for volume display
 	// Update checking
 	latestVersion   string // Latest version from GitHub
 	updateAvailable bool   // True if a newer version exists
@@ -95,6 +101,9 @@ type App struct {
 	sleepDuration time.Duration // duration the user set (for the summary)
 	dataPath      string        // path for persisting sleep timer config
 	sleepSummary  SleepSummaryModel
+	// Quick Play Favorites viewport
+	qfViewOffset    int // first QF entry index visible on screen
+	qfVisibleWindow int // last-known number of QF rows that fit on screen
 	// Recently Played viewport
 	rpViewOffset    int // first RP entry index visible on screen
 	rpVisibleWindow int // last-known number of RP rows that fit on screen
@@ -203,6 +212,13 @@ func NewApp() *App {
 		app.playHistoryCfg = config.DefaultPlayHistoryConfig()
 	}
 
+	// Load play options config
+	if po, err := storage.LoadPlayOptionsConfigFromUnified(); err == nil {
+		app.playOptsCfg = po
+	} else {
+		app.playOptsCfg = config.DefaultPlayOptionsConfig()
+	}
+
 	// Initialize header renderer
 	InitializeHeaderRenderer()
 
@@ -274,8 +290,8 @@ func (a *App) loadQuickFavorites() {
 }
 
 func (a *App) Init() tea.Cmd {
-	// Check for updates in the background on startup
-	return checkForUpdates()
+	// Check for updates in the background on startup.
+	return tea.Batch(checkForUpdates())
 }
 
 // Cleanup stops all players and releases resources for graceful shutdown.
@@ -285,6 +301,29 @@ func (a *App) Cleanup() {
 		if a.sleepTimer != nil {
 			a.sleepTimer.Cancel()
 			a.sleepTimer = nil
+		}
+
+		// Phase 5: Save LastUsedVolume before stopping players so the
+		// GetVolume() calls below reach live players, not nil pointers.
+		if a.playOptsCfg.StartVolumeMode == "last_used" {
+			var lastVol int
+			if a.activePlayer != nil {
+				lastVol = a.activePlayer.GetVolume()
+			} else if a.quickFavPlayer != nil {
+				lastVol = a.quickFavPlayer.GetVolume()
+			}
+			if lastVol > 100 {
+				lastVol = 100
+			}
+			if lastVol > 0 {
+				a.playOptsCfg.LastUsedVolume = lastVol
+				_ = storage.SavePlayOptionsConfigToUnified(a.playOptsCfg)
+			}
+		}
+
+		if a.activePlayer != nil {
+			_ = a.activePlayer.Stop()
+			a.activePlayer = nil
 		}
 		if a.quickFavPlayer != nil {
 			_ = a.quickFavPlayer.Stop()
@@ -343,6 +382,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Stop any playing stations before quitting
 			a.Cleanup()
 			return a, tea.Quit
+		case "x":
+			// Kill the ContinueOnNavigate station (or all mpv when things go
+			// wrong) from any screen.
+			if a.activeStation != nil || (a.playingFromMain && a.quickFavPlayer != nil) {
+				a.stopAllPlayback()
+				a.broadcastNowPlayingBar()
+				return a, nil
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -372,7 +419,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Initialize screen-specific models with current dimensions
 		switch msg.screen {
 		case screenPlay:
+			// Stop all screen-owned players so they don't overlap with whatever
+			// the user is about to play. When ContinueOnNavigate is on we keep
+			// activePlayer alive — the user is just browsing; it will be stopped
+			// the moment they actually select and play a new station.
+			a.stopScreenPlayers()
+			if !a.playOptsCfg.ContinueOnNavigate {
+				if a.activePlayer != nil {
+					_ = a.activePlayer.Stop()
+					a.activePlayer = nil
+					a.activeStation = nil
+					a.activeContextLabel = ""
+				}
+				a.playingFromMain = false
+				a.playingStation = nil
+			}
 			a.playScreen = NewPlayModel(a.favoritePath, a.blocklistManager)
+			a.playScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+			// Pass play options so volume/behaviour is consistent
+			a.playScreen.playOptsCfg = a.playOptsCfg
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {
 				a.playScreen.metadataManager = a.metadataManager
@@ -404,6 +469,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.playScreen.Init()
 		case screenSearch:
 			a.searchScreen = NewSearchModel(a.apiClient, a.favoritePath, a.dataPath, a.blocklistManager)
+			a.searchScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+			// Create and wire up the MPV player for search screen playback
+			searchPlayer := player.NewMPVPlayer()
+			a.searchScreen.player = searchPlayer
+			// Load voted stations for the search screen
+			if votedStations, err := storage.LoadVotedStations(); err == nil {
+				a.searchScreen.votedStations = votedStations
+			} else {
+				a.searchScreen.votedStations = &storage.VotedStations{Stations: []storage.VotedStation{}}
+			}
+			// Apply play options so volume/behaviour is consistent
+			a.searchScreen.playOptsCfg = a.playOptsCfg
 			// Apply search visibility setting
 			if cfg, err := storage.LoadBlocklistConfigFromUnified(); err == nil {
 				a.searchScreen.showBlockedInSearch = cfg.ShowBlockedInSearch
@@ -413,9 +490,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {
 				a.searchScreen.metadataManager = a.metadataManager
-				if a.searchScreen.player != nil {
-					a.searchScreen.player.SetMetadataManager(a.metadataManager)
-				}
+				searchPlayer.SetMetadataManager(a.metadataManager)
 			}
 			// Set ratings manager and star renderer for star rating feature
 			if a.ratingsManager != nil {
@@ -431,6 +506,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Sync running timer state so Z cancels rather than reopens the dialog.
 			a.searchScreen.sleepTimerActive = a.sleepTimer != nil
+			// Seed quickFavorites so duplicate detection works from first use.
+			a.searchScreen.quickFavorites = a.quickFavorites
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.searchScreen.width = a.width
@@ -439,6 +516,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.searchScreen.Init()
 		case screenList:
 			a.listManagementScreen = NewListManagementModel(a.favoritePath)
+			a.listManagementScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.listManagementScreen.width = a.width
@@ -447,6 +525,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.listManagementScreen.Init()
 		case screenLucky:
 			a.luckyScreen = NewLuckyModel(a.apiClient, a.favoritePath, a.blocklistManager)
+			a.luckyScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+			// Pass play options so volume/behaviour is consistent
+			a.luckyScreen.playOptsCfg = a.playOptsCfg
 			// Set metadata manager for play tracking and metadata display
 			if a.metadataManager != nil {
 				a.luckyScreen.metadataManager = a.metadataManager
@@ -474,6 +555,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.luckyScreen.Init()
 		case screenMostPlayed:
 			a.mostPlayedScreen = NewMostPlayedModel(a.metadataManager, a.favoritePath, a.blocklistManager)
+			a.mostPlayedScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+			// Pass play options so volume/behaviour is consistent
+			a.mostPlayedScreen.playOptsCfg = a.playOptsCfg
 			// Set metadata manager for play tracking
 			if a.metadataManager != nil && a.mostPlayedScreen.player != nil {
 				a.mostPlayedScreen.player.SetMetadataManager(a.metadataManager)
@@ -497,11 +581,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, a.mostPlayedScreen.Init()
 		case screenTopRated:
+			// Stop other screen-owned players (but not activePlayer when
+			// ContinueOnNavigate is on — the handoff keeps that alive).
+			a.stopScreenPlayers()
 			a.topRatedScreen = NewTopRatedModel(a.ratingsManager, a.metadataManager, a.starRenderer, a.favoritePath, a.blocklistManager)
-			// Set metadata manager for play tracking
-			if a.metadataManager != nil && a.topRatedScreen.player != nil {
-				a.topRatedScreen.player.SetMetadataManager(a.metadataManager)
+			a.topRatedScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+			// Give Top Rated its own dedicated player so it doesn't share
+			// quickFavPlayer with the main menu. This prevents stopScreenPlayers()
+			// or a ContinueOnNavigate handoff from killing the wrong stream.
+			topRatedPlayer := player.NewMPVPlayer()
+			a.topRatedScreen.player = topRatedPlayer
+			if a.metadataManager != nil {
+				topRatedPlayer.SetMetadataManager(a.metadataManager)
 			}
+			// Pass play options so volume/behaviour is consistent
+			a.topRatedScreen.playOptsCfg = a.playOptsCfg
 			// Set tags manager for tag pill display
 			if a.tagsManager != nil {
 				a.topRatedScreen.tagsManager = a.tagsManager
@@ -516,6 +610,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenBrowseTags:
 			if a.tagsManager != nil {
 				a.browseTagsScreen = NewBrowseTagsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				a.browseTagsScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+				// Pass play options so volume/behaviour is consistent
+				a.browseTagsScreen.playOptsCfg = a.playOptsCfg
 				// Set metadata manager for play tracking
 				if a.metadataManager != nil && a.browseTagsScreen.player != nil {
 					a.browseTagsScreen.player.SetMetadataManager(a.metadataManager)
@@ -531,6 +628,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenTagPlaylists:
 			if a.tagsManager != nil {
 				a.tagPlaylistsScreen = NewTagPlaylistsModel(a.tagsManager, a.ratingsManager, a.metadataManager, a.starRenderer, a.blocklistManager)
+				a.tagPlaylistsScreen.nowPlayingBar = a.buildNowPlayingBannerText()
+				// Pass play options so volume/behaviour is consistent
+				a.tagPlaylistsScreen.playOptsCfg = a.playOptsCfg
 				// Set metadata manager for play tracking
 				if a.metadataManager != nil && a.tagPlaylistsScreen.player != nil {
 					a.tagPlaylistsScreen.player.SetMetadataManager(a.metadataManager)
@@ -545,6 +645,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, func() tea.Msg { return backToMainMsg{} }
 		case screenGist:
 			a.gistScreen = NewGistModel(a.favoritePath)
+			a.gistScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.gistScreen.width = a.width
@@ -553,6 +654,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.gistScreen.Init()
 		case screenSettings:
 			a.settingsScreen = NewSettingsModel(a.favoritePath)
+			a.settingsScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Pass metadata manager for play history clear action
 			a.settingsScreen.metadataManager = a.metadataManager
 			// Set dimensions immediately if we have them
@@ -569,6 +671,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.settingsScreen.Init()
 		case screenShuffleSettings:
 			a.shuffleSettingsScreen = NewShuffleSettingsModel()
+			a.shuffleSettingsScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.shuffleSettingsScreen.width = a.width
@@ -577,6 +680,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.shuffleSettingsScreen.Init()
 		case screenConnectionSettings:
 			a.connectionSettingsScreen = NewConnectionSettingsModel()
+			a.connectionSettingsScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.connectionSettingsScreen.width = a.width
@@ -585,6 +689,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.connectionSettingsScreen.Init()
 		case screenAppearanceSettings:
 			a.appearanceSettingsScreen = NewAppearanceSettingsModel()
+			a.appearanceSettingsScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.appearanceSettingsScreen.width = a.width
@@ -593,6 +698,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.appearanceSettingsScreen.Init()
 		case screenBlocklist:
 			a.blocklistScreen = NewBlocklistModel(a.blocklistManager)
+			a.blocklistScreen.nowPlayingBar = a.buildNowPlayingBannerText()
 			// Set dimensions immediately if we have them
 			if a.width > 0 && a.height > 0 {
 				a.blocklistScreen.width = a.width
@@ -603,9 +709,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Return to main menu and reload favorites and play history
 			a.loadQuickFavorites()
 			a.refreshPlayHistoryConfig()
+			a.refreshPlayOptionsConfig()
 			a.loadRecentlyPlayed()
 			a.unifiedMenuIndex = 0
 			a.numberBuffer = ""
+			a.qfViewOffset = 0
 			a.rpViewOffset = 0
 			return a, nil
 		}
@@ -673,6 +781,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.sleepSession != nil {
 			a.sleepSummary = NewSleepSummaryModel(a.sleepSession, a.sleepDuration, a.width, a.height)
+			a.sleepSummary.nowPlayingBar = a.buildNowPlayingBannerText()
 			a.sleepSession = nil
 		} else {
 			// Session data unavailable (unexpected); fall back to main menu
@@ -691,15 +800,40 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.searchScreen.sleepCountdown = ""
 		return a, nil
 
+	case handoffPlaybackMsg:
+		// A play screen is navigating away with ContinueOnNavigate=true.
+		// Stop any previously handed-off player before accepting the new one.
+		if a.activePlayer != nil && a.activePlayer != msg.player {
+			_ = a.activePlayer.Stop()
+		}
+		a.activePlayer = msg.player
+		a.activeStation = msg.station
+		a.activeContextLabel = msg.contextLabel
+		a.broadcastNowPlayingBar()
+		return a, nil
+
+	case stopActivePlaybackMsg:
+		// Stop the app-level handed-off player and clear its state.
+		if a.activePlayer != nil {
+			_ = a.activePlayer.Stop()
+			a.activePlayer = nil
+		}
+		a.activeStation = nil
+		a.activeContextLabel = ""
+		a.broadcastNowPlayingBar()
+		return a, nil
+
 	case backToMainMsg:
 		// Handle back to main menu from any screen
 		a.screen = screenMainMenu
 		// Reload quick favorites and play history in case they were updated
 		a.loadQuickFavorites()
 		a.refreshPlayHistoryConfig()
+		a.refreshPlayOptionsConfig()
 		a.loadRecentlyPlayed()
 		a.unifiedMenuIndex = 0
 		a.numberBuffer = ""
+		a.qfViewOffset = 0
 		a.rpViewOffset = 0
 		return a, nil
 	}
@@ -1098,6 +1232,7 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex > 0 {
 				a.unifiedMenuIndex--
+				a.updateQFViewOffset(a.qfVisibleWindow)
 				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
@@ -1105,6 +1240,7 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.numberBuffer = "" // Clear buffer on navigation
 			if a.unifiedMenuIndex < totalItems-1 {
 				a.unifiedMenuIndex++
+				a.updateQFViewOffset(a.qfVisibleWindow)
 				a.updateRPViewOffset(a.rpVisibleWindow)
 			}
 			return a, nil
@@ -1120,9 +1256,35 @@ func (a *App) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) executeMenuAction(index int) (tea.Model, tea.Cmd) {
-	// Stop any currently playing quick favorite before navigating
-	if a.playingFromMain && a.quickFavPlayer != nil {
-		_ = a.quickFavPlayer.Stop()
+	// Stop any currently playing quick favorite before navigating.
+	// When ContinueOnNavigate is on and something is handed off to App-level,
+	// don't stop it — it should keep playing across screens.
+	// We do not require quickFavPlayer.IsPlaying() here because Play() is called
+	// asynchronously; checking IsPlaying() is a race condition that drops the
+	// handoff when the user navigates before the cmd goroutine runs.
+	// activePlayer == nil guards the case where a player screen already did a
+	// handoffPlaybackMsg — in that scenario playingFromMain/playingStation are
+	// also set but we must NOT replace the already-correct activePlayer with the
+	// idle quickFavPlayer.
+	if a.playingFromMain && a.playingStation != nil && a.activePlayer == nil {
+		if a.playOptsCfg.ContinueOnNavigate && a.quickFavPlayer != nil {
+			// Hand the main-menu player off to activePlayer so it survives
+			// stopScreenPlayers() when the destination screen is initialized.
+			// (a.activePlayer is guaranteed nil by the outer condition, so no
+			// stop-before-replace is needed here.)
+			a.activePlayer = a.quickFavPlayer
+			a.activeStation = a.playingStation
+			a.activeContextLabel = "Quick Play"
+			// Install a fresh quickFavPlayer so stopScreenPlayers doesn't
+			// kill the handed-off one.
+			a.quickFavPlayer = player.NewMPVPlayer()
+			if a.metadataManager != nil {
+				a.quickFavPlayer.SetMetadataManager(a.metadataManager)
+			}
+			a.broadcastNowPlayingBar()
+		} else if a.quickFavPlayer != nil {
+			_ = a.quickFavPlayer.Stop()
+		}
 	}
 	a.playingFromMain = false
 	a.playingStation = nil
@@ -1184,6 +1346,14 @@ func (a *App) refreshPlayHistoryConfig() {
 	}
 }
 
+// refreshPlayOptionsConfig reloads the play options config from disk so that
+// changes made in Settings > Play Options are reflected immediately on return.
+func (a *App) refreshPlayOptionsConfig() {
+	if po, err := storage.LoadPlayOptionsConfigFromUnified(); err == nil {
+		a.playOptsCfg = po
+	}
+}
+
 // loadRecentlyPlayed loads recently played stations from metadata, respecting
 // the play history config (enabled flag and size limit).
 // Callers that need a fresh config from disk should call refreshPlayHistoryConfig
@@ -1206,17 +1376,32 @@ func (a *App) playQuickFavorite(index int) (tea.Model, tea.Cmd) {
 	a.playingStation = &station
 	a.playingFromMain = true
 
-	// Stop any currently playing station
+	// Stop any currently playing station. This also cancels any in-flight async
+	// Play() goroutine via the killed flag.
 	if a.quickFavPlayer != nil {
 		_ = a.quickFavPlayer.Stop()
 	}
+	// Stop any station handed off from a previous ContinueOnNavigate session.
+	if a.activePlayer != nil && a.activePlayer != a.quickFavPlayer {
+		_ = a.activePlayer.Stop()
+		a.activePlayer = nil
+		a.activeStation = nil
+		a.activeContextLabel = ""
+	}
 
-	// Start playback
+	// Create a fresh player for the new station. The old player's killed flag may
+	// be true after Stop() (if it was idle), which would silently block Play().
+	fresh := player.NewMPVPlayer()
+	if a.metadataManager != nil {
+		fresh.SetMetadataManager(a.metadataManager)
+	}
+	a.quickFavPlayer = fresh
+	p := fresh
+
+	// Start playback on the fresh player
 	return a, func() tea.Msg {
-		if a.quickFavPlayer != nil {
-			if err := a.quickFavPlayer.Play(&station); err != nil {
-				return playbackErrorMsg{err}
-			}
+		if err := p.Play(&station); err != nil {
+			return playbackErrorMsg{err}
 		}
 		return playbackStartedMsg{}
 	}
@@ -1232,64 +1417,170 @@ func (a *App) playRecentStation(index int) (tea.Model, tea.Cmd) {
 	a.playingStation = &station
 	a.playingFromMain = true
 
-	// Stop any currently playing station
+	// Stop any currently playing station. This also cancels any in-flight async
+	// Play() goroutine via the killed flag.
 	if a.quickFavPlayer != nil {
 		_ = a.quickFavPlayer.Stop()
 	}
+	// Stop any station handed off from a previous ContinueOnNavigate session.
+	if a.activePlayer != nil && a.activePlayer != a.quickFavPlayer {
+		_ = a.activePlayer.Stop()
+		a.activePlayer = nil
+		a.activeStation = nil
+		a.activeContextLabel = ""
+	}
 
-	// Start playback
+	// Create a fresh player for the new station. The old player's killed flag may
+	// be true after Stop() (if it was idle), which would silently block Play().
+	fresh := player.NewMPVPlayer()
+	if a.metadataManager != nil {
+		fresh.SetMetadataManager(a.metadataManager)
+	}
+	a.quickFavPlayer = fresh
+	p := fresh
+
+	// Start playback on the fresh player
 	return a, func() tea.Msg {
-		if a.quickFavPlayer != nil {
-			if err := a.quickFavPlayer.Play(&station); err != nil {
-				return playbackErrorMsg{err}
-			}
+		if err := p.Play(&station); err != nil {
+			return playbackErrorMsg{err}
 		}
 		return playbackStartedMsg{}
 	}
 }
 
+// isPlayerScreen reports whether the current screen manages its own playback
+// UI. The Now Playing bar should not be shown on these screens to avoid
+// duplicate/conflicting playback information.
+func (a *App) isPlayerScreen() bool {
+	switch a.screen {
+	case screenPlay, screenSearch, screenLucky,
+		screenMostPlayed, screenTopRated,
+		screenBrowseTags, screenTagPlaylists:
+		return true
+	}
+	return false
+}
+
+// nowPlayingBar returns the now-playing bar string when a station has been
+// handed off to the app level (ContinueOnNavigate=true). Returns "" otherwise.
+func (a *App) nowPlayingBar() string {
+	if a.activeStation == nil {
+		return ""
+	}
+	vol := 0
+	if a.activePlayer != nil {
+		vol = a.activePlayer.GetVolume()
+	}
+	return renderNowPlayingBar(a.activeStation, a.activeContextLabel, vol)
+}
+
+// buildNowPlayingBannerText returns the static now-playing banner string shown
+// above the footer help bar on non-player screens when ContinueOnNavigate is ON.
+// The banner includes the station name, optional star rating, and context label.
+func (a *App) buildNowPlayingBannerText() string {
+	if a.activeStation == nil {
+		return ""
+	}
+	name := a.activeStation.TrimName()
+	bar := "♫ Now Playing: " + name
+	if a.ratingsManager != nil && a.starRenderer != nil {
+		if r := a.ratingsManager.GetRating(a.activeStation.StationUUID); r != nil && r.Rating > 0 {
+			bar += " " + a.starRenderer.RenderCompactPlain(r.Rating)
+		}
+	}
+	if a.activeContextLabel != "" {
+		bar += "  ·  [" + a.activeContextLabel + "]"
+	}
+	bar += "  ·  x: Stop"
+	return successStyle().Render(bar)
+}
+
+// broadcastNowPlayingBar pushes the current now-playing banner to every
+// non-player screen model so it appears above each screen's footer help bar.
+func (a *App) broadcastNowPlayingBar() {
+	bar := a.buildNowPlayingBannerText()
+	// Non-player screens
+	a.listManagementScreen.nowPlayingBar = bar
+	a.gistScreen.nowPlayingBar = bar
+	a.settingsScreen.nowPlayingBar = bar
+	a.shuffleSettingsScreen.nowPlayingBar = bar
+	a.connectionSettingsScreen.nowPlayingBar = bar
+	a.appearanceSettingsScreen.nowPlayingBar = bar
+	a.blocklistScreen.nowPlayingBar = bar
+	a.sleepSummary.nowPlayingBar = bar
+	// Player screens (shown in list/browse states when ContinueOnNavigate is on)
+	a.playScreen.nowPlayingBar = bar
+	a.searchScreen.nowPlayingBar = bar
+	a.luckyScreen.nowPlayingBar = bar
+	a.mostPlayedScreen.nowPlayingBar = bar
+	a.topRatedScreen.nowPlayingBar = bar
+	a.browseTagsScreen.nowPlayingBar = bar
+	a.tagPlaylistsScreen.nowPlayingBar = bar
+}
+
 func (a *App) View() string {
+	var view string
 	switch a.screen {
 	case screenMainMenu:
 		return a.viewMainMenu()
 	case screenPlay:
-		return a.playScreen.View()
+		view = a.playScreen.View()
 	case screenSearch:
-		return a.searchScreen.View()
+		view = a.searchScreen.View()
 	case screenList:
-		return a.listManagementScreen.View()
+		view = a.listManagementScreen.View()
 	case screenLucky:
-		return a.luckyScreen.View()
+		view = a.luckyScreen.View()
 	case screenGist:
-		return a.gistScreen.View()
+		view = a.gistScreen.View()
 	case screenSettings:
-		return a.settingsScreen.View()
+		view = a.settingsScreen.View()
 	case screenShuffleSettings:
-		return a.shuffleSettingsScreen.View()
+		view = a.shuffleSettingsScreen.View()
 	case screenConnectionSettings:
-		return a.connectionSettingsScreen.View()
+		view = a.connectionSettingsScreen.View()
 	case screenAppearanceSettings:
-		return a.appearanceSettingsScreen.View()
+		view = a.appearanceSettingsScreen.View()
 	case screenBlocklist:
-		return a.blocklistScreen.View()
+		view = a.blocklistScreen.View()
 	case screenMostPlayed:
-		return a.mostPlayedScreen.View()
+		view = a.mostPlayedScreen.View()
 	case screenTopRated:
-		return a.topRatedScreen.View()
+		view = a.topRatedScreen.View()
 	case screenBrowseTags:
-		return a.browseTagsScreen.View()
+		view = a.browseTagsScreen.View()
 	case screenTagPlaylists:
-		return a.tagPlaylistsScreen.View()
+		view = a.tagPlaylistsScreen.View()
 	case screenSleepSummary:
-		return a.sleepSummary.View()
+		view = a.sleepSummary.View()
+	default:
+		return "Unknown screen"
 	}
-	return "Unknown screen"
+	// Append the global now-playing bar on non-main-menu, non-player screens
+	// when ContinueOnNavigate is active and a station has been handed off to App.
+	// Player screens (Top Rated, Most Played, Play, Search, etc.) manage their
+	// own playback UI, so the bar would be a duplicate there.
+	// NOTE: The bar is now injected via PageLayout.NowPlaying above the help
+	// text instead of appended here; this block is intentionally removed.
+	return view
 }
 
-// stopAllPlayback stops mpv on every screen that may be playing.
-func (a *App) stopAllPlayback() {
+// stopScreenPlayers stops every screen-owned player without touching
+// activePlayer or the app-level playingFromMain state. Use this when
+// navigating to a new player screen so existing streams don't overlap,
+// while still preserving a ContinueOnNavigate handoff.
+//
+// Important: a screen player pointer may be the same object as activePlayer
+// when a handoff just occurred (the screen handed its player to App before
+// navigating away). Stopping it here would kill the still-running stream, so
+// we skip any player that is identical to activePlayer.
+//
+// quickFavPlayer is app-level, not screen-owned, so it is excluded from this
+// list. Calling Stop() on an idle quickFavPlayer sets killed=true and blocks
+// subsequent Quick Play; stopAllPlayback() handles it when a full teardown is
+// needed.
+func (a *App) stopScreenPlayers() {
 	for _, p := range []*player.MPVPlayer{
-		a.quickFavPlayer,
 		a.playScreen.player,
 		a.searchScreen.player,
 		a.luckyScreen.player,
@@ -1298,10 +1589,42 @@ func (a *App) stopAllPlayback() {
 		a.tagPlaylistsScreen.player,
 		a.browseTagsScreen.player,
 	} {
-		if p != nil {
+		if p != nil && p != a.activePlayer {
 			_ = p.Stop()
 		}
 	}
+}
+
+// stopAllPlayback stops mpv on every screen that may be playing.
+// App-level players (activePlayer, quickFavPlayer) are stopped unconditionally.
+// Screen-owned players are only stopped when actively playing; calling Stop()
+// on an idle player sets killed=true which would block the next PlayWithVolume
+// call on that screen.
+func (a *App) stopAllPlayback() {
+	// App-level players: always stop so ContinueOnNavigate state is cleared.
+	if a.activePlayer != nil {
+		_ = a.activePlayer.Stop()
+	}
+	if a.quickFavPlayer != nil {
+		_ = a.quickFavPlayer.Stop()
+	}
+	// Screen-owned players: only stop when actually playing.
+	for _, p := range []*player.MPVPlayer{
+		a.playScreen.player,
+		a.searchScreen.player,
+		a.luckyScreen.player,
+		a.mostPlayedScreen.player,
+		a.topRatedScreen.player,
+		a.tagPlaylistsScreen.player,
+		a.browseTagsScreen.player,
+	} {
+		if p != nil && p.IsPlaying() {
+			_ = p.Stop()
+		}
+	}
+	a.activePlayer = nil
+	a.activeStation = nil
+	a.activeContextLabel = ""
 	a.playingFromMain = false
 	a.playingStation = nil
 }
@@ -1331,6 +1654,52 @@ func (a *App) saveStationVolume(station *api.Station) {
 
 	// Reload quick favorites to reflect the change
 	a.loadQuickFavorites()
+}
+
+// updateQFViewOffset adjusts qfViewOffset so the currently selected QF entry
+// is always visible in the clipped window. Call this after changing unifiedMenuIndex.
+func (a *App) updateQFViewOffset(visibleCount ...int) {
+	qfCount := len(a.quickFavorites)
+	if qfCount == 0 {
+		a.qfViewOffset = 0
+		return
+	}
+
+	win := qfCount
+	if len(visibleCount) > 0 && visibleCount[0] > 0 {
+		win = visibleCount[0]
+	}
+
+	// Cursor position inside the QF list (negative = cursor is not in QF section)
+	qfCursor := a.unifiedMenuIndex - mainMenuItemCount
+	if qfCursor < 0 {
+		a.qfViewOffset = 0
+		return
+	}
+	if qfCursor >= qfCount {
+		// Cursor is below the QF section (in RP or beyond). Preserve the current
+		// scroll position so the QF list doesn't jump while user navigates RP.
+		return
+	}
+
+	// Scroll down
+	if qfCursor >= a.qfViewOffset+win {
+		a.qfViewOffset = qfCursor - win + 1
+	}
+	// Scroll up
+	if qfCursor < a.qfViewOffset {
+		a.qfViewOffset = qfCursor
+	}
+	// Clamp
+	if a.qfViewOffset < 0 {
+		a.qfViewOffset = 0
+	}
+	if a.qfViewOffset > qfCount-win {
+		a.qfViewOffset = qfCount - win
+		if a.qfViewOffset < 0 {
+			a.qfViewOffset = 0
+		}
+	}
 }
 
 // updateRPViewOffset adjusts rpViewOffset so the currently selected RP entry
@@ -1434,23 +1803,86 @@ func (a *App) viewMainMenu() string {
 			}
 		}
 		content.WriteString("\n")
+	} else if a.activeStation != nil {
+		// ContinueOnNavigate: station handed off from a player screen.
+		content.WriteString("\n")
+		content.WriteString(a.buildNowPlayingBannerText())
+		content.WriteString("\n")
 	}
 
-	// Add quick play favorites if available (also part of unified navigation)
+	// Add quick play favorites if available (also part of unified navigation).
+	// The list is viewport-clipped so it never pushes the menu off-screen on
+	// small terminals (e.g. tmux panes). The calculation mirrors the RP section.
 	if len(a.quickFavorites) > 0 {
+		// ── viewport calculation ────────────────────────────────────────────
+		// Lines already committed: header + chrome (title/subtitle/blank) +
+		// menu items + now-playing block + blank + QF header + scroll indicators
+		// + RP section (if non-empty) + volume display + footer.
+		headerLines := visibleLineCount(renderHeader())
+		p := getPadding()
+		const (
+			chromeLines   = 5 // same as RP calculation
+			footerLines   = 2 // 1 margin + 1 help bar
+			qfHeaderLines = 2 // blank + "─── Quick Play Favorites ───"
+		)
+		menuLinesQF := mainMenuItemCount
+		if a.playingFromMain && a.playingStation != nil {
+			menuLinesQF += 2
+		} else if a.activeStation != nil {
+			menuLinesQF += 2
+		}
+		// Reserve lines for RP section if it will be shown.
+		rpReserve := 0
+		if len(a.recentlyPlayed) > 0 {
+			// At minimum: blank + RP header + 1 entry + possible scroll indicators
+			rpReserve = 4
+		}
+		volumeLines := 0
+		if a.volumeDisplay != "" {
+			volumeLines = 2
+		}
+		fixed := headerLines + chromeLines + menuLinesQF + qfHeaderLines + rpReserve + volumeLines + footerLines + p.PageVertical
+		visibleQF := a.height - fixed
+		if len(a.quickFavorites) > visibleQF {
+			// Reserve space for both scroll indicators.
+			visibleQF -= 2
+		}
+		if visibleQF < 1 {
+			visibleQF = 1
+		}
+		// If the user has set a display row cap, honour it (mirrors RP behaviour).
+		if a.playHistoryCfg.DisplayRows > 0 && visibleQF > a.playHistoryCfg.DisplayRows {
+			visibleQF = a.playHistoryCfg.DisplayRows
+		}
+		if visibleQF > len(a.quickFavorites) {
+			visibleQF = len(a.quickFavorites)
+		}
+
+		// Cache window size and sync viewport (same pattern as RP).
+		a.qfVisibleWindow = visibleQF
+		a.updateQFViewOffset(visibleQF)
+
 		content.WriteString("\n")
 		content.WriteString(quickFavoritesStyle().Render("─── Quick Play Favorites ───"))
 		content.WriteString("\n")
 
+		// Scroll indicator: entries hidden above.
+		if a.qfViewOffset > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↑ %d more (↑/k to scroll)", a.qfViewOffset)))
+			content.WriteString("\n")
+		}
+
 		menuItemCount := len(menuItems)
-		for i, station := range a.quickFavorites {
-			// Use numbers 10+ for quick favorites (no limit)
+		endQF := a.qfViewOffset + visibleQF
+		if endQF > len(a.quickFavorites) {
+			endQF = len(a.quickFavorites)
+		}
+		for i := a.qfViewOffset; i < endQF; i++ {
+			station := a.quickFavorites[i]
 			shortcut := fmt.Sprintf("%d", 10+i)
 
-			// Build station info line
 			var stationInfo strings.Builder
 			stationInfo.WriteString(station.TrimName())
-
 			if station.Country != "" {
 				stationInfo.WriteString(" • ")
 				stationInfo.WriteString(station.Country)
@@ -1469,12 +1901,7 @@ func (a *App) viewMainMenu() string {
 				prefix = "> "
 			}
 
-			// Build the line content
-			lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
-
-			// Highlight if this is the playing station
 			if a.playingFromMain && a.playingStation != nil && a.playingStation.StationUUID == station.StationUUID {
-				// Playing station - show with play icon
 				playingLine := fmt.Sprintf("%s%s. ▶ %s", prefix, shortcut, stationInfo.String())
 				if unifiedIdx == a.unifiedMenuIndex {
 					content.WriteString(selectedItemStyle().Render(playingLine))
@@ -1482,13 +1909,20 @@ func (a *App) viewMainMenu() string {
 					content.WriteString(normalItemStyle().Render(playingLine))
 				}
 			} else {
-				// Normal station
+				lineContent := fmt.Sprintf("%s%s. %s", prefix, shortcut, stationInfo.String())
 				if unifiedIdx == a.unifiedMenuIndex {
 					content.WriteString(selectedItemStyle().Render(lineContent))
 				} else {
 					content.WriteString(normalItemStyle().Render(lineContent))
 				}
 			}
+			content.WriteString("\n")
+		}
+
+		// Scroll indicator: entries hidden below.
+		hiddenBelowQF := len(a.quickFavorites) - endQF
+		if hiddenBelowQF > 0 {
+			content.WriteString(dimStyle().Render(fmt.Sprintf("  ↓ %d more (↓/j to scroll)", hiddenBelowQF)))
 			content.WriteString("\n")
 		}
 	}
@@ -1504,17 +1938,27 @@ func (a *App) viewMainMenu() string {
 			// assemblePageContent always emits 3 lines before Content:
 			//   \n (blank-after-header) + title\n + \n (empty subtitle line)
 			// Content itself starts with "Choose an option:\n\n" = 2 more lines.
-			chromeLines   = 5  // 3 (assemblePageContent) + 2 ("Choose an option:\n\n")
-			footerLines   = 2  // 1 margin + 1 help bar
-			rpHeaderLines = 2  // blank + "─── Recently Played ───"
+			chromeLines   = 5 // 3 (assemblePageContent) + 2 ("Choose an option:\n\n")
+			footerLines   = 2 // 1 margin + 1 help bar
+			rpHeaderLines = 2 // blank + "─── Recently Played ───"
 		)
 		menuLines := mainMenuItemCount // one line per menu item
 		if a.playingFromMain && a.playingStation != nil {
 			menuLines += 2 // now-playing block: blank + station line
+		} else if a.activeStation != nil {
+			menuLines += 2 // ContinueOnNavigate banner: blank + banner line
 		}
 		qfLines := 0
 		if len(a.quickFavorites) > 0 {
-			qfLines = 2 + len(a.quickFavorites) // blank + header + items
+			// QF is now viewport-clipped; use the cached visible window size.
+			// Add 2 for potential scroll indicators (conservative upper bound).
+			qfLines = 2 + a.qfVisibleWindow // blank + header + visible items
+			if a.qfViewOffset > 0 {
+				qfLines++ // top scroll indicator
+			}
+			if len(a.quickFavorites) > a.qfViewOffset+a.qfVisibleWindow {
+				qfLines++ // bottom scroll indicator
+			}
 		}
 		volumeLines := 0
 		if a.volumeDisplay != "" {

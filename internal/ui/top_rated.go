@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -90,7 +92,8 @@ const (
 	topRatedStatePlaying
 	topRatedStateSavePrompt
 	topRatedStateSelectList
-	topRatedStateRating // Rating mode activated with *
+	topRatedStateRating      // Rating mode activated with *
+	topRatedStateConfirmStop // Phase 5: Confirm before stopping
 )
 
 // TopRatedModel represents the Top Rated screen
@@ -106,7 +109,7 @@ type TopRatedModel struct {
 	ratingsManager     *storage.RatingsManager
 	metadataManager    *storage.MetadataManager
 	starRenderer       *components.StarRenderer
-	tagsManager        *storage.TagsManager   // for tag pill display
+	tagsManager        *storage.TagsManager    // for tag pill display
 	tagRenderer        *components.TagRenderer // for rendering tag pills
 	favoritePath       string
 	saveMessage        string
@@ -122,6 +125,11 @@ type TopRatedModel struct {
 	availableLists []string
 	listItems      []list.Item
 	listModel      list.Model
+	// Play options (injected by App)
+	playOptsCfg        config.PlayOptionsConfig
+	confirmStopTarget  string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar      string // set by App when ContinueOnNavigate is active
+	pendingResolveUUID string // UUID of the in-flight GetByUUID lookup; cleared on resolution
 }
 
 // topRatedStationItem wraps a station with rating for the list
@@ -176,10 +184,10 @@ func (i topRatedStationItem) Description() string {
 // NewTopRatedModel creates a new Top Rated model
 func NewTopRatedModel(ratingsManager *storage.RatingsManager, metadataManager *storage.MetadataManager, starRenderer *components.StarRenderer, favoritePath string, blocklistManager *blocklist.Manager) TopRatedModel {
 	m := TopRatedModel{
-		state:            topRatedStateList,
-		sortBy:           sortByRatingHigh,
-		filterBy:         filterAllRatings,
-		player:           player.NewMPVPlayer(),
+		state:    topRatedStateList,
+		sortBy:   sortByRatingHigh,
+		filterBy: filterAllRatings,
+		// player will be injected by App.Update
 		ratingsManager:   ratingsManager,
 		metadataManager:  metadataManager,
 		starRenderer:     starRenderer,
@@ -188,7 +196,6 @@ func NewTopRatedModel(ratingsManager *storage.RatingsManager, metadataManager *s
 		blocklistManager: blocklistManager,
 		helpModel:        components.NewHelpModel(createTopRatedHelp()),
 	}
-
 	// Load voted stations
 	votedStations, err := storage.LoadVotedStations()
 	if err == nil {
@@ -237,6 +244,13 @@ func (m TopRatedModel) loadStations() tea.Msg {
 
 type topRatedLoadedMsg struct{}
 
+// topRatedResolvedMsg is sent when a UUID lookup completes
+type topRatedResolvedMsg struct {
+	requestedUUID string
+	station       *api.Station
+	err           error
+}
+
 func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -245,6 +259,33 @@ func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
 	case topRatedLoadedMsg:
 		m.refreshStationList()
 		return m, nil
+
+	case topRatedResolvedMsg:
+		if msg.err != nil || msg.station == nil {
+			// Only clear pendingResolveUUID when this response matches the
+			// current pending request; stale failures must not clobber a
+			// newer in-flight lookup.
+			if msg.requestedUUID == m.pendingResolveUUID {
+				m.saveMessage = "Could not resolve station URL"
+				m.saveMessageSuccess = false
+				m.saveMessageTime = 3
+				m.pendingResolveUUID = ""
+				return m, tickEverySecond()
+			}
+			return m, nil
+		}
+		// Discard stale responses (user changed selection or navigated away).
+		if m.pendingResolveUUID != msg.station.StationUUID {
+			return m, nil
+		}
+		m.pendingResolveUUID = ""
+		// Update the cache so future plays don't need a lookup.
+		if m.ratingsManager != nil {
+			if r := m.ratingsManager.GetRating(msg.station.StationUUID); r != nil {
+				_ = m.ratingsManager.SetRating(msg.station, r.Rating)
+			}
+		}
+		return m.playStation(*msg.station)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -272,6 +313,8 @@ func (m TopRatedModel) Update(msg tea.Msg) (TopRatedModel, tea.Cmd) {
 			return m.handleSelectListInput(msg)
 		case topRatedStateRating:
 			return m.handleRatingInput(msg)
+		case topRatedStateConfirmStop:
+			return m.handleConfirmStopInput(msg)
 		}
 
 	case tickMsg:
@@ -355,11 +398,39 @@ func (m *TopRatedModel) refreshStationList() {
 	m.stationListModel.SetItems(m.stationItems)
 }
 
+// playStation starts playback for the given station and transitions to the playing state.
+// Returns the updated model and a command. Use as: m, cmd = m.playStation(st)
+func (m TopRatedModel) playStation(st api.Station) (TopRatedModel, tea.Cmd) {
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if st.Volume != nil {
+		startVol = *st.Volume
+	}
+	// Stop any app-level handed-off player (e.g. from Play from Favorites or Search
+	// Stations with ContinueOnNavigate on) before starting the new stream.
+	stopCmd := func() tea.Msg { return stopActivePlaybackMsg{} }
+	if err := m.player.PlayWithVolume(&st, startVol); err != nil {
+		m.err = err
+		return m, stopCmd
+	}
+	m.selectedStation = &st
+	m.state = topRatedStatePlaying
+	// Stop any app-level handed-off player so it doesn't overlap.
+	// The live player (m.player) stays with this screen; the handoff to App
+	// happens later when the user navigates away via navigateBackCmd /
+	// navigateToMainCmd, keeping volume/pause/status controls correct.
+	return m, stopCmd
+}
+
 func (m TopRatedModel) handleListInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc", "m":
-		// Stop player before returning
-		if m.player != nil && m.player.IsPlaying() {
+		// Only stop the player if ContinueOnNavigate is off (or nothing is playing).
+		// When ContinueOnNavigate is on and a station was handed off to App,
+		// stopping here would kill the still-running stream.
+		if m.player != nil && m.player.IsPlaying() && !m.playOptsCfg.ContinueOnNavigate {
 			_ = m.player.Stop()
 		}
 		return m, func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
@@ -384,20 +455,22 @@ func (m TopRatedModel) handleListInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) 
 		if len(m.stationItems) > 0 {
 			selected := m.stationListModel.SelectedItem()
 			if item, ok := selected.(topRatedStationItem); ok {
-				m.selectedStation = &item.station
-				// Check if we have the URL to play
 				if item.station.URLResolved != "" {
-					if err := m.player.Play(&item.station); err != nil {
-						m.err = err
-					} else {
-						m.state = topRatedStatePlaying
-					}
-				} else {
-					m.saveMessage = "Station URL not available (needs lookup)"
-					m.saveMessageSuccess = false
-					m.saveMessageTime = 3
-					return m, tickEverySecond()
+					return m.playStation(item.station)
 				}
+				// URL missing — look it up live from the API
+				uuid := item.station.StationUUID
+				m.pendingResolveUUID = uuid
+				m.saveMessage = "Looking up station…"
+				m.saveMessageSuccess = true
+				m.saveMessageTime = 5
+				return m, tea.Batch(tickEverySecond(), func() tea.Msg {
+					client := api.NewClient()
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					st, err := client.GetByUUID(ctx, uuid)
+					return topRatedResolvedMsg{requestedUUID: uuid, station: st, err: err}
+				})
 			}
 		}
 		return m, nil
@@ -496,14 +569,81 @@ func (m TopRatedModel) handleRatingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd
 	return m, nil
 }
 
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m TopRatedModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Top Rated",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m TopRatedModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Top Rated",
+				}
+			},
+			func() tea.Msg { return navigateMsg{screen: screenMainMenu} },
+		)
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+}
+
 func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc", "m":
-		if m.player != nil {
-			_ = m.player.Stop()
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
+			m.state = topRatedStateConfirmStop
+			return m, nil
 		}
+		// Stop (or hand off) playback and return to list.
+		cmd := m.navigateBackCmd()
 		m.state = topRatedStateList
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
 		return m, nil
+
+	case "0":
+		// Phase 5: Confirm before stopping
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
+			m.state = topRatedStateConfirmStop
+			return m, nil
+		}
+		// Build cmd before clearing selectedStation.
+		cmd := m.navigateToMainCmd()
+		m.state = topRatedStateList
+		m.selectedStation = nil
+		return m, cmd
 
 	case "*":
 		// Enter rating mode while playing
@@ -519,6 +659,33 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 			_ = m.player.Stop()
 		}
 		m.state = topRatedStateList
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleConfirmStopInput handles input in the ConfirmStop state (Phase 5)
+func (m TopRatedModel) handleConfirmStopInput(msg tea.KeyMsg) (TopRatedModel, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "y", "1":
+		target := m.confirmStopTarget
+		m.confirmStopTarget = ""
+		m.state = topRatedStateList
+		var cmd tea.Cmd
+		if target == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+		}
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case "n", "2", "esc":
+		// Cancel stop, return to playing
+		m.state = topRatedStatePlaying
 		return m, nil
 	}
 	return m, nil
@@ -653,23 +820,52 @@ func (m TopRatedModel) View() string {
 
 	case topRatedStatePlaying:
 		if m.selectedStation != nil {
-			content.WriteString(stationNameStyle().Render(m.selectedStation.Name))
-			content.WriteString("\n")
-			if m.selectedStation.Country != "" {
-				content.WriteString(helpStyle().Render(m.selectedStation.Country))
+			if m.playOptsCfg.ShowMetadata {
+				// Render full metadata block
+				var metadata *storage.StationMetadata
+				if m.metadataManager != nil {
+					metadata = m.metadataManager.GetMetadata(m.selectedStation.StationUUID)
+				}
+				var rating int
+				if m.ratingsManager != nil {
+					if r := m.ratingsManager.GetRating(m.selectedStation.StationUUID); r != nil {
+						rating = r.Rating
+					}
+				}
+				content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+				content.WriteString("\n")
+			} else {
+				// Render only basic info
+				content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
+				if m.selectedStation.Country != "" {
+					content.WriteString("  ")
+					content.WriteString(dimStyle().Render(m.selectedStation.Country))
+				}
 				content.WriteString("\n")
 			}
-			// Show current rating
-			if m.ratingsManager != nil {
-				rating := m.ratingsManager.GetRating(m.selectedStation.StationUUID)
-				if rating != nil {
-					stars := storage.RenderStars(rating.Rating, true)
-					content.WriteString(highlightStyle().Render(stars))
-					content.WriteString("\n")
+			// Playback status with live track metadata
+			content.WriteString("\n")
+			if m.player != nil && m.player.IsPlaying() {
+				if m.player.IsPaused() {
+					content.WriteString(infoStyle().Render("⏸ Paused"))
+				} else {
+					track := m.player.GetCachedTrack()
+					if IsValidTrackMetadata(track, m.selectedStation.Name) {
+						content.WriteString(successStyle().Render("▶ Now Playing:"))
+						content.WriteString(" ")
+						content.WriteString(infoStyle().Render(track))
+					} else {
+						content.WriteString(successStyle().Render("▶ Playing..."))
+					}
 				}
+			} else {
+				content.WriteString(infoStyle().Render("⏹ Stopped"))
 			}
 			content.WriteString("\n")
-			content.WriteString(successStyle().Render("▶ Now Playing"))
+			// Volume
+			if m.player != nil {
+				fmt.Fprintf(&content, "\nVolume: %d%%", m.player.GetVolume())
+			}
 		}
 
 	case topRatedStateSavePrompt:
@@ -683,6 +879,11 @@ func (m TopRatedModel) View() string {
 	case topRatedStateSelectList:
 		content.WriteString("Select list to save to:\n\n")
 		content.WriteString(m.listModel.View())
+
+	case topRatedStateConfirmStop:
+		content.WriteString("Are you sure you want to stop playback?\n\n")
+		content.WriteString("y: Yes, stop\n")
+		content.WriteString("n/Esc: No, keep playing\n")
 	}
 
 	// Show save message
@@ -703,11 +904,22 @@ func (m TopRatedModel) View() string {
 	case topRatedStateRating:
 		helpText = "1-5: Set rating • 0/r: Remove rating • Esc: Cancel"
 	case topRatedStatePlaying:
-		helpText = "s: Stop • *1-5: Rate • Esc: Back"
+		helpText = "s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    helpText,
 	}, m.height)
 }
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m TopRatedModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
+}
+
+// Phase 5: Confirm stop prompt view

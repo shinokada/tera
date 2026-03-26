@@ -33,6 +33,7 @@ type ShuffleSettingsModel struct {
 	message          string
 	messageIsSuccess bool
 	messageTime      int
+	nowPlayingBar    string // set by App when ContinueOnNavigate is active
 }
 
 // NewShuffleSettingsModel creates a new shuffle settings model
@@ -415,7 +416,7 @@ func (m ShuffleSettingsModel) viewMenu() string {
 		content.WriteString(infoStyle().Render("✓ Shuffle settings saved automatically"))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-6: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
@@ -446,7 +447,7 @@ func (m ShuffleSettingsModel) viewInterval() string {
 	content.WriteString("\n\n")
 	content.WriteString(infoStyle().Render("Auto-advance will skip to next shuffle station after this interval"))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-6: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
@@ -477,7 +478,7 @@ func (m ShuffleSettingsModel) viewHistorySize() string {
 	content.WriteString("\n\n")
 	content.WriteString(infoStyle().Render("History allows you to go back to previous shuffle stations"))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-5: Shortcut • Esc: Back • 0: Main Menu",
 	}, m.height)
@@ -496,4 +497,10 @@ func boolToEnabledDisabled(b bool) string {
 		return "Enabled"
 	}
 	return "Disabled"
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m ShuffleSettingsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
@@ -32,6 +33,7 @@ const (
 	playStateTagInput
 	playStateManageTags
 	playStateSleepTimer
+	playStateConfirmStop // Phase 5: confirm stop prompt
 )
 
 // PlayModel represents the play screen
@@ -76,6 +78,10 @@ type PlayModel struct {
 	dataPath         string // for loading last-used duration preference
 	sleepCountdown   string // e.g. "Stops in 12:34", refreshed by App on each tick
 	sleepTimerActive bool   // true once a timer is running; cleared on cancel/expiry
+	// Play options (injected by App)
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // playListItem wraps a list name for the bubbles list
@@ -158,9 +164,20 @@ func (m PlayModel) Init() tea.Cmd {
 
 // playStation starts playing a station
 func (m PlayModel) playStation(station api.Station) tea.Cmd {
+	// Phase 5: Play Options wiring for volume
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return tea.Batch(
+		// Stop any app-level handed-off player (e.g. from Top Rated / Most
+		// Played with ContinueOnNavigate on) before starting the new stream.
+		func() tea.Msg { return stopActivePlaybackMsg{} },
 		func() tea.Msg {
-			err := m.player.Play(&station)
+			err := m.player.PlayWithVolume(&station, startVol)
 			if err != nil {
 				return playbackErrorMsg{err}
 			}
@@ -327,6 +344,8 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateManageTags(msg)
 		case playStateSleepTimer:
 			return m.updateSleepTimerDialog(msg)
+		case playStateConfirmStop:
+			return m.updateConfirmStop(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -355,16 +374,15 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playbackStartedMsg:
 		// Playback started successfully - trigger refresh to show voted status
-		// Only start tick if not already running (saveMessageTime == 0 means no tick;
-		// messageDisplayPersistent means persistent/rating prompt with no tick dispatched yet)
-		if m.saveMessageTime <= 0 {
+		// Only start tick if not already running
+		if m.saveMessageTime <= 0 && !m.sleepTimerActive {
 			return m, tea.Batch(tickEverySecond(), m.pollTrackHistory())
 		}
 		return m, m.pollTrackHistory()
 
 	case playbackErrorMsg:
 		m.err = msg.err
-		m.ratingMode = false // Clear rating mode on async state transition
+		m.ratingMode = false          // Clear rating mode on async state transition
 		m.state = playStateSavePrompt // Show prompt even on error
 		return m, nil
 
@@ -392,7 +410,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case saveSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ Saved '%s' to Quick Favorites", msg.station.TrimName())
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case saveFailedMsg:
@@ -401,7 +423,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.saveMessage = fmt.Sprintf("✗ Failed to save: %v", msg.err)
 		}
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case deleteSuccessMsg:
@@ -414,7 +440,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.VoteSuccessMsg:
 		m.saveMessage = fmt.Sprintf("✓ %s", msg.Message)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Start tick to show the message and trigger UI refresh to show voted status
 		if startTick {
@@ -424,7 +450,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.VoteFailedMsg:
 		m.saveMessage = fmt.Sprintf("✗ Vote failed: %v", msg.Err)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Start tick to show the message and trigger UI refresh
 		if startTick {
@@ -461,16 +487,25 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.selectedStation = nil
 
-			return m, tickEverySecond()
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
+			if startTick {
+				return m, tickEverySecond()
+			}
+			return m, nil
 		} else {
 			// Already blocked
 			m.saveMessage = msg.message
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
+			if startTick {
+				return m, tickEverySecond()
+			}
 		}
 		return m, nil
 
 	case undoBlockSuccessMsg:
 		m.saveMessage = "✓ Block undone"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		// Update blocked status in list
 		if m.stationListModel.Items() != nil {
@@ -487,11 +522,18 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.stationListModel.SetItems(items)
 		}
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case undoBlockFailedMsg:
 		m.saveMessage = "No recent block to undo"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 
 	case components.TagSubmittedMsg:
@@ -509,7 +551,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✓ Added tag: %s", msg.Tag)
 				m.refreshStationTagPills(m.selectedStation.StationUUID)
 			}
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
 			m.state = playStatePlaying
 			if startTick {
@@ -538,7 +580,7 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = fmt.Sprintf("✓ Tags saved (%d)", len(msg.Tags))
 				m.refreshStationTagPills(m.selectedStation.StationUUID)
 			}
-			startTick := m.saveMessageTime == 0
+			startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 			m.saveMessageTime = messageDisplayShort
 			m.state = playStatePlaying
 			if startTick {
@@ -556,7 +598,12 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// User confirmed a duration in the dialog
 		m.state = playStatePlaying
 		m.sleepTimerActive = true
-		return m, func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+		// Start the tick if the countdown wasn't already keeping it alive
+		activateCmd := func() tea.Msg { return sleepTimerActivateMsg{Minutes: msg.Minutes} }
+		if m.saveMessageTime <= 0 {
+			return m, tea.Batch(tickEverySecond(), activateCmd)
+		}
+		return m, activateCmd
 
 	case components.SleepTimerCancelledMsg:
 		m.state = playStatePlaying
@@ -612,7 +659,11 @@ func (m PlayModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saveMessage = ""
 			}
 		}
-		return m, tickEverySecond()
+		// Only re-schedule if there is still something to update
+		if m.saveMessageTime > 0 || m.sleepTimerActive {
+			return m, tickEverySecond()
+		}
+		return m, nil
 
 	case trackHistoryMsg:
 		m.trackHistory = msg.tracks
@@ -676,10 +727,16 @@ func (m *PlayModel) initializeStationListModel() {
 func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// Return to main menu
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
+		// Leaving the Play screen entirely — hand off (with fresh player) or stop.
+		navCmd := func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			return m, tea.Batch(handoffCmd, navCmd)
 		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		return m, navCmd
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
@@ -704,17 +761,29 @@ func (m PlayModel) updateListSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// Go back to list selection
+		// Going back one level within the Play screen (staying here, not leaving).
+		// Stop the player — if the user picked a new station from a different
+		// list they'll start fresh; ContinueOnNavigate handoff only applies when
+		// leaving the screen entirely.
+		if m.player != nil && m.player.IsPlaying() {
+			_ = m.player.Stop()
+		}
 		m.state = playStateListSelection
 		m.stations = nil
 		m.stationItems = nil
 		m.stationListModel = list.Model{}
 		return m, nil
 	case "0":
-		// Return to main menu (Level 2+ shortcut)
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
+		// Leave the Play screen entirely — hand off (with fresh player) or stop.
+		navCmd := func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			return m, tea.Batch(handoffCmd, navCmd)
 		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		return m, navCmd
 	case "ctrl+c":
 		// Quit application
 		return m, tea.Quit
@@ -743,6 +812,31 @@ func (m PlayModel) updateStationSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// handOffPlayer hands m.player to App and installs a fresh player on the
+// model, so App owns the running stream while PlayModel has a clean player
+// ready for the next selection. Returns the handoff command and the updated
+// model (the caller must use the returned model, not the original).
+func (m PlayModel) handOffPlayer() (PlayModel, tea.Cmd) {
+	station := m.selectedStation
+	oldPlayer := m.player
+	// Give the model a brand-new player so the old one is exclusively owned
+	// by App. Any subsequent Stop() via stopActivePlaybackMsg won't touch the
+	// player that PlayModel will use for the next station.
+	newP := player.NewMPVPlayer()
+	if m.metadataManager != nil {
+		newP.SetMetadataManager(m.metadataManager)
+	}
+	m.player = newP
+	cmd := func() tea.Msg {
+		return handoffPlaybackMsg{
+			player:       oldPlayer,
+			station:      station,
+			contextLabel: "Favorites",
+		}
+	}
+	return m, cmd
+}
+
 // updatePlaying handles input during playback
 func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle rating mode input first
@@ -752,19 +846,15 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "?":
-		// Toggle help overlay
 		m.helpModel.SetSize(m.width, m.height)
 		m.helpModel.Toggle()
 		return m, nil
 	case " ":
-		// Toggle pause/resume
 		if err := m.player.TogglePause(); err == nil {
 			if m.player.IsPaused() {
-				// Paused - show persistent message
 				m.saveMessage = "⏸ Paused - Press Space to resume"
 				m.saveMessageTime = messageDisplayPersistent
 			} else {
-				// Resumed - show temporary message
 				m.saveMessage = "▶ Resumed"
 				startTick := m.saveMessageTime <= 0
 				m.saveMessageTime = messageDisplayShort
@@ -774,69 +864,94 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case "esc":
-		// Stop playback and go back
-		if err := m.player.Stop(); err != nil {
-			m.err = fmt.Errorf("failed to stop playback: %w", err)
+	case "esc", "0":
+		// Phase 5: ConfirmStop prompt
+		if m.playOptsCfg.ConfirmStop {
+			if msg.String() == "0" {
+				m.confirmStopTarget = "main"
+			} else {
+				m.confirmStopTarget = "back"
+			}
+			m.state = playStateConfirmStop
 			return m, nil
 		}
-		m.state = playStateStationSelection
-		m.selectedStation = nil
-		m.trackHistory = []string{}
-		return m, nil
-	case "0":
-		// Return to main menu (Level 3 shortcut)
-		if err := m.player.Stop(); err != nil {
-			m.err = fmt.Errorf("failed to stop playback: %w", err)
+		if msg.String() == "esc" {
+			// Return to station list. With ContinueOnNavigate ON, hand the
+			// player off to App and install a fresh player on the model so
+			// the next station selection doesn't share the same MPVPlayer
+			// pointer (stopActivePlaybackMsg would kill it prematurely).
+			if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+				m, handoffCmd := m.handOffPlayer()
+				m.state = playStateStationSelection
+				m.selectedStation = nil
+				m.trackHistory = []string{}
+				return m, handoffCmd
+			}
+			// ContinueOnNavigate off — stop the player.
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+			m.state = playStateStationSelection
+			m.selectedStation = nil
+			m.trackHistory = []string{}
 			return m, nil
-		}
-		m.selectedStation = nil
-		m.trackHistory = []string{}
-		return m, func() tea.Msg {
-			return navigateMsg{screen: screenMainMenu}
+		} else {
+			// Press 0: leave the screen entirely. Hand off (with fresh player)
+			// or stop, then navigate to main menu.
+			navCmd := func() tea.Msg { return navigateMsg{screen: screenMainMenu} }
+			if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+				m, handoffCmd := m.handOffPlayer()
+				m.selectedStation = nil
+				m.trackHistory = []string{}
+				return m, tea.Batch(handoffCmd, navCmd)
+			}
+			// ContinueOnNavigate off — stop and navigate.
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+			m.selectedStation = nil
+			m.trackHistory = []string{}
+			return m, navCmd
 		}
 	case "f":
-		// Save to Quick Favorites
 		return m, m.saveToQuickFavorites()
 	case "s":
-		// Save to a list (not implemented yet)
-		// TODO: Implement save to custom list
 		m.saveMessage = "Save to list feature coming soon"
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
+		if startTick {
+			return m, tickEverySecond()
+		}
 		return m, nil
 	case "v":
-		// Vote for this station
 		return m, m.voteForStation()
 	case "/":
-		// Decrease volume
 		newVol := m.player.DecreaseVolume(5)
 		if m.selectedStation != nil && newVol >= 0 {
 			m.selectedStation.SetVolume(newVol)
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
 		}
 		return m, nil
 	case "*":
-		// Increase volume
 		newVol := m.player.IncreaseVolume(5)
 		if m.selectedStation != nil {
 			m.selectedStation.SetVolume(newVol)
 			m.saveStationVolume(m.selectedStation)
 		}
 		m.saveMessage = fmt.Sprintf("Volume: %d%%", newVol)
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
 		}
 		return m, nil
 	case "m":
-		// Toggle mute
 		muted, vol := m.player.ToggleMute()
 		if muted {
 			m.saveMessage = "Volume: Muted"
@@ -847,26 +962,23 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedStation.SetVolume(vol)
 			m.saveStationVolume(m.selectedStation)
 		}
-		startTick := m.saveMessageTime == 0
+		startTick := m.saveMessageTime <= 0 && !m.sleepTimerActive
 		m.saveMessageTime = messageDisplayShort
 		if startTick {
 			return m, tickEverySecond()
 		}
 		return m, nil
 	case "b":
-		// Block current station
 		if m.selectedStation != nil {
 			return m, m.blockStation()
 		}
 		return m, nil
 	case "u":
-		// Undo last block (within 5 seconds)
 		if time.Since(m.lastBlockTime) < 5*time.Second {
 			return m, m.undoLastBlock()
 		}
 		return m, nil
 	case "r":
-		// Enter rating mode
 		if m.selectedStation != nil && m.ratingsManager != nil {
 			m.ratingMode = true
 			m.saveMessage = "Press 1-5 to rate, 0 to remove rating, Esc to cancel"
@@ -875,7 +987,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "t":
-		// Enter tag input mode
 		if m.selectedStation != nil && m.tagsManager != nil {
 			allTags := m.tagsManager.GetAllTags()
 			w := m.width
@@ -888,7 +999,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "T":
-		// Enter manage tags dialog
 		if m.selectedStation != nil && m.tagsManager != nil {
 			currentTags := m.tagsManager.GetTags(m.selectedStation.StationUUID)
 			allTags := m.tagsManager.GetAllTags()
@@ -902,8 +1012,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "Z":
-		// If a sleep timer is already running, Z cancels it immediately.
-		// Otherwise, open the dialog to set a new duration.
 		if m.sleepTimerActive {
 			return m, func() tea.Msg { return sleepTimerCancelMsg{} }
 		}
@@ -921,7 +1029,6 @@ func (m PlayModel) updatePlaying(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = playStateSleepTimer
 		return m, nil
 	case "+":
-		// Extend active sleep timer by 15 minutes (no-op when timer is not running)
 		if m.sleepTimerActive {
 			return m, func() tea.Msg { return sleepTimerExtendMsg{Minutes: 15} }
 		}
@@ -1189,7 +1296,7 @@ func (m PlayModel) View() string {
 	}
 
 	if m.err != nil {
-		return errorView(m.err)
+		return m.errorView(m.err)
 	}
 
 	switch m.state {
@@ -1208,14 +1315,35 @@ func (m PlayModel) View() string {
 	case playStateManageTags:
 		return m.viewManageTags()
 	case playStateSleepTimer:
-		return RenderPageWithBottomHelp(PageLayout{
+		return m.renderPageWithBottomHelp(PageLayout{
 			Title:   "💤 Sleep Timer",
 			Content: m.sleepTimerDialog.View(),
 			Help:    "Enter: Set • ↑↓/jk: Navigate • Esc: Cancel",
 		}, m.height)
+	case playStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 
 	return "Unknown state"
+}
+
+// Phase 5: ConfirmStop prompt view
+func (m PlayModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString(errorStyle().Render("⚠ Stop Playback?"))
+	content.WriteString("\n\n")
+	if m.selectedStation != nil {
+		content.WriteString("Station: ")
+		content.WriteString(stationNameStyle().Render(m.selectedStation.TrimName()))
+		content.WriteString("\n\n")
+	}
+	content.WriteString("Are you sure you want to stop playback?\n")
+	content.WriteString(infoStyle().Render("Press y/1 to stop, n/2/Esc to cancel."))
+	return m.renderPage(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y/1: Stop • n/2/Esc: Cancel",
+	})
 }
 
 // viewListSelection renders the list selection view
@@ -1226,7 +1354,7 @@ func (m PlayModel) viewListSelection() string {
 	}
 
 	if len(m.lists) == 0 {
-		return noListsView()
+		return m.noListsView()
 	}
 
 	var content strings.Builder
@@ -1246,7 +1374,7 @@ func (m PlayModel) viewListSelection() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: "Select a Favorite List",
 		Content:  content.String(),
@@ -1276,22 +1404,30 @@ func (m PlayModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
-
-	// Playback status with proper spacing
-	content.WriteString("\n")
-	if m.player.IsPlaying() {
-		// Use the cached track (kept fresh by monitorMetadata every 5 s) to
-		// avoid a blocking IPC socket call inside the render path.
-		if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
-			content.WriteString(successStyle().Render("▶ Now Playing:"))
-			content.WriteString(" ")
-			content.WriteString(infoStyle().Render(track))
+	// Gate full station details and playback status on ShowMetadata
+	if m.playOptsCfg.ShowMetadata {
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
+		// Playback status with proper spacing
+		content.WriteString("\n")
+		if m.player.IsPlaying() {
+			if track := m.player.GetCachedTrack(); IsValidTrackMetadata(track, m.selectedStation.TrimName()) {
+				content.WriteString(successStyle().Render("▶ Now Playing:"))
+				content.WriteString(" ")
+				content.WriteString(infoStyle().Render(track))
+			} else {
+				content.WriteString(successStyle().Render("▶ Playing..."))
+			}
 		} else {
-			content.WriteString(successStyle().Render("▶ Playing..."))
+			content.WriteString(infoStyle().Render("⏸ Stopped"))
 		}
 	} else {
-		content.WriteString(infoStyle().Render("⏸ Stopped"))
+		// Render only basic info when metadata display is disabled
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			content.WriteString("  ")
+			content.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		content.WriteString("\n")
 	}
 
 	// Tag display
@@ -1316,7 +1452,6 @@ func (m PlayModel) viewPlaying() string {
 				break
 			}
 
-			// Show newest first with indicators
 			indicator := "  "
 			if i == 0 {
 				indicator = "🎵"
@@ -1331,10 +1466,8 @@ func (m PlayModel) viewPlaying() string {
 		}
 	}
 
-	// Save message (if any)
 	if m.saveMessage != "" {
 		content.WriteString("\n\n")
-		// Determine style based on message content
 		var style lipgloss.Style
 		if strings.Contains(m.saveMessage, "✓") || strings.HasPrefix(m.saveMessage, "Volume:") {
 			if strings.Contains(m.saveMessage, "Muted") {
@@ -1350,15 +1483,13 @@ func (m PlayModel) viewPlaying() string {
 		content.WriteString(style.Render(m.saveMessage))
 	}
 
-	// Sleep timer countdown
 	if timerInfo := m.sleepTimerCountdown(); timerInfo != "" {
 		content.WriteString("\n")
 		content.WriteString(highlightStyle().Render(timerInfo))
 	}
 
-	// Use the consistent page template with bottom-aligned help
 	helpText := "Space: Pause • f: Fav • v: Vote • b: Block • Z: Sleep • +: Extend • 0: Main Menu • ?: Help"
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: content.String(),
 		Help:    helpText,
@@ -1375,7 +1506,7 @@ func (m PlayModel) sleepTimerCountdown() string {
 // The ManageTags component renders the station name in its own header,
 // so no prepend is needed here.
 func (m PlayModel) viewManageTags() string {
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Manage Tags",
 		Content: m.manageTags.View(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
@@ -1390,7 +1521,7 @@ func (m PlayModel) viewTagInput() string {
 		content.WriteString("\n\n")
 	}
 	content.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: content.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -1405,7 +1536,7 @@ func (m PlayModel) viewStationSelection() string {
 	}
 
 	if len(m.stations) == 0 {
-		return noStationsView(m.selectedList)
+		return m.noStationsView(m.selectedList)
 	}
 
 	var content strings.Builder
@@ -1425,7 +1556,7 @@ func (m PlayModel) viewStationSelection() string {
 	}
 
 	// Use the consistent page template with bottom-aligned help
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • g/G: Top/End • /: Filter • Enter: Play • d: Delete • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
@@ -1433,14 +1564,14 @@ func (m PlayModel) viewStationSelection() string {
 }
 
 // noStationsView renders the view when a list is empty
-func noStationsView(listName string) string {
+func (m PlayModel) noStationsView(listName string) string {
 	var content strings.Builder
 
 	content.WriteString(infoStyle().Render("This list is empty!"))
 	content.WriteString("\n\n")
 	content.WriteString("Add stations to this list using Search or List Management.")
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:    "Play from Favorites",
 		Subtitle: fmt.Sprintf("List: %s", listName),
 		Content:  content.String(),
@@ -1449,14 +1580,14 @@ func noStationsView(listName string) string {
 }
 
 // noListsView renders the view when no lists are available
-func noListsView() string {
+func (m PlayModel) noListsView() string {
 	var content strings.Builder
 
 	content.WriteString(errorStyle().Render("No favorite lists found!"))
 	content.WriteString("\n\n")
 	content.WriteString("Create your first list using the List Management menu.")
 
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "Play from Favorites",
 		Content: content.String(),
 		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
@@ -1464,8 +1595,8 @@ func noListsView() string {
 }
 
 // errorView renders an error message
-func errorView(err error) string {
-	return RenderPage(PageLayout{
+func (m PlayModel) errorView(err error) string {
+	return m.renderPage(PageLayout{
 		Title:   "Error",
 		Content: errorStyle().Render(err.Error()),
 		Help:    "Esc: Back to main menu • Ctrl+C: Quit",
@@ -1492,7 +1623,7 @@ func (m PlayModel) viewSavePrompt() string {
 	content.WriteString("2) Return to station list")
 
 	// Use the consistent page template
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "💾 Save Station?",
 		Content: content.String(),
 		Help:    "y/1: Yes • n/2/Esc: No",
@@ -1524,7 +1655,7 @@ func (m PlayModel) viewDeleteConfirm() string {
 	content.WriteString(infoStyle().Render("This action cannot be undone."))
 
 	// Use the consistent page template
-	return RenderPage(PageLayout{
+	return m.renderPage(PageLayout{
 		Title:   "⚠️  Confirm Delete",
 		Content: content.String(),
 		Help:    "y: Yes, delete • n/Esc: No, cancel",
@@ -1581,4 +1712,63 @@ type errMsg struct {
 
 type trackHistoryMsg struct {
 	tracks []string
+}
+
+// updateConfirmStop handles input during the ConfirmStop prompt (Phase 5)
+func (m PlayModel) updateConfirmStop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "1":
+		// Always reset state so the model is clean when reused.
+		m.state = playStateStationSelection
+		// User confirmed stop: navigate based on what triggered the prompt.
+		if m.confirmStopTarget == "main" {
+			navCmd := func() tea.Msg { return backToMainMsg{} }
+			if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+				m, handoffCmd := m.handOffPlayer()
+				m.selectedStation = nil
+				m.trackHistory = []string{}
+				return m, tea.Batch(handoffCmd, navCmd)
+			}
+			if m.player != nil {
+				_ = m.player.Stop()
+			}
+			m.selectedStation = nil
+			m.trackHistory = []string{}
+			return m, navCmd
+		}
+		// Default: return to station selection (hand off or stop).
+		if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+			m, handoffCmd := m.handOffPlayer()
+			m.selectedStation = nil
+			m.trackHistory = []string{}
+			return m, handoffCmd
+		}
+		if m.player != nil {
+			_ = m.player.Stop()
+		}
+		m.selectedStation = nil
+		m.trackHistory = []string{}
+		return m, nil
+	case "n", "2", "esc":
+		// Cancel: return to playing state
+		m.state = playStatePlaying
+		return m, nil
+	}
+	return m, nil
+}
+
+// renderPage injects the now-playing bar when the model's own player is not
+// actively playing (so viewPlaying is unaffected).
+func (m PlayModel) renderPage(layout PageLayout) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPage(layout)
+}
+
+func (m PlayModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }

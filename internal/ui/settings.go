@@ -22,9 +22,10 @@ const (
 	settingsStateMenu settingsState = iota
 	settingsStateTheme
 	settingsStateConnection
-	settingsStateHistory        // top-level: Search History or Play History
-	settingsStateSearchHistory  // existing search history sub-menu
-	settingsStatePlayHistory    // NEW: play history settings
+	settingsStateHistory       // top-level: Search History or Play History
+	settingsStateSearchHistory // existing search history sub-menu
+	settingsStatePlayHistory   // play history settings
+	settingsStatePlayOptions   // play options (continuous playback, volume, etc.)
 	settingsStateUpdates
 	settingsStateAbout
 )
@@ -34,21 +35,21 @@ var Version = "dev"
 
 // SettingsModel represents the settings screen
 type SettingsModel struct {
-	state                settingsState
-	menuList             list.Model
-	themeList            list.Model
-	historyMenuList      list.Model
-	historyMenuIndex     int // cursor for the top-level History switcher
-	width                int
-	height               int
-	message              string
-	messageTime          int
-	messageIsSuccess     bool
-	currentTheme         string
-	favoritePath         string
-	searchHistory        *storage.SearchHistoryStore
-	playHistoryCfg       config.PlayHistoryConfig
-	metadataManager      *storage.MetadataManager
+	state            settingsState
+	menuList         list.Model
+	themeList        list.Model
+	historyMenuList  list.Model
+	historyMenuIndex int // cursor for the top-level History switcher
+	width            int
+	height           int
+	message          string
+	messageTime      int
+	messageIsSuccess bool
+	currentTheme     string
+	favoritePath     string
+	searchHistory    *storage.SearchHistoryStore
+	playHistoryCfg   config.PlayHistoryConfig
+	metadataManager  *storage.MetadataManager
 	// Update checking
 	latestVersion   string
 	updateAvailable bool
@@ -56,6 +57,9 @@ type SettingsModel struct {
 	updateChecking  bool
 	updateError     string
 	installInfo     api.InstallInfo
+	// Play options
+	playOptsCfg   config.PlayOptionsConfig
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // Predefined themes
@@ -209,9 +213,10 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		components.NewMenuItem("Appearance", "Customize header and layout", "2"),
 		components.NewMenuItem("Connection Settings", "Auto-reconnect and buffering", "3"),
 		components.NewMenuItem("Shuffle Settings", "Configure shuffle mode behavior", "4"),
-		components.NewMenuItem("History", "Search and play history settings", "5"),
-		components.NewMenuItem("Check for Updates", "Check for new versions", "6"),
-		components.NewMenuItem("About TERA", "Version and information", "7"),
+		components.NewMenuItem("Play Options", "Playback behaviour settings", "5"),
+		components.NewMenuItem("History", "Search and play history settings", "6"),
+		components.NewMenuItem("Check for Updates", "Check for new versions", "7"),
+		components.NewMenuItem("About TERA", "Version and information", "8"),
 	}
 	menuList := components.CreateMenu(menuItems, "", 50, 12)
 
@@ -266,6 +271,12 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		phCfg = config.DefaultPlayHistoryConfig()
 	}
 
+	// Load play options config
+	poCfg, err := storage.LoadPlayOptionsConfigFromUnified()
+	if err != nil {
+		poCfg = config.DefaultPlayOptionsConfig()
+	}
+
 	// Detect installation method
 	installInfo := api.DetectInstallMethod()
 
@@ -278,6 +289,7 @@ func NewSettingsModel(favoritePath string) SettingsModel {
 		favoritePath:    favoritePath,
 		searchHistory:   history,
 		playHistoryCfg:  phCfg,
+		playOptsCfg:     poCfg,
 		// Update fields initialized to defaults
 		updateChecked:  false,
 		updateChecking: false,
@@ -319,6 +331,8 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSearchHistory(msg)
 		case settingsStatePlayHistory:
 			return m.updatePlayHistory(msg)
+		case settingsStatePlayOptions:
+			return m.updatePlayOptions(msg)
 		case settingsStateUpdates:
 			return m.updateUpdates(msg)
 		case settingsStateAbout:
@@ -376,10 +390,14 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "5":
-		m.state = settingsStateHistory
+		m.state = settingsStatePlayOptions
 		return m, nil
 
 	case "6":
+		m.state = settingsStateHistory
+		return m, nil
+
+	case "7":
 		m.state = settingsStateUpdates
 		if !m.updateChecked && !m.updateChecking {
 			m.updateChecking = true
@@ -387,7 +405,7 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "7":
+	case "8":
 		m.state = settingsStateAbout
 		return m, nil
 
@@ -412,14 +430,16 @@ func (m SettingsModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return navigateMsg{screen: screenShuffleSettings}
 			}
 		case 4:
-			m.state = settingsStateHistory
+			m.state = settingsStatePlayOptions
 		case 5:
+			m.state = settingsStateHistory
+		case 6:
 			m.state = settingsStateUpdates
 			if !m.updateChecked && !m.updateChecking {
 				m.updateChecking = true
 				return m, checkForUpdates()
 			}
-		case 6:
+		case 7:
 			m.state = settingsStateAbout
 		}
 		return m, nil
@@ -650,6 +670,8 @@ func (m SettingsModel) View() string {
 		return m.viewSearchHistory()
 	case settingsStatePlayHistory:
 		return m.viewPlayHistory()
+	case settingsStatePlayOptions:
+		return m.viewPlayOptions()
 	case settingsStateUpdates:
 		return m.viewUpdates()
 	case settingsStateAbout:
@@ -672,10 +694,10 @@ func (m SettingsModel) viewMenu() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings",
 		Content: content.String(),
-		Help:    "↑↓/jk: Navigate • Enter: Select • 1-7: Shortcut • Esc/0: Back • Ctrl+C: Quit",
+		Help:    "↑↓/jk: Navigate • Enter: Select • 1-8: Shortcut • Esc/0: Back • Ctrl+C: Quit",
 	}, m.height)
 }
 
@@ -697,7 +719,7 @@ func (m SettingsModel) viewTheme() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎨 Theme / Colors",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Apply Theme • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
@@ -747,7 +769,7 @@ func (m SettingsModel) viewHistoryMenu() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings > History",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Select • 1-3: Shortcut • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
@@ -794,10 +816,177 @@ func (m SettingsModel) viewSearchHistory() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings > History > Search History",
 		Content: content.String(),
 		Help:    "↑↓/jk: Navigate • Enter/1-5: Select • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
+	}, m.height)
+}
+
+// updatePlayOptions handles keys in the Play Options sub-menu.
+func (m SettingsModel) updatePlayOptions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	cfg := m.playOptsCfg
+	switch msg.String() {
+	case "esc", "7":
+		m.state = settingsStateMenu
+		return m, nil
+	case "0":
+		return m, func() tea.Msg { return backToMainMsg{} }
+
+	case "1": // Toggle ContinueOnNavigate
+		cfg.ContinueOnNavigate = !cfg.ContinueOnNavigate
+		if err := storage.SavePlayOptionsConfigToUnified(cfg); err == nil {
+			m.playOptsCfg = cfg
+			v := "Off"
+			if cfg.ContinueOnNavigate {
+				v = "On"
+			}
+			m.message = fmt.Sprintf("✓ Continue playback when changing pages: %s", v)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+
+	case "2": // Increase DefaultVolume
+		cfg.DefaultVolume += 5
+		if cfg.DefaultVolume > 100 {
+			cfg.DefaultVolume = 100
+		}
+		if err := storage.SavePlayOptionsConfigToUnified(cfg); err == nil {
+			m.playOptsCfg = cfg
+			m.message = fmt.Sprintf("✓ Default volume: %d%%", cfg.DefaultVolume)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+
+	case "3": // Decrease DefaultVolume
+		cfg.DefaultVolume -= 5
+		if cfg.DefaultVolume < 0 {
+			cfg.DefaultVolume = 0
+		}
+		if err := storage.SavePlayOptionsConfigToUnified(cfg); err == nil {
+			m.playOptsCfg = cfg
+			m.message = fmt.Sprintf("✓ Default volume: %d%%", cfg.DefaultVolume)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+
+	case "4": // Toggle ConfirmStop
+		cfg.ConfirmStop = !cfg.ConfirmStop
+		if err := storage.SavePlayOptionsConfigToUnified(cfg); err == nil {
+			m.playOptsCfg = cfg
+			v := "Off"
+			if cfg.ConfirmStop {
+				v = "On"
+			}
+			m.message = fmt.Sprintf("✓ Confirm before stopping: %s", v)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+
+	case "5": // Toggle ShowMetadata
+		cfg.ShowMetadata = !cfg.ShowMetadata
+		if err := storage.SavePlayOptionsConfigToUnified(cfg); err == nil {
+			m.playOptsCfg = cfg
+			v := "Off"
+			if cfg.ShowMetadata {
+				v = "On"
+			}
+			m.message = fmt.Sprintf("✓ Show station metadata: %s", v)
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+
+	case "6": // Reset to Defaults
+		cfg = config.DefaultPlayOptionsConfig()
+		if err := storage.SavePlayOptionsConfigToUnified(cfg); err == nil {
+			m.playOptsCfg = cfg
+			m.message = "✓ Play Options reset to defaults"
+			m.messageIsSuccess = true
+		} else {
+			m.message = fmt.Sprintf("✗ Failed: %v", err)
+			m.messageIsSuccess = false
+		}
+		m.messageTime = 3
+		return m, tickEverySecond()
+	}
+	return m, nil
+}
+
+// viewPlayOptions renders the Play Options settings screen.
+func (m SettingsModel) viewPlayOptions() string {
+	var content strings.Builder
+
+	boolStr := func(b bool) string {
+		if b {
+			return "[On] "
+		}
+		return "[Off]"
+	}
+
+	continueStr := boolStr(m.playOptsCfg.ContinueOnNavigate)
+	confirmStr := boolStr(m.playOptsCfg.ConfirmStop)
+	metaStr := boolStr(m.playOptsCfg.ShowMetadata)
+
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  1. (Experimental) Continue playback when changing pages   %s", continueStr)))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render("      Keep station playing while browsing other screens."))
+	content.WriteString("\n\n")
+
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  2. Default volume (+5)                    → %d%%", min(m.playOptsCfg.DefaultVolume+5, 100))))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  3. Default volume (-5)                    → %d%%", max(m.playOptsCfg.DefaultVolume-5, 0))))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render(fmt.Sprintf("      Current default volume: %d%%", m.playOptsCfg.DefaultVolume)))
+	content.WriteString("\n\n")
+
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  4. Confirm before stopping playback        %s", confirmStr)))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render("      Show a prompt when pressing Esc/0 while a station is playing."))
+	content.WriteString("\n\n")
+
+	content.WriteString(normalItemStyle().Render(fmt.Sprintf("  5. Show station metadata while playing     %s", metaStr)))
+	content.WriteString("\n")
+	content.WriteString(helpStyle().Render("      Display bitrate, codec, country, and tags in the play screen."))
+	content.WriteString("\n\n")
+
+	content.WriteString(normalItemStyle().Render("  6. Reset to Defaults"))
+	content.WriteString("\n")
+	content.WriteString(normalItemStyle().Render("  7. Back"))
+	content.WriteString("\n")
+
+	if m.message != "" {
+		content.WriteString("\n")
+		if m.messageIsSuccess {
+			content.WriteString(successStyle().Render(m.message))
+		} else {
+			content.WriteString(errorStyle().Render(m.message))
+		}
+	}
+
+	return m.renderPageWithBottomHelp(PageLayout{
+		Title:   "⚙️  Settings > Play Options",
+		Content: content.String(),
+		Help:    "1-7: Select • Esc/7: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
 }
 
@@ -1007,7 +1196,7 @@ func (m SettingsModel) viewPlayHistory() string {
 		}
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "⚙️  Settings > History > Play History",
 		Content: content.String(),
 		Help:    "1-7: Select • Esc/7: Back • 0: Main Menu • Ctrl+C: Quit",
@@ -1077,7 +1266,7 @@ func (m SettingsModel) viewUpdates() string {
 		content.WriteString(stationValueStyle().Render("Press Enter or 'r' to check for updates"))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🔄 Check for Updates",
 		Content: content.String(),
 		Help:    "r: Refresh • Esc: Back • 0: Main Menu • Ctrl+C: Quit",
@@ -1125,9 +1314,15 @@ func (m SettingsModel) viewAbout() string {
 	content.WriteString("\n\n")
 	content.WriteString(helpStyle().Render("Requires: mpv for audio playback"))
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "ℹ️  About TERA",
 		Content: content.String(),
 		Help:    "Esc/Enter: Back • 0: Main Menu • Ctrl+C: Quit",
 	}, m.height)
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m SettingsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }

@@ -203,6 +203,7 @@ func TestCreatePlaylist(t *testing.T) {
 	p := tm.GetPlaylist("Evening Chill")
 	if p == nil {
 		t.Fatal("playlist not found after creation")
+		return
 	}
 	if p.MatchMode != "any" {
 		t.Errorf("expected matchMode 'any', got %q", p.MatchMode)
@@ -226,11 +227,11 @@ func TestCreatePlaylistValidation(t *testing.T) {
 		matchMode string
 		wantErr   bool
 	}{
-		{"", []string{"chill"}, "any", true},          // empty name
-		{"p1", []string{}, "any", true},               // no tags
-		{"p2", []string{"chill"}, "invalid", true},    // bad matchMode
-		{"p3", []string{"chill"}, "any", false},       // valid
-		{"p4", []string{"chill"}, "all", false},       // valid matchAll
+		{"", []string{"chill"}, "any", true},       // empty name
+		{"p1", []string{}, "any", true},            // no tags
+		{"p2", []string{"chill"}, "invalid", true}, // bad matchMode
+		{"p3", []string{"chill"}, "any", false},    // valid
+		{"p4", []string{"chill"}, "all", false},    // valid matchAll
 	}
 	for _, tc := range tests {
 		err := tm.CreatePlaylist(tc.name, tc.tags, tc.matchMode)
@@ -426,6 +427,7 @@ func TestPlaylistCreatedAt(t *testing.T) {
 	p := tm.GetPlaylist("TimeTest")
 	if p == nil {
 		t.Fatal("playlist not found")
+		return
 	}
 	if p.CreatedAt.Before(before.Add(-time.Second)) {
 		t.Errorf("CreatedAt %v is suspiciously old", p.CreatedAt)

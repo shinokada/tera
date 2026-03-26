@@ -4,6 +4,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/shinokada/tera/v3/internal/api"
+	"github.com/shinokada/tera/v3/internal/player"
 )
 
 // Common message types used across UI components
@@ -48,6 +50,19 @@ type undoBlockSuccessMsg struct{}
 
 // undoBlockFailedMsg is sent when a block undo operation fails
 type undoBlockFailedMsg struct{}
+
+// handoffPlaybackMsg is sent by a play screen when ContinueOnNavigate is on
+// and the user navigates away. App takes ownership of the player and station.
+type handoffPlaybackMsg struct {
+	player       *player.MPVPlayer
+	station      *api.Station
+	contextLabel string
+}
+
+// stopActivePlaybackMsg is sent when any screen wants to stop the app-level
+// active player (e.g. main menu Esc while a handoff is in progress, or a new
+// station starting on any screen).
+type stopActivePlaybackMsg struct{}
 
 // tickEverySecond returns a command that ticks every second
 func tickEverySecond() tea.Cmd {

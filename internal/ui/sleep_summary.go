@@ -19,6 +19,7 @@ type SleepSummaryModel struct {
 	setDuration   time.Duration // the duration the user originally requested
 	width         int
 	height        int
+	nowPlayingBar string // set by App when ContinueOnNavigate is active
 }
 
 // NewSleepSummaryModel builds the summary from a completed session.
@@ -78,7 +79,7 @@ func (m SleepSummaryModel) View() string {
 			len(m.entries), formatSessionDuration(m.totalDuration))
 	}
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "💤 Sleep Timer — Session Summary",
 		Content: content.String(),
 		Help:    "0: Main Menu • Any other key: Exit",
@@ -116,4 +117,10 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string(runes[:n-1]) + "…"
+}
+
+// renderPageWithBottomHelp wraps RenderPageWithBottomHelp injecting the active now-playing bar.
+func (m SleepSummaryModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	layout.NowPlaying = m.nowPlayingBar
+	return RenderPageWithBottomHelp(layout, height)
 }

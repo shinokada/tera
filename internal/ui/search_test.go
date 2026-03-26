@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/storage"
 )
 
 func TestSearchModelInit(t *testing.T) {
@@ -68,6 +69,110 @@ func TestSearchMenuNavigation(t *testing.T) {
 				t.Errorf("Expected search type %v, got %v", tt.expectedType, searchModel.searchType)
 			}
 		})
+	}
+}
+
+// TestSearchMenuSingleDigitBuffered verifies that typing a single digit 1-6
+// does NOT immediately execute the search — it should be buffered so that
+// two-digit history shortcuts (10, 11, …) can still be entered.
+func TestSearchMenuSingleDigitBuffered(t *testing.T) {
+	client := api.NewClient()
+	model := NewSearchModel(client, "/tmp/test", "", blocklist.NewManager("/tmp/blocklist"))
+	model.state = searchStateMenu
+	model.numberBuffer = ""
+
+	// Type "1" — must NOT fire Search by Tag immediately
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")}
+	updatedModel, _ := model.Update(msg)
+	searchModel := updatedModel.(SearchModel)
+
+	if searchModel.state != searchStateMenu {
+		t.Errorf("Typing '1' should buffer, not immediately execute: got state %v", searchModel.state)
+	}
+	if searchModel.numberBuffer != "1" {
+		t.Errorf("Expected numberBuffer=\"1\", got %q", searchModel.numberBuffer)
+	}
+}
+
+// TestSearchMenuHistoryShortcut verifies that typing "1" then "0" executes
+// history item 0 (shortcut 10) rather than firing Search by Tag on the "1".
+func TestSearchMenuHistoryShortcut(t *testing.T) {
+	client := api.NewClient()
+	model := NewSearchModel(client, "/tmp/test", "", blocklist.NewManager("/tmp/blocklist"))
+	model.state = searchStateMenu
+	model.numberBuffer = ""
+
+	// Inject a fake history item so shortcut 10 has something to execute
+	model.searchHistory = &storage.SearchHistoryStore{
+		SearchItems: []storage.SearchHistoryItem{
+			{SearchType: "tag", Query: "jazz"},
+		},
+		MaxSize: 10,
+	}
+
+	// Type "1" — should buffer
+	msg1 := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")}
+	updatedModel, _ := model.Update(msg1)
+	searchModel := updatedModel.(SearchModel)
+
+	if searchModel.state != searchStateMenu {
+		t.Fatalf("After '1' expected searchStateMenu, got %v", searchModel.state)
+	}
+
+	// Type "0" — should complete "10" and execute history search
+	msg0 := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")}
+	updatedModel, _ = searchModel.Update(msg0)
+	searchModel = updatedModel.(SearchModel)
+
+	// "10" maps to history[0] whose type is "tag", so searchType must be SearchByTag
+	// and the model must be loading (search dispatched)
+	if searchModel.state != searchStateLoading {
+		t.Errorf("Expected searchStateLoading after '10' history shortcut, got %v", searchModel.state)
+	}
+	if searchModel.searchType != api.SearchByTag {
+		t.Errorf("Expected SearchByTag from history item, got %v", searchModel.searchType)
+	}
+}
+
+// TestSearchMenuEnterOnHistoryItem verifies that pressing Enter while the
+// cursor is on a history list item (raw list index ≥ 8) executes the history
+// search rather than falling through to executeSearchType (which would no-op).
+func TestSearchMenuEnterOnHistoryItem(t *testing.T) {
+	client := api.NewClient()
+	model := NewSearchModel(client, "/tmp/test", "", blocklist.NewManager("/tmp/blocklist"))
+	model.state = searchStateMenu
+	model.numberBuffer = ""
+
+	model.searchHistory = &storage.SearchHistoryStore{
+		SearchItems: []storage.SearchHistoryItem{
+			{SearchType: "name", Query: "BBC"},
+		},
+		MaxSize: 10,
+	}
+	model.rebuildMenuWithHistory()
+
+	// Navigate down far enough to land on the history item.
+	// Menu structure: 0-5 search types, 6 blank, 7 separator, 8 first history item.
+	for i := 0; i < 8; i++ {
+		down := tea.KeyMsg{Type: tea.KeyDown}
+		updatedModel, _ := model.Update(down)
+		model = updatedModel.(SearchModel)
+	}
+
+	if model.menuList.Index() != 8 {
+		t.Fatalf("Expected cursor at index 8 (first history item), got %d", model.menuList.Index())
+	}
+
+	// Press Enter — should execute the history search, not no-op
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	updatedModel, _ := model.Update(enter)
+	finalModel := updatedModel.(SearchModel)
+
+	if finalModel.state != searchStateLoading {
+		t.Errorf("Expected searchStateLoading after Enter on history item, got %v", finalModel.state)
+	}
+	if finalModel.searchType != api.SearchByName {
+		t.Errorf("Expected SearchByName from history item, got %v", finalModel.searchType)
 	}
 }
 
@@ -375,24 +480,6 @@ func TestWindowResize(t *testing.T) {
 
 	if model.height != 50 {
 		t.Errorf("Expected height to be 50, got %d", model.height)
-	}
-}
-
-func TestQuickFavoritesLoading(t *testing.T) {
-	client := api.NewClient()
-	model := NewSearchModel(client, "/tmp/test", "", blocklist.NewManager("/tmp/blocklist"))
-
-	stations := []api.Station{
-		{StationUUID: "fav-1", Name: "Favorite 1"},
-		{StationUUID: "fav-2", Name: "Favorite 2"},
-	}
-
-	msg := quickFavoritesLoadedMsg{stations: stations}
-	updatedModel, _ := model.Update(msg)
-	model = updatedModel.(SearchModel)
-
-	if len(model.quickFavorites) != 2 {
-		t.Errorf("Expected 2 quick favorites, got %d", len(model.quickFavorites))
 	}
 }
 

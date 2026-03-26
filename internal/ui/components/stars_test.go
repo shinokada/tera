@@ -116,6 +116,7 @@ func TestStarRenderer(t *testing.T) {
 		sr := DefaultStarRenderer()
 		if sr == nil {
 			t.Fatal("Expected non-nil default renderer")
+			return
 		}
 		if sr.filledStar != "★" {
 			t.Error("Default renderer should use unicode")

@@ -16,6 +16,7 @@ func TestNewManager(t *testing.T) {
 	manager := NewManager("/tmp/test-blocklist.json")
 	if manager == nil {
 		t.Fatal("NewManager returned nil")
+		return
 	}
 	if manager.blocklistPath != "/tmp/test-blocklist.json" {
 		t.Errorf("Expected path /tmp/test-blocklist.json, got %s", manager.blocklistPath)

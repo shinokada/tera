@@ -51,6 +51,7 @@ func TestRatingsManager(t *testing.T) {
 		rating := mgr.GetRating(stationUUID)
 		if rating == nil {
 			t.Fatal("Expected rating, got nil")
+			return
 		}
 
 		if rating.Rating != 5 {
@@ -126,6 +127,7 @@ func TestRatingsManager(t *testing.T) {
 		updatedRating := mgr.GetRating(stationUUID)
 		if updatedRating == nil {
 			t.Fatal("Expected rating, got nil")
+			return
 		}
 
 		if updatedRating.Rating != 5 {

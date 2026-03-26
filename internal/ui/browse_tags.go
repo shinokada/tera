@@ -1,33 +1,80 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/shinokada/tera/v3/internal/api"
 	"github.com/shinokada/tera/v3/internal/blocklist"
+	"github.com/shinokada/tera/v3/internal/config"
 	"github.com/shinokada/tera/v3/internal/player"
 	"github.com/shinokada/tera/v3/internal/storage"
 	"github.com/shinokada/tera/v3/internal/ui/components"
 )
 
-// browseTagsState tracks sub-views within the Browse by Tag screen.
+// browseTagsState represents the state of the BrowseTagsModel state machine.
+// browseTagsResolvedMsg is sent when a UUID lookup completes for playback
+type browseTagsResolvedMsg struct {
+	station *api.Station
+	err     error
+}
+
 type browseTagsState int
 
 const (
-	browseTagsStateList       browseTagsState = iota // list of all tags
-	browseTagsStateDetail                            // stations for a selected tag
-	browseTagsStatePlaying                           // playing a station from a tag
-	browseTagsStateTagInput                          // entering a new tag (single via 't')
-	browseTagsStateManageTags                        // full tag manager via 'T'
+	browseTagsStateList browseTagsState = iota
+	browseTagsStateDetail
+	browseTagsStatePlaying
+	browseTagsStateTagInput
+	browseTagsStateManageTags
+	browseTagsStateConfirmStop
 )
 
-// tagStat holds a tag name and how many stations carry it.
+// tagStat holds a tag and the count of stations with that tag.
 type tagStat struct {
 	tag   string
 	count int
+}
+
+// viewConfirmStop renders the confirmation prompt for stopping playback.
+func (m BrowseTagsModel) viewConfirmStop() string {
+	var content strings.Builder
+	content.WriteString("Are you sure you want to stop playback?\n\n")
+	content.WriteString("y: Yes, stop\n")
+	content.WriteString("n/Esc: No, keep playing\n")
+	return m.renderPageWithBottomHelp(PageLayout{
+		Title:   "Confirm Stop",
+		Content: content.String(),
+		Help:    "y: Yes • n/Esc: No",
+	}, m.height)
+}
+
+// handleConfirmStopInput handles key input during the confirm-stop prompt.
+func (m BrowseTagsModel) handleConfirmStopInput(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd) {
+	switch msg.String() {
+	case "y", "1":
+		// Execute the navigation that was originally requested.
+		var cmd tea.Cmd
+		if m.confirmStopTarget == "main" {
+			cmd = m.navigateToMainCmd()
+		} else {
+			cmd = m.navigateBackCmd()
+			m.state = browseTagsStateDetail
+		}
+		m.selectedStation = nil
+		if cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case "n", "2", "esc":
+		m.state = browseTagsStatePlaying
+		return m, nil
+	}
+	return m, nil
 }
 
 // BrowseTagsModel is the model for the "Browse by Tag" screen.
@@ -41,9 +88,9 @@ type BrowseTagsModel struct {
 	tagRenderer      *components.TagRenderer
 
 	// Tag list view
-	tagStats        []tagStat
-	tagCursor       int
-	deleteConfirm   bool // true = waiting for second 'd' to confirm tag deletion
+	tagStats      []tagStat
+	tagCursor     int
+	deleteConfirm bool // true = waiting for second 'd' to confirm tag deletion
 
 	// Station detail view
 	selectedTag    string
@@ -55,8 +102,8 @@ type BrowseTagsModel struct {
 	selectedStation *api.Station
 	player          *player.MPVPlayer
 	ratingMode      bool
-	tagInput    components.TagInput
-	manageTags  components.ManageTags
+	tagInput        components.TagInput
+	manageTags      components.ManageTags
 
 	// Help overlay
 	helpModel components.HelpModel
@@ -66,6 +113,10 @@ type BrowseTagsModel struct {
 	saveMessageTime int
 	width           int
 	height          int
+	// Play options (injected by App)
+	playOptsCfg       config.PlayOptionsConfig
+	confirmStopTarget string // "back" or "main" — set when entering confirmStop state
+	nowPlayingBar     string // set by App when ContinueOnNavigate is active
 }
 
 // NewBrowseTagsModel creates a Browse by Tag model.
@@ -188,7 +239,21 @@ func (m BrowseTagsModel) Update(msg tea.Msg) (BrowseTagsModel, tea.Cmd) {
 			var cmd tea.Cmd
 			m.manageTags, cmd = m.manageTags.Update(msg)
 			return m, cmd
+		case browseTagsStateConfirmStop:
+			return m.handleConfirmStopInput(msg)
 		}
+
+	case browseTagsResolvedMsg:
+		if msg.err != nil || msg.station == nil {
+			m.saveMessage = "✗ Could not resolve station URL"
+			m.saveMessageTime = messageDisplayShort
+			return m, nil
+		}
+		m.selectedStation = msg.station
+		m.state = browseTagsStatePlaying
+		// Refresh detail list with new cached URL
+		m.loadDetailStations()
+		return m, m.playSelected()
 
 	case playbackStartedMsg:
 		return m, nil
@@ -291,17 +356,71 @@ func (m BrowseTagsModel) updateDetail(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd)
 		if len(m.detailStations) == 0 {
 			break
 		}
-		station := m.detailStations[m.stationCursor]
-		if station.URLResolved == "" {
-			m.saveMessage = "✗ No URL cached for this station — play it from search first"
-			m.saveMessageTime = messageDisplayShort
-			break
+		// Copy the station so its address is stable on the heap
+		st := m.detailStations[m.stationCursor]
+		if st.URLResolved != "" {
+			m.selectedStation = &st
+			m.state = browseTagsStatePlaying
+			return m, m.playSelected()
 		}
-		m.selectedStation = &station
-		m.state = browseTagsStatePlaying
-		return m, m.playSelected()
+		// URL missing — look it up live from the API
+		uuid := st.StationUUID
+		m.saveMessage = "Looking up station…"
+		m.saveMessageTime = messageDisplayShort
+		return m, func() tea.Msg {
+			client := api.NewClient()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			resolved, err := client.GetByUUID(ctx, uuid)
+			return browseTagsResolvedMsg{station: resolved, err: err}
+		}
 	}
 	return m, nil
+}
+
+// navigateBackCmd returns the appropriate command when the user presses Esc
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m BrowseTagsModel) navigateBackCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return func() tea.Msg {
+			return handoffPlaybackMsg{
+				player:       m.player,
+				station:      station,
+				contextLabel: "Browse Tags",
+			}
+		}
+	}
+	// Default: stop the player.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return nil
+}
+
+// navigateToMainCmd returns the appropriate command when the user presses 0
+// during playback. When ContinueOnNavigate is on it hands the player off to
+// App; otherwise it stops the player first.
+func (m BrowseTagsModel) navigateToMainCmd() tea.Cmd {
+	if m.playOptsCfg.ContinueOnNavigate && m.selectedStation != nil {
+		station := m.selectedStation
+		return tea.Batch(
+			func() tea.Msg {
+				return handoffPlaybackMsg{
+					player:       m.player,
+					station:      station,
+					contextLabel: "Browse Tags",
+				}
+			},
+			func() tea.Msg { return backToMainMsg{} },
+		)
+	}
+	// Default: stop the player, then navigate.
+	if m.player != nil {
+		_ = m.player.Stop()
+	}
+	return func() tea.Msg { return backToMainMsg{} }
 }
 
 func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd) {
@@ -310,17 +429,29 @@ func (m BrowseTagsModel) updatePlaying(msg tea.KeyMsg) (BrowseTagsModel, tea.Cmd
 	}
 	switch msg.String() {
 	case "esc":
-		if m.player != nil {
-			_ = m.player.Stop()
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "back"
+			m.state = browseTagsStateConfirmStop
+			return m, nil
 		}
+		// Stop (or hand off) playback and return to detail view.
+		cmd := m.navigateBackCmd()
 		m.state = browseTagsStateDetail
 		m.selectedStation = nil
 		m.loadDetailStations() // refresh in case tags were modified while playing
-	case "0":
-		if m.player != nil {
-			_ = m.player.Stop()
+		if cmd != nil {
+			return m, cmd
 		}
-		return m, func() tea.Msg { return backToMainMsg{} }
+	case "0":
+		if m.playOptsCfg.ConfirmStop {
+			m.confirmStopTarget = "main"
+			m.state = browseTagsStateConfirmStop
+			return m, nil
+		}
+		// Build cmd before clearing selectedStation.
+		cmd := m.navigateToMainCmd()
+		m.selectedStation = nil
+		return m, cmd
 	case " ":
 		if m.player != nil {
 			if err := m.player.TogglePause(); err == nil {
@@ -443,13 +574,21 @@ func (m *BrowseTagsModel) deleteTagFromAll(tag string) int {
 }
 
 // playSelected starts playing the currently selected station.
+// Phase 5: volume is resolved from PlayOptions (DefaultVolume / StartVolumeMode).
 func (m BrowseTagsModel) playSelected() tea.Cmd {
 	if m.selectedStation == nil {
 		return nil
 	}
 	station := *m.selectedStation
+	startVol := m.playOptsCfg.DefaultVolume
+	if m.playOptsCfg.StartVolumeMode == "last_used" && m.playOptsCfg.LastUsedVolume > 0 {
+		startVol = m.playOptsCfg.LastUsedVolume
+	}
+	if station.Volume != nil {
+		startVol = *station.Volume
+	}
 	return func() tea.Msg {
-		if err := m.player.Play(&station); err != nil {
+		if err := m.player.PlayWithVolume(&station, startVol); err != nil {
 			return playbackErrorMsg{err}
 		}
 		return playbackStartedMsg{}
@@ -472,13 +611,15 @@ func (m BrowseTagsModel) View() string {
 		return m.viewTagInput()
 	case browseTagsStateManageTags:
 		return m.viewManageTags()
+	case browseTagsStateConfirmStop:
+		return m.viewConfirmStop()
 	}
 	return ""
 }
 
 // viewManageTags renders the ManageTags dialog overlay.
 func (m BrowseTagsModel) viewManageTags() string {
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Manage Tags",
 		Content: m.manageTags.View(),
 		Help:    "Space/Enter: Toggle • ↑↓/jk: Navigate • d: Done • Esc: Cancel",
@@ -493,7 +634,7 @@ func (m BrowseTagsModel) viewTagInput() string {
 		sb.WriteString("\n\n")
 	}
 	sb.WriteString(m.tagInput.View())
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Add Tag",
 		Content: sb.String(),
 		Help:    "Enter: Add • Tab: Complete • ↑↓: Navigate • Esc: Cancel",
@@ -524,7 +665,7 @@ func (m BrowseTagsModel) viewTagList() string {
 
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🏷 Browse by Tag",
 		Content: sb.String(),
 		Help:    "↑↓/jk: Navigate • Enter: View stations • d: Delete tag (confirm) • Esc/m: Back",
@@ -574,7 +715,7 @@ func (m BrowseTagsModel) viewDetail() string {
 
 	renderSaveMessage(&sb, m.saveMessage)
 
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   fmt.Sprintf("🏷 Tag: %s", m.selectedTag),
 		Content: sb.String(),
 		Help:    "↑↓/jk: Navigate • Enter: Play • Esc: Back",
@@ -597,7 +738,17 @@ func (m BrowseTagsModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	sb.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	// Phase 5: ShowMetadata wiring
+	if m.playOptsCfg.ShowMetadata {
+		sb.WriteString(RenderStationDetailsWithRating(*m.selectedStation, false, metadata, rating, m.starRenderer))
+	} else {
+		sb.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			sb.WriteString("  ")
+			sb.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		sb.WriteString("\n")
+	}
 
 	sb.WriteString("\n")
 	if m.player != nil && m.player.IsPlaying() {
@@ -627,9 +778,18 @@ func (m BrowseTagsModel) viewPlaying() string {
 	renderSaveMessage(&sb, m.saveMessage)
 
 	helpText := "Space: Pause • r: Rate • t: Tag • /*: Volume • 0: Main Menu • ?: Help • Esc: Back"
-	return RenderPageWithBottomHelp(PageLayout{
+	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "🎵 Now Playing",
 		Content: sb.String(),
 		Help:    helpText,
 	}, m.height)
+}
+
+// renderPageWithBottomHelp injects the now-playing bar when the model's own
+// player is not actively playing (so viewPlaying is unaffected).
+func (m BrowseTagsModel) renderPageWithBottomHelp(layout PageLayout, height int) string {
+	if m.player == nil || !m.player.IsPlaying() {
+		layout.NowPlaying = m.nowPlayingBar
+	}
+	return RenderPageWithBottomHelp(layout, height)
 }
