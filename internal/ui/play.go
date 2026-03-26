@@ -1404,10 +1404,9 @@ func (m PlayModel) viewPlaying() string {
 			rating = r.Rating
 		}
 	}
-	content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
-
-	// Phase 5: Only show metadata block if ShowMetadata is true
+	// Gate full station details and playback status on ShowMetadata
 	if m.playOptsCfg.ShowMetadata {
+		content.WriteString(RenderStationDetailsWithRating(*m.selectedStation, hasVoted, metadata, rating, m.starRenderer))
 		// Playback status with proper spacing
 		content.WriteString("\n")
 		if m.player.IsPlaying() {
@@ -1421,6 +1420,14 @@ func (m PlayModel) viewPlaying() string {
 		} else {
 			content.WriteString(infoStyle().Render("⏸ Stopped"))
 		}
+	} else {
+		// Render only basic info when metadata display is disabled
+		content.WriteString(boldStyle().Render(m.selectedStation.TrimName()))
+		if m.selectedStation.Country != "" {
+			content.WriteString("  ")
+			content.WriteString(dimStyle().Render(m.selectedStation.Country))
+		}
+		content.WriteString("\n")
 	}
 
 	// Tag display

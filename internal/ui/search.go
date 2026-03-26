@@ -1034,12 +1034,12 @@ func (m SearchModel) View() string {
 		}
 		if m.saveMessage != "" {
 			content.WriteString("\n\n")
-			if strings.Contains(m.saveMessage, "✓") {
+			if strings.Contains(m.saveMessage, "✓") || strings.Contains(m.saveMessage, "🚫") {
 				content.WriteString(successStyle().Render(m.saveMessage))
-			} else if strings.Contains(m.saveMessage, "Already") {
-				content.WriteString(infoStyle().Render(m.saveMessage))
-			} else {
+			} else if strings.Contains(m.saveMessage, "✗") {
 				content.WriteString(errorStyle().Render(m.saveMessage))
+			} else {
+				content.WriteString(infoStyle().Render(m.saveMessage))
 			}
 		}
 		// Sleep timer countdown
