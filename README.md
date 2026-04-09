@@ -51,6 +51,11 @@ sudo dpkg -i tera_3.x.x_linux_amd64.deb
 sudo apt-get install -f  # Install mpv dependency if needed
 ```
 
+### Arch Linux/AUR
+```sh
+sudo yay -S tera
+```
+
 ### Fedora/RHEL
 ```sh
 sudo rpm -i tera_3.x.x_linux_amd64.rpm
