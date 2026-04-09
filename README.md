@@ -53,7 +53,7 @@ sudo apt-get install -f  # Install mpv dependency if needed
 
 ### Arch Linux/AUR
 ```sh
-sudo yay -S tera
+yay -S tera
 ```
 
 ### Fedora/RHEL
