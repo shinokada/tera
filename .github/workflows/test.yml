@@ -14,38 +14,37 @@ jobs:
       fail-fast: false  # Continue running other jobs even if one fails
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go-version: ['1.21', '1.22']
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
-    
+        go-version-file: go.mod
+
     - name: Verify Go installation
       run: go version
-    
+
     - name: Download dependencies
       run: go mod download
-    
+
     - name: Verify dependencies
       run: go mod verify
-    
+
     - name: Run tests
       run: go test -v -race -coverprofile=coverage.out ./...
-    
+
     - name: Generate coverage report
       run: go tool cover -html=coverage.out -o coverage.html
-    
+
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
-        name: coverage-${{ matrix.os }}-go${{ matrix.go-version }}
+        name: coverage-${{ matrix.os }}
         path: coverage.html
-    
+
     - name: Check test coverage
       run: |
         coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
@@ -55,33 +54,33 @@ jobs:
         #   echo "Coverage is below 50%"
         #   exit 1
         # fi
-    
+
     - name: Test summary
       if: always()
       run: |
-        echo "Tests completed for ${{ matrix.os }} with Go ${{ matrix.go-version }}"
+        echo "Tests completed for ${{ matrix.os }}"
 
   build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
-    
+        go-version-file: go.mod
+
     - name: Build binary
       run: go build -v -o tera ./cmd/tera
-    
+
     - name: Verify binary
       run: './tera --version || echo "Note: --version flag may not be implemented yet"'
-    
+
     - name: Build summary
       run: |
         echo "Build completed for ${{ matrix.os }}"
@@ -89,16 +88,16 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
-    
+        go-version-file: go.mod
+
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v6
       with:
