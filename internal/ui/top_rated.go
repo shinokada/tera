@@ -916,7 +916,7 @@ func (m TopRatedModel) View() string {
 	case topRatedStateRating:
 		helpText = "1-5: Set rating • 0/r: Remove rating • Esc: Cancel"
 	case topRatedStatePlaying:
-		helpText = "Space: Pause • s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
+		helpText = "Space/p: Pause/Resume • s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
 	}
 
 	return m.renderPageWithBottomHelp(PageLayout{
