@@ -66,10 +66,13 @@ func TestTimerExtend(t *testing.T) {
 	if rem <= d {
 		t.Errorf("expected remaining > %v after Extend, got %v", d, rem)
 	}
+	extendedDeadline := time.Now().Add(rem)
 
 	// Past the original expiry (300ms) but before the extended one (600ms).
 	time.Sleep(d + 100*time.Millisecond)
-	if fired.Load() {
+	// Only a genuine early fire is a bug; if the sleep overshot past the
+	// extended deadline, a fired callback is correct, not an error.
+	if fired.Load() && time.Now().Before(extendedDeadline) {
 		t.Error("timer fired too early after Extend")
 	}
 
