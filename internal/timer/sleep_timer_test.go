@@ -46,23 +46,38 @@ func TestTimerIdempotentCancel(t *testing.T) {
 }
 
 // TestTimerExtend verifies that Extend postpones the expiry.
+//
+// Timing margins are deliberately wide (>=100ms) and the deadline check uses
+// Remaining() rather than sleeping across the original expiry, because CI
+// runners (especially macOS with -race) can oversleep by tens of milliseconds.
 func TestTimerExtend(t *testing.T) {
+	const d = 300 * time.Millisecond
+
 	var fired atomic.Bool
 	st := NewSleepTimer(func() { fired.Store(true) })
-	st.Start(80 * time.Millisecond)
+	st.Start(d)
+	st.Extend(d)
 
-	// Extend before expiry
-	time.Sleep(40 * time.Millisecond)
-	st.Extend(80 * time.Millisecond)
+	// Deterministic check: the deadline must now be beyond the original duration.
+	rem, active := st.Remaining()
+	if !active {
+		t.Fatal("timer should still be active after Extend")
+	}
+	if rem <= d {
+		t.Errorf("expected remaining > %v after Extend, got %v", d, rem)
+	}
 
-	// At the original expiry the timer should NOT have fired yet
-	time.Sleep(60 * time.Millisecond)
+	// Past the original expiry (300ms) but before the extended one (600ms).
+	time.Sleep(d + 100*time.Millisecond)
 	if fired.Load() {
 		t.Error("timer fired too early after Extend")
 	}
 
-	// After the extended expiry it should have fired
-	time.Sleep(100 * time.Millisecond)
+	// It must still fire eventually; poll instead of a fixed sleep.
+	deadline := time.Now().Add(2 * time.Second)
+	for !fired.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if !fired.Load() {
 		t.Error("timer did not fire after extended duration")
 	}
