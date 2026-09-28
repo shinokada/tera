@@ -7,7 +7,7 @@
 .env
 
 # AI development documents
-ai-documents
+ai-docs
 
 /tera
 /coverage.out

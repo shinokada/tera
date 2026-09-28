@@ -27,7 +27,11 @@ func NewSleepTimer(onExpire func()) *SleepTimer {
 func (s *SleepTimer) Start(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.startLocked(d)
+}
 
+// startLocked implements Start. The caller must hold s.mu.
+func (s *SleepTimer) startLocked(d time.Duration) {
 	// Cancel any existing timer
 	if s.cancelFn != nil {
 		s.cancelFn()
@@ -44,6 +48,12 @@ func (s *SleepTimer) Start(d time.Duration) {
 		select {
 		case <-t.C:
 			s.mu.Lock()
+			// The timer may have been cancelled or replaced after t.C became
+			// ready but before we got the lock; a stale timer must not fire.
+			if ctx.Err() != nil {
+				s.mu.Unlock()
+				return
+			}
 			s.active = false
 			s.mu.Unlock()
 			if s.onExpire != nil {
@@ -69,18 +79,17 @@ func (s *SleepTimer) Cancel() {
 }
 
 // Extend adds d to the current deadline. If no timer is active, it is a no-op.
+// The deadline is read and the timer restarted under a single lock, so the
+// timer cannot fire in between.
 func (s *SleepTimer) Extend(d time.Duration) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if !s.active {
-		s.mu.Unlock()
 		return
 	}
 
-	remaining := time.Until(s.expiresAt) + d
-	s.mu.Unlock()
-
-	s.Start(remaining)
+	s.startLocked(time.Until(s.expiresAt) + d)
 }
 
 // Remaining returns the time left and whether a timer is currently active.
