@@ -653,6 +653,18 @@ func (m TopRatedModel) handlePlayingInput(msg tea.KeyMsg) (TopRatedModel, tea.Cm
 		m.saveMessageTime = 3
 		return m, tickEverySecond()
 
+	case " ", "p":
+		// Toggle pause/resume (Space matches the other player screens)
+		if m.player != nil {
+			if err := m.player.TogglePause(); err != nil {
+				m.saveMessage = fmt.Sprintf("Pause failed: %v", err)
+				m.saveMessageSuccess = false
+				m.saveMessageTime = 3
+				return m, tickEverySecond()
+			}
+		}
+		return m, nil
+
 	case "s":
 		// Stop playback
 		if m.player != nil {
@@ -904,7 +916,7 @@ func (m TopRatedModel) View() string {
 	case topRatedStateRating:
 		helpText = "1-5: Set rating • 0/r: Remove rating • Esc: Cancel"
 	case topRatedStatePlaying:
-		helpText = "s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
+		helpText = "Space: Pause • s: Stop • *1-5: Rate • 0: Main Menu • Esc: Back"
 	}
 
 	return m.renderPageWithBottomHelp(PageLayout{

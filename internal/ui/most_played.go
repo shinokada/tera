@@ -198,7 +198,7 @@ func createMostPlayedHelp() []components.HelpSection {
 		{
 			Title: "Now Playing",
 			Items: []components.HelpItem{
-				{Key: "p", Description: "Pause/Resume"},
+				{Key: "Space/p", Description: "Pause/Resume"},
 				{Key: "s", Description: "Stop"},
 				{Key: "+/-", Description: "Adjust volume"},
 				{Key: "r", Description: "Rate station (1-5)"},
@@ -532,10 +532,15 @@ func (m MostPlayedModel) handlePlayingInput(msg tea.KeyMsg) (MostPlayedModel, te
 		}
 		return m, nil
 
-	case "p":
-		// Toggle pause
+	case "p", " ":
+		// Toggle pause (Space matches the other player screens; p kept as alias)
 		if m.player != nil {
-			_ = m.player.TogglePause()
+			if err := m.player.TogglePause(); err != nil {
+				m.saveMessage = fmt.Sprintf("✗ Pause failed: %v", err)
+				m.saveMessageSuccess = false
+				m.saveMessageTime = 3
+				return m, tickEverySecond()
+			}
 		}
 		return m, nil
 
@@ -915,7 +920,7 @@ func (m MostPlayedModel) viewPlaying() string {
 		}
 	}
 
-	helpText := "p: Pause • s: Stop • r: Rate • t: Tag • f: Fav • 0: Main Menu • ?: Help • Esc: Back"
+	helpText := "Space/p: Pause • s: Stop • r: Rate • t: Tag • f: Fav • 0: Main Menu • ?: Help • Esc: Back"
 	return m.renderPageWithBottomHelp(PageLayout{
 		Title:   "📊 Most Played - Now Playing",
 		Content: content.String(),
